@@ -1,11 +1,14 @@
 .container {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--space-md);
   padding: var(--space-lg) var(--space-xl);
-  margin: 0 auto;
-  max-width: 600px;
+  margin: 0 auto var(--space-md);
+  max-width: 720px;
+  width: calc(100% - var(--space-2xl));
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -13,9 +16,10 @@
 .progressSteps {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-xs);
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .step {
@@ -26,14 +30,15 @@
 }
 
 .stepDot {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
+  border: 2px solid var(--bg-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s var(--ease-out-expo);
+  transition: background 0.3s var(--ease-out-expo), border-color 0.3s var(--ease-out-expo);
   flex-shrink: 0;
 }
 
@@ -50,32 +55,37 @@
   background: var(--text-inverse);
 }
 
+/* Completed step — mint */
 .stepActive .stepDot {
-  background: var(--accent-coral);
-}
-
-.stepCurrent .stepDot {
-  box-shadow: 0 0 0 4px var(--accent-coral-light);
-}
-
-.stepLabel {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  transition: color 0.3s ease;
-  white-space: nowrap;
+  background: var(--accent-mint);
+  border-color: var(--accent-mint);
 }
 
 .stepActive .stepLabel {
-  color: var(--text-primary);
+  color: var(--accent-mint);
+}
+
+/* Current step — coral overrides completed */
+.stepCurrent .stepDot {
+  background: var(--accent-coral);
+  border-color: var(--accent-coral);
+}
+
+.stepLabel {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  transition: color 0.3s ease;
+  white-space: nowrap;
+  font-weight: 400;
 }
 
 .stepCurrent .stepLabel {
   color: var(--accent-coral);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .stepLine {
-  width: 20px;
+  width: 24px;
   height: 2px;
   background: var(--bg-tertiary);
   margin: 0 var(--space-xs);
@@ -83,42 +93,47 @@
 }
 
 .stepActive .stepLine {
-  background: var(--accent-coral);
+  background: var(--accent-mint);
+}
+
+/* Current step's outgoing line stays gray until step completes */
+.stepCurrent .stepLine {
+  background: var(--bg-tertiary);
 }
 
 /* Message */
 .message {
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
-  text-align: center;
+  text-align: left;
 }
 
 /* Thinking Bubble */
 .thinkingContainer {
   width: 100%;
-  max-width: 500px;
   overflow: hidden;
 }
 
 .thinkingBubble {
   display: flex;
   gap: var(--space-sm);
-  padding: var(--space-md) var(--space-lg);
-  background: linear-gradient(135deg, var(--accent-lavender-light) 0%, var(--accent-mint-light) 100%);
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(162, 155, 254, 0.2);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: none;
 }
 
 .thinkingIcon {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   flex-shrink: 0;
+  line-height: 1.4;
 }
 
 .thinkingContent {
   flex: 1;
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  line-height: 1.6;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
   word-break: break-word;
 }
 
@@ -157,20 +172,19 @@
 
 /* Cancel Button */
 .cancelBtn {
-  padding: var(--space-xs) var(--space-md);
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  background: transparent;
-  border: 1px solid var(--bg-tertiary);
+  align-self: flex-start;
+  padding: 6px var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: none;
   border-radius: var(--radius-full);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease;
 }
 
 .cancelBtn:hover {
-  color: var(--text-secondary);
-  border-color: var(--text-tertiary);
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
 }
 
 /* Responsive */
