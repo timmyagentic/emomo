@@ -10,8 +10,8 @@
 // (atomics + lazy reflection state must not be shallow copied).
 //
 // Instead, the domain layer uses plain Go structs that mirror the protobuf
-// schema's *value semantics*. Conversion to/from the wire IDL types happens
-// at boundaries via ToProto / *FromProto helpers below. ImageFormat and
+// schema's *value semantics*. Conversion to/from the generated protobuf value
+// types happens at boundaries via ToProto / *FromProto helpers below. ImageFormat and
 // MemeVectorType remain as type aliases of the generated enums — those are
 // plain int32 values with no embedded mutex and are safe to share.
 package domain

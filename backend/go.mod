@@ -1,6 +1,6 @@
 module github.com/timmy/emomo
 
-go 1.24.6
+go 1.26.2
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3

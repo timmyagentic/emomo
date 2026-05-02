@@ -67,20 +67,20 @@ cd backend
 
 详见 [docs/MULTI_EMBEDDING.md](docs/MULTI_EMBEDDING.md) 与 [backend/configs/config.yaml](backend/configs/config.yaml)。
 
-### 更新 protobuf IDL
+### 更新 protobuf value schema
 
 修改 schema 级类型后，从 `backend/` 重新生成 Go 代码：
 
 ```bash
 cd backend
-go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
+GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 ```
 
 ## 技术栈速览
 
 | 子项目 | 关键技术 |
 |--------|---------|
-| backend | Go 1.24, Gin, GORM, Qdrant (gRPC), S3/R2, Qwen3-VL 多模态 embeddings, OpenAI-compatible VLM/OCR 辅助分析, BM25 hybrid 检索, Grafana Alloy + Loki |
+| backend | Go 1.26.2, Gin, GORM, Qdrant (gRPC), S3/R2, Qwen3-VL 多模态 embeddings, OpenAI-compatible VLM/OCR 辅助分析, BM25 hybrid 检索, Grafana Alloy + Loki |
 | frontend | React 19, TypeScript, Vite 7, Framer Motion, Playwright e2e |
 
 ## 部署

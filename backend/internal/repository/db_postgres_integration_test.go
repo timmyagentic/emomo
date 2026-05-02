@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestInitDBPostgresAutoMigrateCreatesRLSEnabledCoreTables(t *testing.T) {
+func TestInitDBPostgresAutoMigrateLeavesRLSDisabledOnCoreTables(t *testing.T) {
 	dsn := os.Getenv("EMOMO_POSTGRES_TEST_DSN")
 	if dsn == "" {
 		t.Skip("set EMOMO_POSTGRES_TEST_DSN to run Postgres AutoMigrate integration test")
@@ -74,6 +74,28 @@ func TestInitDBPostgresAutoMigrateCreatesRLSEnabledCoreTables(t *testing.T) {
 		}
 	}
 
+	// Pre-enable RLS on the freshly-created tables before re-running InitDB to
+	// confirm disableCoreTableRLS actively turns it off on existing schemas
+	// (not just leaves a fresh-install no-op untouched).
+	for _, table := range []string{"memes", "meme_annotations", "meme_vectors"} {
+		if err := adminDB.Exec(fmt.Sprintf(`ALTER TABLE "%s"."%s" ENABLE ROW LEVEL SECURITY`, schema, table)).Error; err != nil {
+			t.Fatalf("failed to pre-enable RLS on %s: %v", table, err)
+		}
+	}
+
+	rerunDB, err := InitDB(&config.DatabaseConfig{
+		Driver:          "postgres",
+		URL:             schemaDSN,
+		AutoMigrate:     true,
+		MaxIdleConns:    1,
+		MaxOpenConns:    1,
+		ConnMaxLifetime: time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("InitDB() rerun error = %v", err)
+	}
+	closeGormDB(t, rerunDB)
+
 	for _, table := range []string{"memes", "meme_annotations", "meme_vectors"} {
 		var enabled bool
 		if err := adminDB.Raw(`
@@ -85,8 +107,8 @@ func TestInitDBPostgresAutoMigrateCreatesRLSEnabledCoreTables(t *testing.T) {
 		`, schema, table).Scan(&enabled).Error; err != nil {
 			t.Fatalf("failed to inspect RLS for %s: %v", table, err)
 		}
-		if !enabled {
-			t.Fatalf("expected RLS enabled for %s", table)
+		if enabled {
+			t.Fatalf("expected RLS disabled for %s after InitDB, but it was still enabled", table)
 		}
 	}
 }

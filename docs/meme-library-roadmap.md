@@ -576,7 +576,7 @@ meme-library/
 │   ├── config.yaml             # 主配置
 │   └── config.example.yaml     # 示例配置
 │
-├── proto/                      # protobuf IDL
+├── proto/                      # protobuf value schema
 │
 ├── deployments/                # 部署相关
 │   ├── docker-compose.yml      # API + Alloy（Qdrant/存储外部）

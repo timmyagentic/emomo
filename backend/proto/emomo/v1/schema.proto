@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-// Package emomo.v1 defines the *structured value* IDL for emomo.
+// Package emomo.v1 defines emomo's protobuf value schema.
 //
 // SCOPE:
 //   This schema is intentionally limited to (a) closed enumerations whose
 //   numeric value is persisted, and (b) JSON-shaped values that are stored
-//   inline as columns in the relational database. It is NOT a transport /
-//   wire IDL — there are no top-level Meme / MemeAnnotation / MemeVector
+//   inline as columns in the relational database. It is NOT a transport or
+//   wire/RPC contract — there are no top-level Meme / MemeAnnotation / MemeVector
 //   messages here, because emomo's HTTP API uses Go structs + encoding/json
 //   directly and does not speak protobuf on the wire.
 //
@@ -15,7 +15,7 @@ syntax = "proto3";
 //   (see also backend/internal/repository/db.go for migrations). This file
 //   only owns the column-level structured values listed below.
 //
-// Owned by this IDL:
+// Owned by this schema:
 //   - enum ImageFormat   (memes.image_info.format, persisted as enum number)
 //   - enum VectorType    (meme_vectors.vector_type, persisted as INTEGER)
 //   - message ImageInfo  (memes.image_info JSON column)

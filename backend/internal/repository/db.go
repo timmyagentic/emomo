@@ -93,8 +93,8 @@ func InitDB(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 		if err := dropLegacyArtifacts(db); err != nil {
 			return nil, fmt.Errorf("failed to drop legacy artifacts: %w", err)
 		}
-		if err := migrateCoreTableSecurity(db); err != nil {
-			return nil, fmt.Errorf("failed to migrate core table security: %w", err)
+		if err := disableCoreTableRLS(db); err != nil {
+			return nil, fmt.Errorf("failed to disable core table RLS: %w", err)
 		}
 	} else {
 		log.Printf("[DB] AutoMigrate disabled")
@@ -565,7 +565,21 @@ func migrateMemeAnnotations(db *gorm.DB) error {
 	return nil
 }
 
-func migrateCoreTableSecurity(db *gorm.DB) error {
+// disableCoreTableRLS makes sure Row Level Security is OFF on the core
+// tables on Postgres. This is intentionally a "force-off" (rather than a
+// no-op) because earlier iterations of this codebase enabled RLS on
+// memes / meme_annotations / meme_vectors as a "deny everything except
+// service role" guard for Supabase deployments — but never paired that with
+// explicit REVOKE / CREATE POLICY statements. The result was implicit and
+// easy to misconfigure: production silently relied on a BYPASSRLS service
+// role to read its own data.
+//
+// Access control is now handled at the connection layer (the backend always
+// connects with a service-role DSN and Supabase's anon/authenticated REST
+// API does not expose these tables for this project), so RLS here would
+// only add confusion. Running this migration on a database that previously
+// had RLS enabled will turn it off; on a fresh database it is a no-op.
+func disableCoreTableRLS(db *gorm.DB) error {
 	if db.Dialector.Name() != "postgres" {
 		return nil
 	}
@@ -573,7 +587,7 @@ func migrateCoreTableSecurity(db *gorm.DB) error {
 		if !db.Migrator().HasTable(table) {
 			continue
 		}
-		if err := db.Exec(fmt.Sprintf(`ALTER TABLE "%s" ENABLE ROW LEVEL SECURITY`, table)).Error; err != nil {
+		if err := db.Exec(fmt.Sprintf(`ALTER TABLE "%s" DISABLE ROW LEVEL SECURITY`, table)).Error; err != nil {
 			return err
 		}
 	}

@@ -8,7 +8,7 @@ This is the emomo monorepo: an AI-powered meme search engine with backend and fr
 ## 1. Repo Layout
 
 ```
-backend/      Go 1.24 + Gin, ingestion + REST API
+backend/      Go 1.26.2 + Gin, ingestion + REST API
 frontend/    React 19 + Vite SPA
 deployments/ Cross-service Docker Compose (API + Grafana Alloy)
 docs/        Cross-service design and ops docs
@@ -49,7 +49,7 @@ docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d  
 cd backend && go run ./cmd/api
 cd frontend && npm run dev
 cd backend && ./scripts/import-data.sh -p ./data/memes -l 50
-cd backend && go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
+cd backend && GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 ```
 
 ## 4. Current Backend Data Model

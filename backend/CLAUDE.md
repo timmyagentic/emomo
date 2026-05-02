@@ -8,7 +8,7 @@ All commands below assume `cd backend` unless stated otherwise.
 
 Emomo is an AI-powered meme/sticker semantic search system. Users can search for memes using natural language queries in Chinese.
 
-**Tech Stack:** Go 1.24 + Gin, Qdrant (vector DB), S3-compatible storage (R2/S3), SQLite/PostgreSQL, protobuf IDL, Qwen3-VL multimodal embeddings, OpenAI-compatible VLM/OCR auxiliary analysis, Grafana Alloy + Loki (logging)
+**Tech Stack:** Go 1.26.2 + Gin, Qdrant (vector DB), S3-compatible storage (R2/S3), SQLite/PostgreSQL, protobuf value schema, Qwen3-VL multimodal embeddings, OpenAI-compatible VLM/OCR auxiliary analysis, Grafana Alloy + Loki (logging)
 
 ## Build & Run Commands
 
@@ -67,15 +67,16 @@ backend/
 │   ├── logger/          # Context-aware structured logging
 │   ├── idl/             # generated protobuf Go code
 │   └── domain/          # Data models (Meme, MemeAnnotation, MemeVector)
-└── proto/               # protobuf IDL source (structured values + enums only)
+└── proto/               # protobuf value schema source (structured values + enums only)
 ```
 
 ### Data Flow
 
 1. **Ingestion**: Local static image source → validate/normalize image → compute `content_hash` → upload to object storage → create/reuse `memes` → direct image embedding → Qdrant upsert → `meme_vectors` save. VLM/OCR writes `meme_annotations` as auxiliary description/OCR/labels.
 2. **Search**: Query text → optional query expansion → multimodal query embedding → direct Qdrant image-vector search, optionally fused with caption dense and BM25 sparse routes → fetch metadata from `memes`.
-3. **Schema**: Core relational tables are `memes`, `meme_annotations`, and `meme_vectors`. protobuf IDL is defined in `proto/emomo/v1/schema.proto`; generated Go code lives in `internal/idl/emomo/v1/`. The IDL only owns column-level structured values (`ImageInfo`, `MemeAnnotationLabels`, `TextLabel`) and closed enums (`ImageFormat`, `VectorType`); table rows themselves are GORM structs in `internal/domain/`.
-4. **Migrations**: managed in code via GORM AutoMigrate plus the explicit helpers in `internal/repository/db.go` (`prepareLegacy*`, `migrate*`, `dropLegacy*`, `migrateCoreTableSecurity`). There is no separate SQL migration runner — do not introduce one without first replacing those Go helpers.
+3. **Schema**: Core relational tables are `memes`, `meme_annotations`, and `meme_vectors`. Schema-level types are defined in `proto/emomo/v1/schema.proto`; generated Go code lives in `internal/idl/emomo/v1/`. This protobuf value schema only owns column-level structured values (`ImageInfo`, `MemeAnnotationLabels`, `TextLabel`) and closed enums (`ImageFormat`, `VectorType`); table rows themselves are GORM structs in `internal/domain/`.
+4. **Migrations**: managed in code via GORM AutoMigrate plus the explicit helpers in `internal/repository/db.go` (`prepareLegacy*`, `migrate*`, `dropLegacy*`, `disableCoreTableRLS`). There is no separate SQL migration runner — do not introduce one without first replacing those Go helpers.
+5. **Row Level Security**: the core tables intentionally run with RLS disabled; `disableCoreTableRLS` actively turns it off on every `InitDB`. Access control is enforced at the connection layer (service-role DSN, no Supabase Data API exposure for these tables) — do not enable RLS again unless you also commit explicit `REVOKE` / `CREATE POLICY` statements.
 
 ## API Endpoints
 
@@ -114,5 +115,5 @@ Config file: `backend/configs/config.yaml`.
 - **Clean schema**: Do not reintroduce top-level `source_type`, `source_id`, `local_path`, `is_animated`, `md5_hash`, `status`, or per-vector provider/mode/dimension columns unless there is an implemented runtime need.
 - **Structured labels**: "has visible text" lives at `meme_annotations.labels.text.present`, and Qdrant `text_presence` is a derived payload/filter value.
 - **Multi-embedding**: each embedding route is registered in `internal/service/embedding_registry.go` and stored as a separate `meme_vectors` row keyed by `meme_id + collection + vector_type`.
-- **IDL generation**: after changing `proto/emomo/v1/schema.proto`, run `go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate`. Do NOT add top-level `Meme` / `MemeAnnotation` / `MemeVector` messages to the proto: the project does not speak protobuf on the wire and the relational rows are GORM structs.
+- **Schema-level type generation**: after changing `proto/emomo/v1/schema.proto`, run `GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate`. Do NOT add top-level `Meme` / `MemeAnnotation` / `MemeVector` messages to the proto: the project does not speak protobuf on the wire and the relational rows are GORM structs.
 - **Migrations**: extend `internal/repository/db.go` (specifically `dropLegacyArtifacts`, `migrateMemes`, `prepareLegacy*` helpers). Add a regression test in `db_test.go` (SQLite) and, if it touches Postgres-specific behaviour, in `db_postgres_integration_test.go`.

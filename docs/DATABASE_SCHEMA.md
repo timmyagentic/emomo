@@ -8,24 +8,26 @@
 
 检索主链路不是“图片 -> VLM 描述 -> 文本向量”。当前默认链路是：导入时直接生成图片向量并写入 Qdrant；搜索时把用户文本编码到同一个多模态向量空间，直接和图片向量做相似度匹配。`meme_annotations` 只用于展示、OCR、标签筛选和 caption/BM25 辅助信号。
 
-生产环境使用 Supabase/PostgreSQL 时，三张核心表位于 `public` schema，但浏览器端不直接访问这些表。前端只调用 Go API；Go 后端使用服务端数据库连接访问 Postgres。因此三张核心表启用 Row Level Security，不为 `anon` / `authenticated` 角色创建默认读写 policy，避免 Supabase Data API 暴露表数据。
+生产环境使用 Supabase/PostgreSQL 时，三张核心表位于 `public` schema，但浏览器端不直接访问这些表。前端只调用 Go API；Go 后端使用服务端（service-role）数据库连接访问 Postgres。
 
-## IDL
+三张核心表**不启用 Row Level Security**：访问控制完全在连接层做（service-role DSN + 不通过 Supabase Data API 把这些表暴露给 anon/authenticated）。早期版本曾把 RLS 在这些表上 ENABLE 但没建任何 policy，那是个"隐式拒绝 + 靠 BYPASSRLS 偷渡"的半成品；当前 `InitDB` 会通过 `disableCoreTableRLS` 主动 DISABLE，新老库行为统一。
+
+## Schema-Level Types
 
 类型契约定义在 `backend/proto/emomo/v1/schema.proto`，Go 生成代码在 `backend/internal/idl/emomo/v1/schema.pb.go`。
 
-**IDL 范围（重要）**：本项目的 protobuf 仅作为"列级结构化值"和"封闭枚举"的 schema 来源——并不是 wire / RPC 协议。HTTP API 直接使用 Go struct + `encoding/json`；schema.proto 里**不包含** `Meme` / `MemeAnnotation` / `MemeVector` 这种顶层表行 message，那些行模型由 GORM 结构体（`backend/internal/domain/`）定义。
+**protobuf value schema 范围（重要）**：本项目的 protobuf 仅作为"列级结构化值"和"封闭枚举"的 schema 来源——并不是 wire / RPC 协议。HTTP API 直接使用 Go struct + `encoding/json`；schema.proto 里**不包含** `Meme` / `MemeAnnotation` / `MemeVector` 这种顶层表行 message，那些行模型由 GORM 结构体（`backend/internal/domain/`）定义。
 
-重新生成 IDL 代码：
+重新生成 schema-level type 代码：
 
 ```bash
 cd backend
-go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
+GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 ```
 
 有限集合用 protobuf enum 定义，数据库里按整数存储；开放集合仍用文本：
 
-| 类型 | IDL | 数据库存储 |
+| 类型 | Schema-level type | 数据库存储 |
 |---|---|---|
 | 图片格式 | `ImageFormat` | `image_info.format` 内的 enum number |
 | 向量类型 | `VectorType` | `meme_vectors.vector_type INTEGER` |
@@ -42,11 +44,11 @@ go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 - `prepareLegacyMemesForAutoMigrate` / `prepareLegacyMemeVectorsForAutoMigrate` 处理老 schema 在 SQLite/Postgres 上的预处理（含 SQLite 整表重建）；
 - `migrateMemes` / `migrateMemeAnnotations` / `migrateMemeVectorIndexes` 做数据回填与索引重建；
 - `dropLegacyArtifacts`（含 `dropLegacyMemesColumns` / `dropLegacyMemeVectorsColumns` / `finalizeMemesConstraints` / `dropLegacyIndexes` / `dropLegacyTables`）清理废弃列、表、索引并补上 NOT NULL/DEFAULT 约束（仅 Postgres 需要）；
-- `migrateCoreTableSecurity` 在 Postgres 上启用三张核心表的 RLS。
+- `disableCoreTableRLS` 在 Postgres 上确保三张核心表的 RLS 处于关闭状态（旧库若已 ENABLE 也会被关回）。
 
 项目**不使用**独立的 SQL 迁移工具（goose / golang-migrate / atlas 等），也**不存在** `backend/migrations/` 目录。新增 schema 演进时：
 
-1. 修改 `backend/internal/domain/` 的 GORM 模型或 `backend/proto/emomo/v1/schema.proto` 的结构化值/枚举（IDL 改动跑 `buf generate`）；
+1. 修改 `backend/internal/domain/` 的 GORM 模型或 `backend/proto/emomo/v1/schema.proto` 的结构化值/枚举（schema-level type 改动跑 `buf generate`）；
 2. 在 `db.go` 里增改对应迁移函数；
 3. 在 `internal/repository/db_test.go` 中加一条 SQLite 集成测试覆盖"老 schema → 新 schema"路径，必要时也在 `db_postgres_integration_test.go` 加 Postgres 集成测试。
 
@@ -63,8 +65,6 @@ CREATE TABLE memes (
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
-
-ALTER TABLE memes ENABLE ROW LEVEL SECURITY;
 ```
 
 字段说明：
@@ -109,8 +109,6 @@ CREATE TABLE meme_annotations (
 
 CREATE UNIQUE INDEX idx_meme_annotations_meme_model
     ON meme_annotations(meme_id, analyzer_model);
-
-ALTER TABLE meme_annotations ENABLE ROW LEVEL SECURITY;
 ```
 
 字段说明：
@@ -157,8 +155,6 @@ CREATE TABLE meme_vectors (
 
 CREATE UNIQUE INDEX idx_meme_vectors_meme_collection_type
     ON meme_vectors(meme_id, collection, vector_type);
-
-ALTER TABLE meme_vectors ENABLE ROW LEVEL SECURITY;
 ```
 
 字段说明：
