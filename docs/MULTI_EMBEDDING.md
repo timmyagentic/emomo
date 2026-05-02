@@ -1,451 +1,198 @@
-# 多 Embedding 模型支持文档
+# 多 Embedding 与多路检索
 
-本文档详细说明了 emomo 项目中多 Embedding 模型支持的实现细节。
+本文描述当前默认的数据导入和检索链路。旧版本曾主要依赖 “VLM 生成图片描述 -> text embedding -> Qdrant 检索”；当前默认链路已经改为 Qwen3-VL 多模态 embedding：导入时直接为图片生成 image 向量，搜索时把用户文本嵌入到同一语义空间，并直接与图片向量做相似度匹配。
 
-## 目录
+VLM 描述和 OCR 仍然存在，但它们是 caption/keyword 辅助信号和展示元数据，不再是唯一或主检索路径。
 
-- [背景与目的](#背景与目的)
-- [架构设计](#架构设计)
-- [数据模型变化](#数据模型变化)
-- [配置说明](#配置说明)
-- [Ingest CLI 使用](#ingest-cli-使用)
-- [Search API 使用](#search-api-使用)
-- [代码变更详情](#代码变更详情)
-- [最佳实践](#最佳实践)
+schema 级类型使用 protobuf 维护：`backend/proto/emomo/v1/schema.proto` 定义了 `ImageFormat`、`VectorType`、`ImageInfo`、`MemeAnnotationLabels` 等结构。数据库里只保留三张核心表：`memes`、`meme_annotations`、`meme_vectors`。
 
----
+## 默认架构
 
-## 背景与目的
-
-### 需求背景
-
-原有系统仅支持单一 Embedding 模型（Jina Embeddings），向量维度固定为 1024。随着需求发展，需要支持更多 Embedding 模型（如 Qwen3-Embedding-8B），这些模型具有不同的向量维度（如 4096）。
-
-### 设计目标
-
-1. **不影响原有数据**：现有的 Jina embedding 数据和功能完全保留
-2. **多模型共存**：同一张图片可以被不同 Embedding 模型处理
-3. **资源复用**：已上传的 S3 图片和 VLM 描述可复用，无需重复调用
-4. **配置灵活**：通过配置文件和命令行参数选择 Embedding 模型
-
----
-
-## 架构设计
-
-### 整体架构
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Ingest CLI / API                             │
-│                   --embedding=jina | qwen3                          │
-└───────────────────────────────┬─────────────────────────────────────┘
-                                │
-                ┌───────────────┴───────────────┐
-                │                               │
-                ▼                               ▼
-┌───────────────────────────┐   ┌───────────────────────────────────┐
-│   JinaEmbeddingProvider   │   │ OpenAICompatibleEmbeddingProvider │
-│   (jina-embeddings-v4)    │   │    (Qwen3-Embedding-8B)           │
-│   dim: 2048               │   │    dim: 4096                      │
-└───────────────┬───────────┘   └───────────────┬───────────────────┘
-                │                               │
-                ▼                               ▼
-┌───────────────────────────┐   ┌───────────────────────────────────┐
-│   Qdrant Collection       │   │      Qdrant Collection            │
-│   "emomo_jina_v4"         │   │   "emomo_v2"                      │
-│   dim: 2048               │   │      dim: 4096                    │
-└───────────────────────────┘   └───────────────────────────────────┘
-                │                               │
-                └───────────────┬───────────────┘
-                                ▼
-                ┌───────────────────────────────┐
-                │          SQLite/PG            │
-                │   memes + meme_vectors        │
-                └───────────────────────────────┘
-```
-
-### 数据流程
-
-#### 新图片处理流程
-
-```
-图片 → 计算 MD5 → 检查 meme_vectors(md5, collection) → 不存在
-                                    ↓
-                    VLM 生成描述 → S3 上传 → 创建 meme 记录
-                                    ↓
-                    Embedding 生成 → Qdrant 写入 → 创建 meme_vectors 记录
-```
-
-#### 已有图片新 Embedding 流程（资源复用）
-
-```
-图片 → 计算 MD5 → 检查 meme_vectors(md5, collection) → 不存在
-                                    ↓
-               按 MD5 查询 meme 记录 → 存在 → 复用 storage_key + vlm_description
-                                    ↓
-                    Embedding 生成 → Qdrant 写入 → 创建 meme_vectors 记录
-```
-
----
-
-## 数据模型变化
-
-### 新增表：meme_vectors
-
-用于记录 meme 与向量的关联关系，支持同一 meme 在不同 collection 中有多个向量。
-
-```sql
-CREATE TABLE meme_vectors (
-    id              TEXT PRIMARY KEY,
-    meme_id         TEXT NOT NULL,           -- 关联 memes.id
-    md5_hash        TEXT NOT NULL,           -- 冗余存储，加速查询
-    collection      TEXT NOT NULL,           -- Qdrant collection 名称
-    embedding_model TEXT NOT NULL,           -- Embedding 模型名称
-    qdrant_point_id TEXT NOT NULL,           -- Qdrant 中的 point ID
-    status          TEXT DEFAULT 'active',   -- 状态：active, deleted
-    created_at      TIMESTAMP,
-    
-    UNIQUE (md5_hash, collection)            -- 同一图片在同一 collection 只有一条
-);
-
-CREATE INDEX idx_meme_vectors_meme ON meme_vectors(meme_id);
-```
-
-### memes 表保持不变
-
-原有 `memes` 表结构不变，保持向后兼容。
-
----
-
-## 配置说明
-
-### config.yaml 配置
+`backend/configs/config.yaml` 中默认配置了两个 embedding 路由和一个 search profile：
 
 ```yaml
 embeddings:
-  - name: jina
-    provider: jina
-    model: jina-embeddings-v4
-    api_key_env: JINA_API_KEY
+  - name: qwen3vl_image
+    provider: siliconflow
+    model: Qwen/Qwen3-VL-Embedding-8B
     document_mode: image
-    dimensions: 2048
-    collection: emomo_jina_v4
+    dimensions: 1024
+    collection: meme_image_qwen3vl_1024
 
-  - name: qwen3
-    provider: modelscope
-    model: Qwen/Qwen3-Embedding-8B
-    api_key_env: MODELSCOPE_API_KEY
-    base_url_env: MODELSCOPE_BASE_URL
-    dimensions: 4096
-    collection: emomo_v2
+  - name: qwen3vl_caption
+    provider: siliconflow
+    model: Qwen/Qwen3-VL-Embedding-8B
+    document_mode: text
+    dimensions: 1024
+    collection: meme_caption_qwen3vl_1024
     is_default: true
+
+search:
+  default_profile: qwen3vl
+  profiles:
+    - name: qwen3vl
+      image_embedding: qwen3vl_image
+      caption_embedding: qwen3vl_caption
 ```
 
-### 环境变量
+默认检索 profile 会融合三路结果：
 
-| 环境变量 | 说明 |
-|----------|------|
-| `JINA_API_KEY` | Jina API Key |
-| `MODELSCOPE_API_KEY` | ModelScope API Key |
-| `MODELSCOPE_BASE_URL` | ModelScope API Base URL |
-| `STORAGE_PUBLIC_URL` | Jina `document_mode=image` 时图片的公网访问地址 |
+| 路由 | Collection | 写入内容 | 查询方式 | 默认权重 |
+|------|------------|----------|----------|----------|
+| image | `meme_image_qwen3vl_1024` | 图片直接生成的多模态向量 | 文本 query 生成向量后直接搜图片向量 | 0.60 |
+| caption | `meme_caption_qwen3vl_1024` | OCR、VLM 描述、分类、tags、情绪词拼出的 caption 文本向量 | 文本 query 生成向量后搜 caption 向量 | 0.30 |
+| keyword | `meme_caption_qwen3vl_1024` | OCR、描述、tags 生成的 BM25 sparse vector | 原始 query 做 sparse/BM25 检索 | 0.10 |
 
-### EmbeddingConfig 字段说明
+## 导入流程
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `name` | string | Embedding 配置名称，也是 Search API 使用的 `collection` 参数值 |
-| `provider` | string | 提供商类型：`jina`, `modelscope`, `openai-compatible` |
-| `model` | string | 模型名称/ID |
-| `api_key` | string | API 认证密钥 |
-| `api_key_env` | string | 从环境变量读取 API Key |
-| `base_url` | string | API 基础 URL（OpenAI 兼容 API 需要）|
-| `base_url_env` | string | 从环境变量读取 Base URL |
-| `document_mode` | string | 文档嵌入模式：`text` 或 `image`；Jina v4 图像检索使用 `image` |
-| `dimensions` | int | 向量维度 |
-| `collection` | string | 对应的 Qdrant collection 名称 |
-| `is_default` | bool | 是否作为默认搜索/导入配置 |
+默认 profile 导入的核心步骤：
 
-`collection` 这个 Search API 字段使用的是 embedding 配置名称，如 `jina`、`qwen3`；Qdrant 实际 collection 名称仍然来自配置里的 `collection` 值，如 `emomo_jina_v4`、`emomo_v2`。
+```text
+localdir 扫描静态图片
+  -> 校验真实图片格式，拒绝 GIF/非静态格式
+  -> WebP 转 JPEG（用于存储和模型兼容）
+  -> 计算处理后图片 content_hash
+  -> 按 meme_id + collection + vector_type 检查缺失向量
+  -> 新图上传到 S3/R2，写 memes 元数据和 image_info
+  -> 获取或生成 VLM description + OCR text，写 meme_annotations
+  -> image route: 图片 URL/data -> 多模态 embedding -> Qdrant image collection
+  -> caption route: OCR/描述/category/tags/情绪词 -> text embedding + BM25 -> Qdrant caption collection
+  -> 写 meme_vectors，记录 collection、vector_type、model、point_id、annotation_id
+```
 
----
+已有图片重跑新 collection 或新 vector type 时，会复用 `memes.storage_key` 和已有 `meme_annotations`，只补缺失向量。
 
-## Ingest CLI 使用
+注意：`meme_annotations.description` 不是主检索语料，`meme_vectors.vector_type` 也不是字符串；它是 protobuf `VectorType` enum number。
 
-### 命令格式
+## 数据模型
+
+### `memes`
+
+保存图片本体元数据：`storage_key`、`content_hash`、`image_info`、`category`、自由 `tags`。`image_info` 是 protobuf `ImageInfo` 的 JSON 表示，集中存放宽、高和图片格式。
+
+### `meme_annotations`
+
+保存 VLM/OCR 分析结果和结构化标签：`meme_id`、`analyzer_model`、`description`、`ocr_text`、`labels`。`labels` 是 protobuf `MemeAnnotationLabels` 的 JSON 表示；“有没有文字”存为 `labels.text.present`，不是一级列。
+
+### `meme_vectors`
+
+记录每一路向量写入结果。当前关键字段包括：
+
+```text
+meme_id
+collection
+vector_type        protobuf enum: 1=image, 2=caption
+embedding_model
+input_hash
+annotation_id
+qdrant_point_id
+```
+
+唯一约束按 `meme_id + collection + vector_type` 去重，因此同一张图可以同时拥有 image 向量和 caption 向量。
+
+## Ingest CLI
+
+默认导入当前 search profile：
 
 ```bash
-./ingest [options]
+cd backend
+./scripts/import-data.sh -p ./data/memes -l 100
 ```
 
-### 命令行参数
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--source` | `localdir` | 数据源；当前仅支持 `localdir` |
-| `--path` | `""` | 本地静态图片目录；覆盖 `sources.localdir.root_path` |
-| `--limit` | `100` | 最大处理数量 |
-| `--embedding` | `""` | Embedding 配置名称（如 `jina`, `qwen3`）|
-| `--force` | `false` | 强制重新处理，跳过去重检查 |
-| `--retry` | `false` | 重试 pending 状态的记录 |
-| `--config` | `""` | 配置文件路径 |
-
-### 使用示例
+显式使用默认 profile：
 
 ```bash
-# 使用默认 Embedding（当前示例中为 qwen3）
-./ingest --source=localdir --path=./data/memes --limit=50
-
-# 使用 Jina v4 图像 Embedding
-./ingest --source=localdir --path=./data/memes --limit=50 --embedding=jina
-
-# 使用 Qwen3 Embedding
-./ingest --source=localdir --path=./data/memes --limit=50 --embedding=qwen3
-
-# 强制重新处理（跳过去重检查）
-./ingest --source=localdir --path=./data/memes --limit=50 --embedding=qwen3 --force
+./scripts/import-data.sh -p ./data/memes --profile qwen3vl -l 100
 ```
 
-### 输出日志示例
+只导入单一路 embedding：
+
+```bash
+./scripts/import-data.sh -p ./data/memes -e qwen3vl_image -l 100
+./scripts/import-data.sh -p ./data/memes -e qwen3vl_caption -l 100
+```
+
+补齐已有数据的新向量可使用 reembed：
+
+```bash
+go run ./cmd/reembed --profile qwen3vl --vector-type all
+go run ./cmd/reembed --profile qwen3vl --vector-type image
+go run ./cmd/reembed --profile qwen3vl --vector-type caption
+```
+
+如果数据库还没有更新到 `meme_annotations` / `meme_vectors.annotation_id` schema，首次回填时加上 `--auto-migrate`。
+
+## Search API
+
+默认搜索会使用 `qwen3vl` profile：
 
 ```json
 {
-  "level": "info",
-  "source": "localdir",
-  "limit": 50,
-  "embedding": "qwen3",
-  "embedding_model": "Qwen/Qwen3-Embedding-8B",
-  "embedding_dim": 4096,
-  "qdrant_collection": "emomo_v2",
-  "msg": "Starting ingestion"
+  "query": "无语",
+  "top_k": 20
 }
 ```
 
----
-
-## Search API 使用
-
-### POST /api/v1/search
-
-完整查询接口，支持 JSON body。
-
-**请求体：**
+也可以显式指定 profile：
 
 ```json
 {
-  "query": "开心的表情",
-  "top_k": 10,
-  "collection": "qwen3",
-  "category": "emoji",
-  "source_type": "localdir"
+  "query": "无语",
+  "top_k": 20,
+  "profile": "qwen3vl",
+  "category": "学生党表情包",
+  "text_presence": "with_text"
 }
 ```
 
-**响应示例：**
+服务内部流程：
 
-```json
-{
-  "results": [
-    {
-      "id": "uuid-xxx",
-      "url": "https://storage.example.com/xx/xxxxx.png",
-      "score": 0.89,
-      "description": "一个开心的表情...",
-      "category": "emoji",
-      "tags": ["开心", "笑"],
-      "width": 256,
-      "height": 256
-    }
-  ],
-  "total": 1,
-  "query": "开心的表情",
-  "expanded_query": "",
-  "collection": "qwen3"
-}
+```text
+query
+  -> 可选 query expansion
+  -> EmbedQuery(query) for image route
+  -> Qdrant Search(image collection)
+  -> EmbedQuery(query) for caption route
+  -> Qdrant Search(caption collection)
+  -> Qdrant SparseSearch(caption collection, original query)
+  -> weighted rank fusion
+  -> 用 memes 表补充 image_info/category/tags
 ```
 
-### GET /api/v1/stats
+## 配置字段说明
 
-获取统计信息，包括可用的 collections。
-
-**响应示例：**
-
-```json
-{
-  "total_active": 1000,
-  "total_pending": 5,
-  "total_categories": 10,
-  "available_collections": ["qwen3", "jina"]
-}
-```
-
----
-
-## 代码变更详情
-
-### 新增文件
-
-| 文件 | 说明 |
+| 字段 | 说明 |
 |------|------|
-| `internal/domain/meme_vector.go` | MemeVector 数据模型 |
-| `internal/repository/meme_vector_repo.go` | MemeVector 数据库操作 |
+| `name` | embedding 配置名称，也是 API 中可用的单路 collection key |
+| `provider` | `jina`、`modelscope`、`openai-compatible`、`siliconflow` |
+| `model` | embedding 模型名 |
+| `document_mode` | `image` 表示输入图片，`text` 表示输入 caption/query 文本 |
+| `dimensions` | 向量维度，必须和 Qdrant collection 一致 |
+| `collection` | 实际 Qdrant collection 名称 |
+| `is_default` | 单路 fallback 默认 embedding |
 
-### 修改文件
+这些配置字段属于运行时配置，不会逐项复制到 `meme_vectors`。关系库只记录当前必要的 `collection`、`vector_type`、`embedding_model`、`input_hash` 和 `qdrant_point_id`。
 
-| 文件 | 修改说明 |
-|------|----------|
-| `internal/repository/db.go` | 添加 `MemeVector` 表自动迁移 |
-| `internal/service/embedding.go` | 重构为接口化设计，添加 `EmbeddingProvider` 接口、多 Provider 实现 |
-| `internal/config/config.go` | 添加 `Embeddings` map 配置、辅助方法 |
-| `configs/config.yaml` | 添加 qwen3 Embedding 配置 |
-| `internal/repository/qdrant_repo.go` | 向量维度动态化、添加辅助方法 |
-| `internal/service/ingest.go` | 新去重逻辑、资源复用、支持 EmbeddingProvider 接口 |
-| `cmd/ingest/main.go` | 添加 `--embedding` 参数 |
-| `internal/service/search.go` | 支持多 Collection、`RegisterCollection` 方法 |
-| `cmd/api/main.go` | 初始化多个 embedding provider |
+## 环境变量
 
-### 接口变更
+当前默认配置需要：
 
-#### EmbeddingProvider 接口（新增）
-
-```go
-type EmbeddingProvider interface {
-    Embed(ctx context.Context, text string) ([]float32, error)
-    EmbedBatch(ctx context.Context, texts []string) ([][]float32, error)
-    EmbedQuery(ctx context.Context, query string) ([]float32, error)
-    EmbedDocument(ctx context.Context, doc EmbeddingDocument) ([]float32, error)
-    GetModel() string
-    GetDimensions() int
-}
+```bash
+SILICONFLOW_API_KEY=...
+SILICONFLOW_BASE_URL=...
+QDRANT_HOST=...
+QDRANT_PORT=6334
+QDRANT_API_KEY=...
+QDRANT_USE_TLS=true
+STORAGE_PUBLIC_URL=...
 ```
 
-#### IngestService 构造函数变更
-
-```go
-// 旧版
-func NewIngestService(
-    memeRepo *repository.MemeRepository,
-    qdrantRepo *repository.QdrantRepository,
-    objectStorage storage.ObjectStorage,
-    vlm *VLMService,
-    embedding *EmbeddingService,  // 旧类型
-    log *logger.Logger,
-    cfg *IngestConfig,
-) *IngestService
-
-// 新版
-func NewIngestService(
-    memeRepo *repository.MemeRepository,
-    vectorRepo *repository.MemeVectorRepository,  // 新增
-    qdrantRepo *repository.QdrantRepository,
-    objectStorage storage.ObjectStorage,
-    vlm *VLMService,
-    embedding EmbeddingProvider,  // 接口类型
-    log *logger.Logger,
-    cfg *IngestConfig,  // 增加 Collection 字段
-) *IngestService
-```
-
-#### SearchService 构造函数变更
-
-```go
-// 新版支持 EmbeddingProvider 接口
-func NewSearchService(
-    memeRepo *repository.MemeRepository,
-    qdrantRepo *repository.QdrantRepository,
-    embedding EmbeddingProvider,  // 接口类型
-    queryExpansion *QueryExpansionService,
-    objectStorage storage.ObjectStorage,
-    log *logger.Logger,
-    cfg *SearchConfig,  // 增加 DefaultCollection 字段
-) *SearchService
-
-// 新增方法
-func (s *SearchService) RegisterCollection(
-    name string,
-    qdrantRepo *repository.QdrantRepository,
-    embedding EmbeddingProvider,
-)
-```
-
----
+`VLM_MODEL` / `OPENAI_API_KEY` 仍用于 VLM 描述、OCR 和查询扩展，但默认 image route 的向量检索不依赖 “先把图片转成文字描述”。
 
 ## 最佳实践
 
-### 1. 环境变量管理
-
-建议将敏感的 API Key 通过环境变量配置，而非写在配置文件中：
-
-```bash
-# .env 文件
-JINA_API_KEY=jina_xxx
-MODELSCOPE_API_KEY=sk-xxx
-MODELSCOPE_BASE_URL=https://api-inference.modelscope.cn/v1
-```
-
-### 2. 分批导入策略
-
-对于大量数据，建议分批导入：
-
-```bash
-# 先使用默认 Embedding 导入所有数据
-./ingest --source=localdir --path=./data/memes --limit=1000
-
-# 再使用 Jina v4 图像 Embedding 为已有数据生成新向量
-./ingest --source=localdir --path=./data/memes --limit=1000 --embedding=jina
-
-# 或使用 Qwen3 为已有数据生成新向量
-./ingest --source=localdir --path=./data/memes --limit=1000 --embedding=qwen3
-```
-
-### 3. Collection 命名规范
-
-建议将两层命名分开：
-
-- Search API 的 `collection` 使用 embedding 配置名，如 `jina`、`qwen3`
-- Qdrant 的实际 collection 使用存储名，如 `emomo_jina_v4`、`emomo_v2`
-
-### 4. 监控与调试
-
-启动 API 时会输出可用的 collections：
-
-```json
-{
-  "port": 8080,
-  "default_collection": "qwen3",
-  "default_qdrant": "emomo_v2",
-  "available_collections": ["qwen3", "jina"]
-}
-```
-
----
-
-## 常见问题
-
-### Q: 如何添加新的 Embedding 模型？
-
-1. 在 `configs/config.yaml` 的 `embeddings` 下添加新配置
-2. 如果是 OpenAI 兼容 API，设置 `provider: modelscope` 或 `provider: openai-compatible`
-3. 确保 Qdrant 中已创建对应维度的 collection
-4. 重启 API 服务或使用 CLI 导入
-
-### Q: 如何查看某个图片在哪些 collection 中有向量？
-
-查询 `meme_vectors` 表：
-
-```sql
-SELECT collection, embedding_model, created_at 
-FROM meme_vectors 
-WHERE meme_id = 'xxx';
-```
-
-### Q: 资源复用的条件是什么？
-
-- S3 图片路径按 MD5 生成，相同图片自动复用
-- VLM 描述从已有 meme 记录复用（按 MD5 匹配）
-- 只有 Embedding 向量会重新生成
-
-### Q: 如何删除某个 collection 的所有向量？
-
-1. 删除 Qdrant collection：`curl -X DELETE "http://localhost:6333/collections/emomo_v2"`
-2. 删除数据库记录：`DELETE FROM meme_vectors WHERE collection = 'emomo_v2'`
+- 默认优先使用 `--profile qwen3vl`，保证 image/caption/keyword 三路信号完整。
+- 只验证图片向量质量时，可以单独导入或回填 `qwen3vl_image`。
+- 调整模型、prompt 或 caption 构造逻辑后，应使用 `cmd/reembed` 回填受影响的 vector type。
+- 不要把 `meme_annotations.description` 当成唯一检索语料；它只是辅助 caption/keyword 的一部分。
+- “有没有文字”在关系库中来自 `meme_annotations.labels.text.present`。Qdrant payload 可派生 `text_presence=with_text/without_text/unknown` 作为过滤字段。

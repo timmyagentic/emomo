@@ -11,6 +11,7 @@ import (
 
 	"github.com/timmy/emomo/internal/api"
 	"github.com/timmy/emomo/internal/config"
+	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/service"
@@ -85,7 +86,7 @@ func main() {
 	// Initialize repositories
 	memeRepo := repository.NewMemeRepository(db)
 	vectorRepo := repository.NewMemeVectorRepository(db)
-	descRepo := repository.NewMemeDescriptionRepository(db)
+	annotationRepo := repository.NewMemeAnnotationRepository(db)
 
 	ctx := context.Background()
 
@@ -133,7 +134,7 @@ func main() {
 	defaultProvider, defaultQdrantRepo := embeddingRegistry.Default()
 	defaultEmbeddingName := embeddingRegistry.DefaultName()
 	defaultQdrantCollection := defaultQdrantRepo.GetCollectionName()
-	defaultVectorType := ""
+	defaultVectorType := domain.MemeVectorTypeUnspecified
 	if defaultEmbeddingCfg := cfg.GetDefaultEmbedding(); defaultEmbeddingCfg != nil {
 		defaultVectorType = service.IngestVectorTypeForDocumentMode(defaultEmbeddingCfg.GetDocumentMode())
 	}
@@ -164,7 +165,7 @@ func main() {
 	// Create search service
 	searchService := service.NewSearchService(
 		memeRepo,
-		descRepo,
+		annotationRepo,
 		defaultQdrantRepo,
 		defaultProvider,
 		queryExpansionService,
@@ -213,7 +214,7 @@ func main() {
 	ingestService := service.NewIngestService(
 		memeRepo,
 		vectorRepo,
-		descRepo,
+		annotationRepo,
 		defaultQdrantRepo,
 		objectStorage,
 		vlmService,

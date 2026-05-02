@@ -11,6 +11,7 @@ import (
 // LoggerMiddleware returns a Gin middleware that injects a request-scoped logger.
 // Parameters:
 //   - log: base logger to enrich with request fields.
+//
 // Returns:
 //   - gin.HandlerFunc: middleware handler.
 func LoggerMiddleware(log *logger.Logger) gin.HandlerFunc {
@@ -65,6 +66,7 @@ func LoggerMiddleware(log *logger.Logger) gin.HandlerFunc {
 // GetLogger extracts logger from Gin context or request context.
 // Parameters:
 //   - c: Gin request context.
+//
 // Returns:
 //   - *logger.Logger: request-scoped logger or default logger.
 func GetLogger(c *gin.Context) *logger.Logger {

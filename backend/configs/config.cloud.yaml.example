@@ -21,7 +21,7 @@ database:
 # Qdrant Cloud 配置
 qdrant:
   host: your-cluster.qdrant.io  # Qdrant Cloud 集群地址
-  port: 443                      # Qdrant Cloud 使用 HTTPS
+  port: 6334                     # Qdrant Cloud gRPC 端口
   collection: emomo
   api_key: your-qdrant-api-key    # Qdrant Cloud API Key
   use_tls: true                  # Qdrant Cloud 需要 TLS
@@ -35,7 +35,7 @@ storage:
   use_ssl: true                                     # R2 使用 HTTPS
   bucket: memes                                     # Bucket 名称
   region: auto                                      # R2 使用 "auto"
-  public_url: https://pub-xxx.r2.dev                # R2.dev 公开访问 URL（Jina image mode 需要公网可访问）
+  public_url: https://pub-xxx.r2.dev                # R2.dev 公开访问 URL（image embedding 需要公网可访问）
 
 # 如果使用 AWS S3，配置示例：
 # storage:

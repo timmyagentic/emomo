@@ -48,6 +48,7 @@ func DefaultConfig() *Config {
 // New creates a new Logger with the given configuration.
 // Parameters:
 //   - cfg: logger configuration; nil uses DefaultConfig.
+//
 // Returns:
 //   - *Logger: initialized logger instance.
 func New(cfg *Config) *Logger {
@@ -77,8 +78,8 @@ func New(cfg *Config) *Logger {
 	// Set formatter - JSON format as default
 	if cfg.Format == "text" {
 		log.SetFormatter(&logrus.TextFormatter{
-			FullTimestamp:   true,
-			TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
+			FullTimestamp:    true,
+			TimestampFormat:  "2006-01-02T15:04:05.000Z07:00",
 			CallerPrettyfier: callerPrettyfier,
 		})
 	} else {
@@ -154,9 +155,9 @@ func NewFromEnv(envCfg *EnvConfig) *Logger {
 		if envCfg.Environment != "local" && envCfg.LogFile != "" {
 			fileWriter := &lumberjack.Logger{
 				Filename:   envCfg.LogFile,
-				MaxSize:    envCfg.MaxSize,    // MB
+				MaxSize:    envCfg.MaxSize, // MB
 				MaxBackups: envCfg.MaxBackups,
-				MaxAge:     envCfg.MaxAge,     // days
+				MaxAge:     envCfg.MaxAge, // days
 				Compress:   envCfg.Compress,
 			}
 			writers = append(writers, fileWriter)
@@ -209,6 +210,7 @@ func Sync() error {
 // WithFields returns a new Logger with additional fields.
 // Parameters:
 //   - fields: structured fields to add.
+//
 // Returns:
 //   - *Logger: derived logger with fields applied.
 func (l *Logger) WithFields(fields Fields) *Logger {
@@ -219,6 +221,7 @@ func (l *Logger) WithFields(fields Fields) *Logger {
 // Parameters:
 //   - key: field key.
 //   - value: field value.
+//
 // Returns:
 //   - *Logger: derived logger with field applied.
 func (l *Logger) WithField(key string, value interface{}) *Logger {
@@ -228,6 +231,7 @@ func (l *Logger) WithField(key string, value interface{}) *Logger {
 // WithError returns a new Logger with an error field.
 // Parameters:
 //   - err: error to attach.
+//
 // Returns:
 //   - *Logger: derived logger with error field.
 func (l *Logger) WithError(err error) *Logger {

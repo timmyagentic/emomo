@@ -58,13 +58,14 @@ func main() {
 	workers := flag.Int("workers", 4, "Number of concurrent workers")
 	dryRun := flag.Bool("dry-run", false, "Plan only: count memes that would be embedded but do not call any APIs")
 	force := flag.Bool("force", false, "Re-embed even if a meme_vectors row already exists for the target collection")
+	autoMigrate := flag.Bool("auto-migrate", false, "Run database auto-migrations before reembed")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		appLogger.WithError(err).Fatal("Failed to load config")
 	}
-	cfg.Database.AutoMigrate = false
+	cfg.Database.AutoMigrate = *autoMigrate
 
 	db, err := repository.InitDB(&cfg.Database)
 	if err != nil {
@@ -73,7 +74,7 @@ func main() {
 
 	memeRepo := repository.NewMemeRepository(db)
 	vectorRepo := repository.NewMemeVectorRepository(db)
-	descRepo := repository.NewMemeDescriptionRepository(db)
+	annotationRepo := repository.NewMemeAnnotationRepository(db)
 
 	embeddingRegistry, err := service.NewEmbeddingRegistry(&service.EmbeddingRegistryConfig{
 		Embeddings:        cfg.Embeddings,
@@ -136,6 +137,7 @@ func main() {
 		"workers":        *workers,
 		"dry_run":        *dryRun,
 		"force":          *force,
+		"auto_migrate":   *autoMigrate,
 	}).Info("Starting reembed")
 
 	sigChan := make(chan os.Signal, 1)
@@ -147,14 +149,14 @@ func main() {
 	}()
 
 	w := &worker{
-		log:           appLogger,
-		memeRepo:      memeRepo,
-		vectorRepo:    vectorRepo,
-		descRepo:      descRepo,
-		objectStorage: objectStorage,
-		vectorIndexes: vectorIndexes,
-		dryRun:        *dryRun,
-		force:         *force,
+		log:            appLogger,
+		memeRepo:       memeRepo,
+		vectorRepo:     vectorRepo,
+		annotationRepo: annotationRepo,
+		objectStorage:  objectStorage,
+		vectorIndexes:  vectorIndexes,
+		dryRun:         *dryRun,
+		force:          *force,
 	}
 
 	stats, err := w.run(ctx, *limit, *workers)
@@ -214,14 +216,11 @@ func buildReembedVectorIndexes(
 	}
 	return []service.IngestVectorIndex{
 		{
-			VectorType:         resolvedType,
-			Collection:         qdrantRepo.GetCollectionName(),
-			Provider:           embCfg.Provider,
-			Embedding:          provider,
-			QdrantRepo:         qdrantRepo,
-			UseSparse:          useSparse,
-			EmbeddingMode:      domain.MemeVectorEmbeddingModeIndependent,
-			EmbeddingDimension: provider.GetDimensions(),
+			VectorType: resolvedType,
+			Collection: qdrantRepo.GetCollectionName(),
+			Embedding:  provider,
+			QdrantRepo: qdrantRepo,
+			UseSparse:  useSparse,
 		},
 	}
 }
@@ -230,10 +229,11 @@ func filterVectorIndexes(indexes []service.IngestVectorIndex, vectorType string,
 	switch vectorType {
 	case "", "all":
 		return indexes
-	case domain.MemeVectorTypeImage, domain.MemeVectorTypeCaption:
+	case "image", "caption":
+		requestedType := domain.ParseMemeVectorType(vectorType)
 		filtered := make([]service.IngestVectorIndex, 0, len(indexes))
 		for _, index := range indexes {
-			if index.VectorType == vectorType {
+			if index.VectorType == requestedType {
 				filtered = append(filtered, index)
 			}
 		}
@@ -252,14 +252,14 @@ func filterVectorIndexes(indexes []service.IngestVectorIndex, vectorType string,
 // =============================================================================
 
 type worker struct {
-	log           *logger.Logger
-	memeRepo      *repository.MemeRepository
-	vectorRepo    *repository.MemeVectorRepository
-	descRepo      *repository.MemeDescriptionRepository
-	objectStorage storage.ObjectStorage
-	vectorIndexes []service.IngestVectorIndex
-	dryRun        bool
-	force         bool
+	log            *logger.Logger
+	memeRepo       *repository.MemeRepository
+	vectorRepo     *repository.MemeVectorRepository
+	annotationRepo *repository.MemeAnnotationRepository
+	objectStorage  storage.ObjectStorage
+	vectorIndexes  []service.IngestVectorIndex
+	dryRun         bool
+	force          bool
 }
 
 type runStats struct {
@@ -272,10 +272,9 @@ type runStats struct {
 
 const pageSize = 200
 
-// run streams memes (status=active) page-by-page and feeds them through a
-// fixed pool of workers. Each worker may concurrently call the embedding API
-// and upsert into Qdrant — both backends tolerate parallelism, but the user
-// can throttle via --workers if they want to respect Jina rate limits.
+// run streams stored memes page-by-page and feeds them through a fixed pool of
+// workers. Each worker may concurrently call the embedding API and upsert into
+// Qdrant; the user can throttle via --workers to respect provider rate limits.
 func (w *worker) run(ctx context.Context, limit, workers int) (runStats, error) {
 	if workers <= 0 {
 		workers = 1
@@ -308,7 +307,7 @@ func (w *worker) run(ctx context.Context, limit, workers int) (runStats, error) 
 				return
 			}
 
-			memes, err := w.memeRepo.ListByStatus(ctx, domain.MemeStatusActive, pageSize, offset)
+			memes, err := w.memeRepo.List(ctx, pageSize, offset)
 			if err != nil {
 				w.log.WithError(err).WithField("offset", offset).Error("Failed to list memes; aborting page")
 				return
@@ -368,16 +367,18 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 		return
 	}
 
-	// Look up an existing VLM description (any model) so we can populate the
+	// Look up an existing annotation (any model) so we can populate the
 	// Qdrant payload + BM25 sparse vector. Reembed never invokes the VLM.
-	desc := w.lookupDescription(ctx, meme.ID)
+	annotation := w.lookupAnnotation(ctx, meme.ID)
 	vlmDescription := ""
 	ocrText := ""
-	descriptionID := ""
-	if desc != nil {
-		vlmDescription = desc.Description
-		ocrText = service.NormalizeOCRText(desc.OCRText)
-		descriptionID = desc.ID
+	annotationID := ""
+	textPresence := domain.TextPresenceUnknown
+	if annotation != nil {
+		vlmDescription = annotation.Description
+		ocrText = service.NormalizeOCRText(annotation.OCRText)
+		annotationID = annotation.ID
+		textPresence = domain.TextPresenceFromLabels(annotation.Labels)
 	}
 
 	captionText := service.BuildCaptionEmbeddingText(
@@ -390,11 +391,11 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 	bm25Text := service.BuildBM25Text(ocrText, service.CompactDescription(vlmDescription), meme.Tags)
 	payload := &repository.MemePayload{
 		MemeID:         meme.ID,
-		SourceType:     meme.SourceType,
 		Category:       meme.Category,
 		Tags:           meme.Tags,
 		VLMDescription: vlmDescription,
 		OCRText:        ocrText,
+		TextPresence:   string(textPresence),
 		StorageURL:     imageURL,
 	}
 
@@ -408,9 +409,9 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 		atomic.AddInt64(&stats.Reembedded, int64(planned))
 		w.log.WithFields(logger.Fields{
 			"meme_id":         meme.ID,
-			"md5":             meme.MD5Hash,
+			"content_hash":    meme.ContentHash,
 			"image_url":       imageURL,
-			"has_desc":        desc != nil,
+			"has_annotation":  annotation != nil,
 			"planned_vectors": planned,
 		}).Info("[dry-run] would re-embed meme")
 		return
@@ -423,11 +424,11 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 			continue
 		}
 		if err := w.processVectorIndex(ctx, meme, index, vectorPayloadInput{
-			ImageURL:      imageURL,
-			CaptionText:   captionText,
-			BM25Text:      bm25Text,
-			DescriptionID: descriptionID,
-			Payload:       payload,
+			ImageURL:     imageURL,
+			CaptionText:  captionText,
+			BM25Text:     bm25Text,
+			AnnotationID: annotationID,
+			Payload:      payload,
 		}); err != nil {
 			atomic.AddInt64(&stats.Failed, 1)
 			w.log.WithError(err).WithFields(logger.Fields{
@@ -453,11 +454,11 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 }
 
 type vectorPayloadInput struct {
-	ImageURL      string
-	CaptionText   string
-	BM25Text      string
-	DescriptionID string
-	Payload       *repository.MemePayload
+	ImageURL     string
+	CaptionText  string
+	BM25Text     string
+	AnnotationID string
+	Payload      *repository.MemePayload
 }
 
 func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index service.IngestVectorIndex, captionText string, stats *runStats) bool {
@@ -466,18 +467,18 @@ func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index
 		w.log.WithFields(logger.Fields{
 			"meme_id":     meme.ID,
 			"collection":  index.Collection,
-			"vector_type": index.VectorType,
+			"vector_type": domain.MemeVectorTypeToString(index.VectorType),
 		}).Warn("Skipping caption vector because caption text is empty")
 		return false
 	}
 	if !w.force {
-		exists, err := w.vectorRepo.ExistsByMD5CollectionAndVectorType(ctx, meme.MD5Hash, index.Collection, index.VectorType)
+		exists, err := w.vectorRepo.ExistsByMemeIDCollectionAndVectorType(ctx, meme.ID, index.Collection, index.VectorType)
 		if err != nil {
 			atomic.AddInt64(&stats.Failed, 1)
 			w.log.WithError(err).WithFields(logger.Fields{
 				"meme_id":     meme.ID,
 				"collection":  index.Collection,
-				"vector_type": index.VectorType,
+				"vector_type": domain.MemeVectorTypeToString(index.VectorType),
 			}).Error("Failed to check vector existence")
 			return false
 		}
@@ -490,7 +491,7 @@ func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index
 
 func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index service.IngestVectorIndex, input vectorPayloadInput) error {
 	if w.force {
-		existing, err := w.vectorRepo.GetByMD5CollectionAndVectorType(ctx, meme.MD5Hash, index.Collection, index.VectorType)
+		existing, err := w.vectorRepo.GetByMemeIDCollectionAndVectorType(ctx, meme.ID, index.Collection, index.VectorType)
 		if err == nil && existing != nil {
 			if delErr := index.QdrantRepo.Delete(ctx, existing.QdrantPointID); delErr != nil {
 				w.log.WithError(delErr).WithField("point_id", existing.QdrantPointID).Warn("Failed to delete old Qdrant point before force reembed")
@@ -504,7 +505,7 @@ func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index
 	}
 
 	doc := service.EmbeddingDocument{}
-	inputHash := meme.MD5Hash
+	inputHash := meme.ContentHash
 	switch index.VectorType {
 	case domain.MemeVectorTypeCaption:
 		doc.Text = input.CaptionText
@@ -512,7 +513,7 @@ func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index
 	case domain.MemeVectorTypeImage:
 		doc.ImageURL = input.ImageURL
 	default:
-		return fmt.Errorf("unsupported vector type: %s", index.VectorType)
+		return fmt.Errorf("unsupported vector type: %s", domain.MemeVectorTypeToString(index.VectorType))
 	}
 
 	embedding, err := w.embedWithRetry(ctx, index.Embedding, doc, meme.ID)
@@ -531,25 +532,17 @@ func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index
 		}
 	}
 
-	dimension := index.EmbeddingDimension
-	if dimension <= 0 {
-		dimension = index.Embedding.GetDimensions()
-	}
 	vectorRecord := &domain.MemeVector{
-		ID:                uuid.New().String(),
-		MemeID:            meme.ID,
-		MD5Hash:           meme.MD5Hash,
-		Collection:        index.Collection,
-		VectorType:        index.VectorType,
-		EmbeddingModel:    index.Embedding.GetModel(),
-		EmbeddingProvider: index.Provider,
-		EmbeddingMode:     domain.MemeVectorEmbeddingModeIndependent,
-		Dimension:         dimension,
-		InputHash:         inputHash,
-		DescriptionID:     input.DescriptionID,
-		QdrantPointID:     pointID,
-		Status:            domain.MemeVectorStatusActive,
-		CreatedAt:         time.Now(),
+		ID:             uuid.New().String(),
+		MemeID:         meme.ID,
+		Collection:     index.Collection,
+		VectorType:     index.VectorType,
+		EmbeddingModel: index.Embedding.GetModel(),
+		InputHash:      inputHash,
+		AnnotationID:   input.AnnotationID,
+		QdrantPointID:  pointID,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 	if err := w.vectorRepo.Create(ctx, vectorRecord); err != nil {
 		if delErr := index.QdrantRepo.Delete(ctx, pointID); delErr != nil {
@@ -625,26 +618,26 @@ func calculateTextSHA256(text string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// lookupDescription returns any existing VLM description for the meme. It does
+// lookupAnnotation returns any existing annotation for the meme. It does
 // not error out when none is found — the meme can still be embedded purely
 // from its image; we just won't have OCR/desc to populate the payload.
-func (w *worker) lookupDescription(ctx context.Context, memeID string) *domain.MemeDescription {
-	descs, err := w.descRepo.GetByMemeID(ctx, memeID)
+func (w *worker) lookupAnnotation(ctx context.Context, memeID string) *domain.MemeAnnotation {
+	annotations, err := w.annotationRepo.GetByMemeID(ctx, memeID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
-		w.log.WithError(err).WithField("meme_id", memeID).Warn("Failed to load meme description; continuing without it")
+		w.log.WithError(err).WithField("meme_id", memeID).Warn("Failed to load meme annotation; continuing without it")
 		return nil
 	}
-	if len(descs) == 0 {
+	if len(annotations) == 0 {
 		return nil
 	}
-	// Prefer the most recently created description if multiple VLM models exist.
-	best := descs[0]
-	for i := 1; i < len(descs); i++ {
-		if descs[i].CreatedAt.After(best.CreatedAt) {
-			best = descs[i]
+	// Prefer the most recently created annotation if multiple analyzer models exist.
+	best := annotations[0]
+	for i := 1; i < len(annotations); i++ {
+		if annotations[i].CreatedAt.After(best.CreatedAt) {
+			best = annotations[i]
 		}
 	}
 	return &best

@@ -24,15 +24,11 @@ func TestMemeVectorRepositorySeparatesVectorTypesWithinCollection(t *testing.T) 
 	repo := NewMemeVectorRepository(db)
 	ctx := context.Background()
 	base := domain.MemeVector{
-		MemeID:            "meme-1",
-		MD5Hash:           "md5",
-		Collection:        "meme_caption_qwen3vl_1024",
-		EmbeddingModel:    "Qwen/Qwen3-VL-Embedding-8B",
-		EmbeddingProvider: "siliconflow",
-		EmbeddingMode:     "independent",
-		Dimension:         1024,
-		Status:            domain.MemeVectorStatusActive,
-		CreatedAt:         time.Now(),
+		MemeID:         "meme-1",
+		Collection:     "meme_caption_qwen3vl_1024",
+		EmbeddingModel: "Qwen/Qwen3-VL-Embedding-8B",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	image := base
@@ -54,9 +50,9 @@ func TestMemeVectorRepositorySeparatesVectorTypesWithinCollection(t *testing.T) 
 		t.Fatalf("failed to create caption vector with same md5+collection: %v", err)
 	}
 
-	exists, err := repo.ExistsByMD5CollectionAndVectorType(ctx, "md5", "meme_caption_qwen3vl_1024", domain.MemeVectorTypeCaption)
+	exists, err := repo.ExistsByMemeIDCollectionAndVectorType(ctx, "meme-1", "meme_caption_qwen3vl_1024", domain.MemeVectorTypeCaption)
 	if err != nil {
-		t.Fatalf("ExistsByMD5CollectionAndVectorType returned error: %v", err)
+		t.Fatalf("ExistsByMemeIDCollectionAndVectorType returned error: %v", err)
 	}
 	if !exists {
 		t.Fatal("expected caption vector to exist")

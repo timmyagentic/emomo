@@ -48,17 +48,17 @@ type SearchProfileConfig struct {
 
 // SearchService handles meme search operations.
 type SearchService struct {
-	memeRepo          *repository.MemeRepository
-	memeDescRepo      *repository.MemeDescriptionRepository
-	defaultQdrantRepo *repository.QdrantRepository
-	defaultEmbedding  EmbeddingProvider
-	queryExpansion    *QueryExpansionService
-	storage           storage.ObjectStorage
-	logger            *logger.Logger
-	scoreThreshold    float32
-	defaultCollection string
-	defaultProfile    string
-	retrieval         RetrievalConfig
+	memeRepo           *repository.MemeRepository
+	memeAnnotationRepo *repository.MemeAnnotationRepository
+	defaultQdrantRepo  *repository.QdrantRepository
+	defaultEmbedding   EmbeddingProvider
+	queryExpansion     *QueryExpansionService
+	storage            storage.ObjectStorage
+	logger             *logger.Logger
+	scoreThreshold     float32
+	defaultCollection  string
+	defaultProfile     string
+	retrieval          RetrievalConfig
 
 	// Multi-collection support: collection name -> config
 	collections map[string]*CollectionConfig
@@ -68,7 +68,7 @@ type SearchService struct {
 // NewSearchService creates a new search service.
 // Parameters:
 //   - memeRepo: repository for meme records.
-//   - memeDescRepo: repository for meme descriptions (metadata access).
+//   - memeAnnotationRepo: repository for meme annotations (metadata access).
 //   - qdrantRepo: default Qdrant repository.
 //   - embedding: default embedding provider.
 //   - queryExpansion: optional query expansion service.
@@ -80,7 +80,7 @@ type SearchService struct {
 //   - *SearchService: initialized search service.
 func NewSearchService(
 	memeRepo *repository.MemeRepository,
-	memeDescRepo *repository.MemeDescriptionRepository,
+	memeAnnotationRepo *repository.MemeAnnotationRepository,
 	qdrantRepo *repository.QdrantRepository,
 	embedding EmbeddingProvider,
 	queryExpansion *QueryExpansionService,
@@ -99,19 +99,19 @@ func NewSearchService(
 		retrieval = normalizeRetrievalConfig(cfg.Retrieval)
 	}
 	return &SearchService{
-		memeRepo:          memeRepo,
-		memeDescRepo:      memeDescRepo,
-		defaultQdrantRepo: qdrantRepo,
-		defaultEmbedding:  embedding,
-		queryExpansion:    queryExpansion,
-		storage:           objectStorage,
-		logger:            log,
-		scoreThreshold:    threshold,
-		defaultCollection: defaultCollection,
-		defaultProfile:    defaultProfile,
-		retrieval:         retrieval,
-		collections:       make(map[string]*CollectionConfig),
-		profiles:          make(map[string]*SearchProfileConfig),
+		memeRepo:           memeRepo,
+		memeAnnotationRepo: memeAnnotationRepo,
+		defaultQdrantRepo:  qdrantRepo,
+		defaultEmbedding:   embedding,
+		queryExpansion:     queryExpansion,
+		storage:            objectStorage,
+		logger:             log,
+		scoreThreshold:     threshold,
+		defaultCollection:  defaultCollection,
+		defaultProfile:     defaultProfile,
+		retrieval:          retrieval,
+		collections:        make(map[string]*CollectionConfig),
+		profiles:           make(map[string]*SearchProfileConfig),
 	}
 }
 
@@ -277,24 +277,24 @@ func (s *SearchService) log(ctx context.Context) *logger.Logger {
 
 // SearchRequest represents a text search request.
 type SearchRequest struct {
-	Query      string  `json:"query" binding:"required"`
-	TopK       int     `json:"top_k"`
-	Category   *string `json:"category,omitempty"`
-	SourceType *string `json:"source_type,omitempty"`
-	Collection string  `json:"collection,omitempty"` // Optional: specify which collection to search
-	Profile    string  `json:"profile,omitempty"`    // Optional: specify multi-route search profile
+	Query        string  `json:"query" binding:"required"`
+	TopK         int     `json:"top_k"`
+	Category     *string `json:"category,omitempty"`
+	TextPresence *string `json:"text_presence,omitempty"`
+	Collection   string  `json:"collection,omitempty"` // Optional: specify which collection to search
+	Profile      string  `json:"profile,omitempty"`    // Optional: specify multi-route search profile
 }
 
 // SearchResult represents a single search result.
 type SearchResult struct {
-	ID          string   `json:"id"`
-	URL         string   `json:"url"`
-	Score       float32  `json:"score"`
-	Description string   `json:"description"`
-	Category    string   `json:"category"`
-	Tags        []string `json:"tags"`
-	Width       int      `json:"width,omitempty"`
-	Height      int      `json:"height,omitempty"`
+	ID           string           `json:"id"`
+	URL          string           `json:"url"`
+	Score        float32          `json:"score"`
+	Description  string           `json:"description"`
+	Category     string           `json:"category"`
+	Tags         []string         `json:"tags"`
+	TextPresence string           `json:"text_presence,omitempty"`
+	ImageInfo    domain.ImageInfo `json:"image_info,omitempty"`
 }
 
 // SearchResponse represents the search response.
@@ -383,8 +383,8 @@ func (s *SearchService) TextSearch(ctx context.Context, req *SearchRequest) (*Se
 
 	// Build filters
 	filters := &repository.SearchFilters{
-		Category:   req.Category,
-		SourceType: req.SourceType,
+		Category:     req.Category,
+		TextPresence: req.TextPresence,
 	}
 
 	plan := buildHybridPlan(route, req.TopK)
@@ -409,12 +409,13 @@ func (s *SearchService) TextSearch(ctx context.Context, req *SearchRequest) (*Se
 			continue
 		}
 		results = append(results, SearchResult{
-			ID:          qr.Payload.MemeID,
-			URL:         qr.Payload.StorageURL,
-			Score:       qr.Score,
-			Description: qr.Payload.VLMDescription,
-			Category:    qr.Payload.Category,
-			Tags:        qr.Payload.Tags,
+			ID:           qr.Payload.MemeID,
+			URL:          qr.Payload.StorageURL,
+			Score:        qr.Score,
+			Description:  qr.Payload.VLMDescription,
+			Category:     qr.Payload.Category,
+			Tags:         qr.Payload.Tags,
+			TextPresence: qr.Payload.TextPresence,
 		})
 	}
 
@@ -441,8 +442,7 @@ func (s *SearchService) TextSearch(ctx context.Context, req *SearchRequest) (*Se
 
 			for i := range results {
 				if meme, ok := memeMap[results[i].ID]; ok {
-					results[i].Width = meme.Width
-					results[i].Height = meme.Height
+					results[i].ImageInfo = meme.ImageInfo
 				}
 			}
 		}
@@ -486,8 +486,8 @@ func (s *SearchService) searchProfile(
 	}
 
 	filters := &repository.SearchFilters{
-		Category:   req.Category,
-		SourceType: req.SourceType,
+		Category:     req.Category,
+		TextPresence: req.TextPresence,
 	}
 
 	imageResults, imageErr := profile.Image.QdrantRepo.Search(ctx, imageQueryEmbedding, s.retrieval.ImageTopK, filters)
@@ -568,11 +568,12 @@ func fuseProfileResults(
 			if !ok {
 				item = &scoredResult{
 					result: SearchResult{
-						ID:          qr.Payload.MemeID,
-						URL:         qr.Payload.StorageURL,
-						Description: qr.Payload.VLMDescription,
-						Category:    qr.Payload.Category,
-						Tags:        qr.Payload.Tags,
+						ID:           qr.Payload.MemeID,
+						URL:          qr.Payload.StorageURL,
+						Description:  qr.Payload.VLMDescription,
+						Category:     qr.Payload.Category,
+						Tags:         qr.Payload.Tags,
+						TextPresence: qr.Payload.TextPresence,
 					},
 				}
 				byMemeID[qr.Payload.MemeID] = item
@@ -631,8 +632,7 @@ func (s *SearchService) enrichSearchResults(ctx context.Context, results []Searc
 
 	for i := range results {
 		if meme, ok := memeMap[results[i].ID]; ok {
-			results[i].Width = meme.Width
-			results[i].Height = meme.Height
+			results[i].ImageInfo = meme.ImageInfo
 		}
 	}
 }
@@ -758,8 +758,8 @@ func (s *SearchService) TextSearchWithProgress(ctx context.Context, req *SearchR
 	}
 
 	filters := &repository.SearchFilters{
-		Category:   req.Category,
-		SourceType: req.SourceType,
+		Category:     req.Category,
+		TextPresence: req.TextPresence,
 	}
 
 	plan := buildHybridPlan(route, req.TopK)
@@ -788,12 +788,13 @@ func (s *SearchService) TextSearchWithProgress(ctx context.Context, req *SearchR
 			continue
 		}
 		result := SearchResult{
-			ID:          qr.Payload.MemeID,
-			URL:         qr.Payload.StorageURL,
-			Score:       qr.Score,
-			Description: qr.Payload.VLMDescription,
-			Category:    qr.Payload.Category,
-			Tags:        qr.Payload.Tags,
+			ID:           qr.Payload.MemeID,
+			URL:          qr.Payload.StorageURL,
+			Score:        qr.Score,
+			Description:  qr.Payload.VLMDescription,
+			Category:     qr.Payload.Category,
+			Tags:         qr.Payload.Tags,
+			TextPresence: qr.Payload.TextPresence,
 		}
 		results = append(results, result)
 	}
@@ -826,8 +827,7 @@ func (s *SearchService) TextSearchWithProgress(ctx context.Context, req *SearchR
 
 			for i := range results {
 				if meme, ok := memeMap[results[i].ID]; ok {
-					results[i].Width = meme.Width
-					results[i].Height = meme.Height
+					results[i].ImageInfo = meme.ImageInfo
 				}
 			}
 		}
@@ -911,11 +911,10 @@ func (s *SearchService) ListMemes(ctx context.Context, category string, limit, o
 			ID:          meme.ID,
 			URL:         url,
 			Score:       0,  // No score for listing (not a search)
-			Description: "", // VLM description moved to meme_descriptions table; use search for descriptions
+			Description: "", // VLM description moved to meme_annotations table; use search for descriptions
 			Category:    meme.Category,
 			Tags:        meme.Tags,
-			Width:       meme.Width,
-			Height:      meme.Height,
+			ImageInfo:   meme.ImageInfo,
 		}
 	}
 
@@ -935,12 +934,7 @@ func (s *SearchService) ListMemes(ctx context.Context, category string, limit, o
 //   - map[string]interface{}: aggregated stats for search and ingest.
 //   - error: non-nil if statistics cannot be computed.
 func (s *SearchService) GetStats(ctx context.Context) (map[string]interface{}, error) {
-	activeCount, err := s.memeRepo.CountByStatus(ctx, domain.MemeStatusActive)
-	if err != nil {
-		return nil, err
-	}
-
-	pendingCount, err := s.memeRepo.CountByStatus(ctx, domain.MemeStatusPending)
+	totalCount, err := s.memeRepo.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -951,8 +945,7 @@ func (s *SearchService) GetStats(ctx context.Context) (map[string]interface{}, e
 	}
 
 	return map[string]interface{}{
-		"total_active":          activeCount,
-		"total_pending":         pendingCount,
+		"total_memes":           totalCount,
 		"total_categories":      len(categories),
 		"available_collections": s.GetAvailableCollections(),
 		"available_profiles":    s.GetAvailableProfiles(),

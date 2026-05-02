@@ -102,9 +102,9 @@ function App() {
     const loadStats = async () => {
       try {
         const stats = await getStats();
-        if (stats.total_active > 0) {
-          setMemeCount(stats.total_active);
-          setFeedTotal(stats.total_active);
+        if (stats.total_memes > 0) {
+          setMemeCount(stats.total_memes);
+          setFeedTotal(stats.total_memes);
         }
       } catch (error) {
         console.error('Failed to load stats:', error);

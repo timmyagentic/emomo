@@ -24,6 +24,10 @@ export interface Meme {
   width?: number;
   /** The height of the meme image in pixels. */
   height?: number;
+  /** Structured image info returned by the backend. */
+  image_info?: ImageInfo;
+  /** Derived image format for UI display/download names. */
+  format?: string;
 
   // Legacy fields for demo data compatibility
   /**
@@ -38,34 +42,18 @@ export interface Meme {
   original_url?: string;
   /**
    * @deprecated
-   * Legacy field for the source type.
-   */
-  source_type?: string;
-  /**
-   * @deprecated
-   * Legacy field for the source ID.
-   */
-  source_id?: string;
-  /**
-   * @deprecated
-   * Legacy field for the storage key.
-   */
-  storage_key?: string;
-  /**
-   * @deprecated
-   * Legacy field for the file format.
-   */
-  format?: string;
-  /**
-   * @deprecated
-   * Legacy field for the file size in bytes.
-   */
-  file_size?: number;
-  /**
-   * @deprecated
    * Legacy field for the creation timestamp.
    */
   created_at?: string;
+}
+
+/**
+ * Structured image metadata returned as backend `image_info`.
+ */
+export interface ImageInfo {
+  width?: number;
+  height?: number;
+  format?: number | string;
 }
 
 /**
@@ -89,6 +77,10 @@ export interface SearchResult {
   width?: number;
   /** The height of the result image. */
   height?: number;
+  /** Structured image info returned by the backend. */
+  image_info?: ImageInfo;
+  /** Derived text-presence filter state from backend annotations. */
+  text_presence?: 'unknown' | 'with_text' | 'without_text' | string;
 }
 
 /**
@@ -164,10 +156,8 @@ export interface MemesListResponse {
  * Represents aggregate system stats returned by the backend.
  */
 export interface StatsResponse {
-  /** Number of active memes available for search and browsing. */
-  total_active: number;
-  /** Number of memes still pending ingestion. */
-  total_pending: number;
+  /** Number of memes available for search and browsing. */
+  total_memes: number;
   /** Number of categories currently available. */
   total_categories: number;
   /** Names of search collections exposed by the backend. */

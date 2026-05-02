@@ -2,13 +2,13 @@
 
 > This directory is the frontend subproject of the emomo monorepo. See the root [../README.md](../README.md) for repo-wide context. The Go backend lives in [../backend](../backend).
 
-Emomo is a meme search engine application that allows users to find memes using semantic search queries. This frontend application provides a responsive and interactive user interface for searching, browsing, and viewing memes.
+Emomo is a meme search engine application that allows users to find memes using semantic search queries. The backend default search path compares text query embeddings directly against multimodal image vectors; VLM/OCR descriptions are returned as auxiliary display metadata. This frontend provides a responsive interface for searching, browsing, and viewing memes.
 
 ## Features
 
 - **Semantic Search**: Find memes by describing them in natural language (e.g., "happy cat", "surprised dog").
 - **Meme Grid**: Browse search results or recommended memes in a responsive grid layout.
-- **Detailed View**: View high-resolution memes in a modal with metadata (tags, source, description).
+- **Detailed View**: View high-resolution memes in a modal with metadata such as category, tags, and auxiliary description.
 - **Interactive UI**: Animated transitions and hover effects using Framer Motion.
 - **Recommendations**: Displays recommended memes on the home page.
 - **Copy & Download**: Easily copy image links or download memes directly.

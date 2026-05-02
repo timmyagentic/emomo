@@ -15,24 +15,31 @@ license: mit
 > 本目录是 emomo monorepo 的后端子项目。仓库总览见 [../README.md](../README.md)。
 > Hugging Face Space 通过 GitHub Actions 仅同步本目录（见仓库 `.github/workflows/sync_to_hf.yml`），所以 Space 看到的根就是这里。
 
-Emomo 是一个基于 Go + Qdrant + VLM + Text Embedding 的表情包语义搜索系统，支持本地静态图片目录摄入、自动描述生成与向量检索。表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
+Emomo 是一个基于 Go + Qdrant + 多模态 Embedding 的表情包语义搜索系统，支持本地静态图片目录摄入、图片向量检索、caption/keyword 辅助检索和元数据管理。当前默认链路使用 Qwen3-VL：导入时直接为图片生成 image 向量，搜索时将用户文本嵌入到同一语义空间并与图片向量匹配；VLM 描述和 OCR 仍会生成，但主要作为 caption/BM25 辅助信号和展示元数据。表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
+
+关系库当前收敛为三张核心表：`memes`、`meme_annotations`、`meme_vectors`。schema 级类型使用 protobuf 定义在 `proto/emomo/v1/schema.proto`，生成代码在 `internal/idl/emomo/v1/`；`VectorType`、`ImageFormat` 等有限集合在数据库中存 enum number。该 IDL 只描述"列级结构化值"（`ImageInfo`、`MemeAnnotationLabels`、`TextLabel`）与封闭枚举，并不是 wire / RPC 协议——表行本身是 `internal/domain/` 下的 GORM 结构体。
+
+数据库迁移完全由代码托管：`internal/repository/db.go` 中的 GORM AutoMigrate 加上 `prepareLegacy*` / `migrate*` / `dropLegacy*` 这一组迁移函数是唯一的事实来源（single source of truth）；项目**不使用** goose / golang-migrate / atlas 等独立 SQL 迁移工具，也不存在 `backend/migrations/` 目录。新增 schema 演进需要修改 `db.go`，并在 `db_test.go` 里补一条 SQLite 集成测试。
+
+Supabase/PostgreSQL 部署会为核心表启用 Row Level Security。前端不直接访问 Supabase 表，所有读写继续经过 Go API。
 
 ## 功能概览
 
-- 语义搜索：输入文字描述即可检索相似表情包。
+- 多模态语义搜索：输入文字即可直接检索图片向量，默认融合 image、caption 和 keyword 三路结果。
 - 数据摄入：支持本地静态图片目录分批摄入，仅接收静态图片并跳过 GIF 文件。
-- 向量管理：支持多 Embedding 模型/多集合管理。
+- 向量管理：支持多 Embedding 模型、多集合和 image/caption 多路向量管理。
 - 存储抽象：兼容 Cloudflare R2、AWS S3 与其他 S3 兼容服务。
-- 可扩展：查询扩展、VLM 描述与多模型配置均可开关。
+- 可扩展：查询扩展、VLM/OCR 辅助分析与多模型配置均可开关。
 
 ## 技术栈
 
 - **后端**: Go + Gin + GORM
+- **IDL**: protobuf + buf
 - **向量数据库**: Qdrant (gRPC)
 - **元数据存储**: SQLite (本地) / PostgreSQL (生产)
 - **对象存储**: S3 兼容存储（Cloudflare R2、AWS S3 等）
-- **VLM**: OpenAI-compatible API (图片描述生成)
-- **Text Embedding**: Jina Embeddings / OpenAI-compatible Embeddings
+- **Embedding**: Qwen3-VL 多模态 Embedding / Jina / OpenAI-compatible Embeddings
+- **VLM/OCR**: OpenAI-compatible API (caption、OCR、keyword 辅助分析)
 
 ## 环境要求
 
@@ -102,7 +109,7 @@ STORAGE_USE_SSL=false
 ```bash
 # 在仓库根执行（compose 文件在 ../deployments）
 cd ..
-docker compose -f deployments/docker-compose.yml up -d
+docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d
 ```
 
 ### 3) 准备数据源
@@ -184,9 +191,10 @@ curl http://localhost:8080/api/v1/stats
 
 | 配置项 | 环境变量 | 说明 |
 |--------|----------|------|
-| vlm.api_key | OPENAI_API_KEY | OpenAI-compatible API Key |
+| vlm.api_key | OPENAI_API_KEY | OpenAI-compatible API Key（VLM/OCR/查询扩展） |
 | vlm.base_url | OPENAI_BASE_URL | OpenAI-compatible Base URL |
-| embedding.api_key | EMBEDDING_API_KEY | Embedding API Key |
+| embeddings[].api_key_env | SILICONFLOW_API_KEY | 默认 Qwen3-VL 多模态 Embedding API Key |
+| embeddings[].base_url_env | SILICONFLOW_BASE_URL | 默认 Qwen3-VL Embedding API Base URL |
 | storage.type | STORAGE_TYPE | 存储类型：r2, s3, s3compatible |
 | storage.endpoint | STORAGE_ENDPOINT | 存储端点（不含 bucket） |
 | storage.bucket | STORAGE_BUCKET | 存储桶名称 |
@@ -208,21 +216,30 @@ go test ./...
 go run ./cmd/api
 ```
 
+### 更新 protobuf IDL
+
+```bash
+go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
+```
+
+修改 `proto/emomo/v1/schema.proto` 后需要重新生成 `internal/idl/emomo/v1/schema.pb.go`，再运行 `go test ./...`。
+
 ## 项目结构（backend/）
 
 ```
 backend/
 ├── cmd/                 # Go 入口（api/ingest）
 ├── internal/            # Go 应用核心逻辑
+│   ├── idl/             # protobuf 生成代码（结构化值 + 枚举）
 │   ├── api/             # API 层
 │   ├── config/          # 配置管理
-│   ├── domain/          # 领域模型
-│   ├── repository/      # 数据访问层
+│   ├── domain/          # 领域模型（GORM 结构体）
+│   ├── repository/      # 数据访问层；db.go 统管全部迁移
 │   ├── service/         # 业务逻辑层
 │   ├── source/          # 数据源适配器
 │   └── storage/         # 对象存储
 ├── configs/             # 配置文件
-├── migrations/          # SQL 迁移
+├── proto/               # protobuf IDL（仅列级结构化值与封闭枚举）
 ├── data/                # 本地数据目录（被 gitignore，仅保留 .gitkeep）
 ├── scripts/             # 后端脚本（import-data / setup / check-data-dir）
 └── Dockerfile           # 后端镜像

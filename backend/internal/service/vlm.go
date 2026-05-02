@@ -27,7 +27,7 @@ var InternetMemes = []string{
 
 const (
 	// VLM System Prompt - 定义角色和规则
-	vlmSystemPrompt = `你是表情包语义分析专家，负责生成用于向量搜索的描述文本。你的描述将被转换为向量，用于语义搜索匹配。
+	vlmSystemPrompt = `你是表情包语义分析专家，负责生成用于展示、OCR 辅助和 caption/BM25 辅助检索的描述文本。默认检索链路会直接使用图片向量，描述不是图片检索的前置条件。
 
 【分析步骤】
 1. 文字提取（最高优先级）：完整提取图片中所有文字，理解文字含义和表达意图

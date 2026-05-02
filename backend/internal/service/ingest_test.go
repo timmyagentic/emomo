@@ -6,14 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 
+	"github.com/qdrant/go-client/qdrant"
 	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/source"
+	"google.golang.org/grpc"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -53,7 +58,7 @@ func TestProcessItemRollsBackNewMemeWhenVectorWriteFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&domain.Meme{}, &domain.MemeVector{}, &domain.MemeDescription{}); err != nil {
+	if err := db.AutoMigrate(&domain.Meme{}, &domain.MemeVector{}, &domain.MemeAnnotation{}); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
 
@@ -85,7 +90,7 @@ func TestProcessItemRollsBackNewMemeWhenVectorWriteFails(t *testing.T) {
 	ingest := NewIngestService(
 		repository.NewMemeRepository(db),
 		repository.NewMemeVectorRepository(db),
-		repository.NewMemeDescriptionRepository(db),
+		repository.NewMemeAnnotationRepository(db),
 		nil,
 		store,
 		vlm,
@@ -125,7 +130,7 @@ func TestProcessItemRollsBackNewMemeWhenVectorWriteFails(t *testing.T) {
 	}
 
 	var descriptionCount int64
-	if err := db.Model(&domain.MemeDescription{}).Count(&descriptionCount).Error; err != nil {
+	if err := db.Model(&domain.MemeAnnotation{}).Count(&descriptionCount).Error; err != nil {
 		t.Fatalf("count descriptions: %v", err)
 	}
 	if descriptionCount != 0 {
@@ -137,6 +142,206 @@ func TestProcessItemRollsBackNewMemeWhenVectorWriteFails(t *testing.T) {
 	}
 	if store.deleteCount != 1 {
 		t.Fatalf("storage delete count = %d, want 1", store.deleteCount)
+	}
+}
+
+func TestProcessItemWritesImageVectorWhenVLMFails(t *testing.T) {
+	t.Parallel()
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&domain.Meme{}, &domain.MemeVector{}, &domain.MemeAnnotation{}); err != nil {
+		t.Fatalf("failed to migrate test database: %v", err)
+	}
+
+	imagePath := filepath.Join(t.TempDir(), "meme.png")
+	if err := os.WriteFile(imagePath, testPNG1x1, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	qdrantRepo, fakeQdrant := newTestQdrantRepository(t)
+	store := newMemoryObjectStorage()
+	vlm := NewVLMService(&VLMConfig{
+		Model:   "test-vlm",
+		APIKey:  "test-key",
+		BaseURL: "https://vlm.test/v1",
+	})
+	vlm.client.SetTransport(roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(t, http.StatusInternalServerError, openAIResponse{}), nil
+	}))
+
+	ingest := NewIngestService(
+		repository.NewMemeRepository(db),
+		repository.NewMemeVectorRepository(db),
+		repository.NewMemeAnnotationRepository(db),
+		qdrantRepo,
+		store,
+		vlm,
+		fixedEmbeddingProvider{},
+		nil,
+		&IngestConfig{
+			Workers:   1,
+			BatchSize: 1,
+			VectorIndexes: []IngestVectorIndex{
+				{
+					VectorType: domain.MemeVectorTypeImage,
+					Collection: "image_collection",
+					Embedding:  fixedEmbeddingProvider{},
+					QdrantRepo: qdrantRepo,
+				},
+				{
+					VectorType: domain.MemeVectorTypeCaption,
+					Collection: "caption_collection",
+					Embedding:  fixedEmbeddingProvider{},
+					QdrantRepo: qdrantRepo,
+				},
+			},
+		},
+	)
+
+	err = ingest.processItem(context.Background(), "test", &source.MemeItem{
+		SourceID:  "new-meme",
+		LocalPath: imagePath,
+		Format:    "png",
+		Category:  "reaction",
+		Tags:      []string{"happy"},
+	}, &IngestOptions{})
+	if err != nil {
+		t.Fatalf("processItem() error = %v, want nil", err)
+	}
+
+	var vectors []domain.MemeVector
+	if err := db.Find(&vectors).Error; err != nil {
+		t.Fatalf("failed to load vectors: %v", err)
+	}
+	if len(vectors) == 0 {
+		t.Fatal("vector count = 0, want at least image vector")
+	}
+	hasImageVector := false
+	for _, vector := range vectors {
+		if vector.VectorType == domain.MemeVectorTypeImage {
+			hasImageVector = true
+		}
+	}
+	if !hasImageVector {
+		t.Fatalf("vectors = %+v, want image vector", vectors)
+	}
+	if fakeQdrant.upserts == 0 {
+		t.Fatal("qdrant upserts = 0, want at least one image vector upsert")
+	}
+}
+
+func TestProcessItemForceKeepsOldVectorWhenReplacementFails(t *testing.T) {
+	t.Parallel()
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&domain.Meme{}, &domain.MemeVector{}, &domain.MemeAnnotation{}); err != nil {
+		t.Fatalf("failed to migrate test database: %v", err)
+	}
+
+	imagePath := filepath.Join(t.TempDir(), "meme.png")
+	if err := os.WriteFile(imagePath, testPNG1x1, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	meme := &domain.Meme{
+		ID:          "meme-existing",
+		StorageKey:  "ab/existing.png",
+		ContentHash: calculateMD5(testPNG1x1),
+		ImageInfo: domain.ImageInfo{
+			Width:  1,
+			Height: 1,
+			Format: domain.ImageFormatPNG,
+		},
+		Category:  "reaction",
+		Tags:      domain.StringArray{"happy"},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := repository.NewMemeRepository(db).Create(context.Background(), meme); err != nil {
+		t.Fatalf("failed to create meme: %v", err)
+	}
+
+	vectorRepo := repository.NewMemeVectorRepository(db)
+	oldVector := &domain.MemeVector{
+		ID:             "vector-existing",
+		MemeID:         meme.ID,
+		Collection:     "image_collection",
+		VectorType:     domain.MemeVectorTypeImage,
+		EmbeddingModel: "test-embedding",
+		InputHash:      meme.ContentHash,
+		QdrantPointID:  "00000000-0000-0000-0000-000000000001",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+	if err := vectorRepo.Create(context.Background(), oldVector); err != nil {
+		t.Fatalf("failed to create old vector: %v", err)
+	}
+
+	annotation := &domain.MemeAnnotation{
+		ID:            "annotation-existing",
+		MemeID:        meme.ID,
+		AnalyzerModel: "test-vlm",
+		Description:   "开心表情",
+		OCRText:       "你好",
+		Labels: domain.AnnotationLabels{
+			Text: &domain.TextLabel{Present: true},
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := repository.NewMemeAnnotationRepository(db).Create(context.Background(), annotation); err != nil {
+		t.Fatalf("failed to create annotation: %v", err)
+	}
+
+	store := newMemoryObjectStorage()
+	store.objects[meme.StorageKey] = testPNG1x1
+	vlm := NewVLMService(&VLMConfig{
+		Model:   "test-vlm",
+		APIKey:  "test-key",
+		BaseURL: "https://vlm.test/v1",
+	})
+	ingest := NewIngestService(
+		repository.NewMemeRepository(db),
+		vectorRepo,
+		repository.NewMemeAnnotationRepository(db),
+		nil,
+		store,
+		vlm,
+		fixedEmbeddingProvider{},
+		nil,
+		&IngestConfig{
+			Workers:   1,
+			BatchSize: 1,
+			VectorIndexes: []IngestVectorIndex{
+				{
+					VectorType: domain.MemeVectorTypeImage,
+					Collection: "image_collection",
+					Embedding:  fixedEmbeddingProvider{},
+				},
+			},
+		},
+	)
+
+	err = ingest.processItem(context.Background(), "test", &source.MemeItem{
+		SourceID:  "existing-meme",
+		LocalPath: imagePath,
+		Format:    "png",
+		Category:  "reaction",
+		Tags:      []string{"happy"},
+	}, &IngestOptions{Force: true})
+	if err == nil {
+		t.Fatal("processItem() error = nil, want replacement write failure")
+	}
+
+	var vector domain.MemeVector
+	if err := db.First(&vector, "id = ?", oldVector.ID).Error; err != nil {
+		t.Fatalf("old vector was removed after failed force replacement: %v", err)
 	}
 }
 
@@ -163,6 +368,79 @@ func TestNewIngestServiceFallbackIndexUsesConfiguredVectorType(t *testing.T) {
 	}
 	if ingest.indexes[0].VectorType != domain.MemeVectorTypeCaption {
 		t.Fatalf("fallback vector type = %q, want %q", ingest.indexes[0].VectorType, domain.MemeVectorTypeCaption)
+	}
+}
+
+func TestShouldExtractOCRForAnnotationSkipsKnownWithoutText(t *testing.T) {
+	t.Parallel()
+
+	annotation := &domain.MemeAnnotation{
+		Labels: domain.AnnotationLabels{
+			Text: &domain.TextLabel{Present: false},
+		},
+	}
+	if shouldExtractOCRForAnnotation(annotation, "") {
+		t.Fatal("should not extract OCR for annotation already marked without_text")
+	}
+
+	unknown := &domain.MemeAnnotation{}
+	if !shouldExtractOCRForAnnotation(unknown, "") {
+		t.Fatal("should extract OCR for annotation with unknown text presence")
+	}
+}
+
+func TestMissingVectorIndexesForceKeepsExistingVectorRecords(t *testing.T) {
+	t.Parallel()
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&domain.MemeVector{}); err != nil {
+		t.Fatalf("failed to migrate meme_vectors: %v", err)
+	}
+
+	repo := repository.NewMemeVectorRepository(db)
+	ctx := context.Background()
+	existing := &domain.MemeVector{
+		ID:             "vector-caption",
+		MemeID:         "meme-1",
+		Collection:     "caption_collection",
+		VectorType:     domain.MemeVectorTypeCaption,
+		EmbeddingModel: "test-embedding",
+		InputHash:      "old-caption-hash",
+		QdrantPointID:  "00000000-0000-0000-0000-000000000001",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+	if err := repo.Create(ctx, existing); err != nil {
+		t.Fatalf("failed to create existing vector: %v", err)
+	}
+
+	ingest := &IngestService{
+		vectorRepo: repo,
+		indexes: []IngestVectorIndex{
+			{
+				VectorType: domain.MemeVectorTypeCaption,
+				Collection: "caption_collection",
+			},
+		},
+	}
+
+	missing, err := ingest.missingVectorIndexes(ctx, "meme-1", true)
+	if err != nil {
+		t.Fatalf("missingVectorIndexes() error = %v", err)
+	}
+	if len(missing) != 1 {
+		t.Fatalf("missingVectorIndexes() returned %d indexes, want 1", len(missing))
+	}
+
+	exists, err := repo.ExistsByMemeIDCollectionAndVectorType(ctx, "meme-1", "caption_collection", domain.MemeVectorTypeCaption)
+	if err != nil {
+		t.Fatalf("ExistsByMemeIDCollectionAndVectorType() error = %v", err)
+	}
+	if !exists {
+		t.Fatal("existing vector record was removed before replacement")
 	}
 }
 
@@ -247,4 +525,62 @@ func (s *memoryObjectStorage) Delete(_ context.Context, key string) error {
 func (s *memoryObjectStorage) Exists(_ context.Context, key string) (bool, error) {
 	_, ok := s.objects[key]
 	return ok, nil
+}
+
+type testQdrantServer struct {
+	qdrant.UnimplementedPointsServer
+	upserts int
+	deletes int
+}
+
+func (s *testQdrantServer) Upsert(context.Context, *qdrant.UpsertPoints) (*qdrant.PointsOperationResponse, error) {
+	s.upserts++
+	return &qdrant.PointsOperationResponse{}, nil
+}
+
+func (s *testQdrantServer) Delete(context.Context, *qdrant.DeletePoints) (*qdrant.PointsOperationResponse, error) {
+	s.deletes++
+	return &qdrant.PointsOperationResponse{}, nil
+}
+
+func newTestQdrantRepository(t *testing.T) (*repository.QdrantRepository, *testQdrantServer) {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen for fake qdrant: %v", err)
+	}
+
+	server := grpc.NewServer()
+	fake := &testQdrantServer{}
+	qdrant.RegisterPointsServer(server, fake)
+	go func() {
+		_ = server.Serve(listener)
+	}()
+	t.Cleanup(func() {
+		server.Stop()
+		_ = listener.Close()
+	})
+
+	host, portValue, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to split fake qdrant address: %v", err)
+	}
+	port, err := strconv.Atoi(portValue)
+	if err != nil {
+		t.Fatalf("failed to parse fake qdrant port: %v", err)
+	}
+
+	repo, err := repository.NewQdrantRepository(&repository.QdrantConnectionConfig{
+		Host:       host,
+		Port:       port,
+		Collection: "test_collection",
+	})
+	if err != nil {
+		t.Fatalf("failed to create qdrant repository: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = repo.Close()
+	})
+	return repo, fake
 }

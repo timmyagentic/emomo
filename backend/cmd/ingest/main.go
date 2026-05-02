@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/timmy/emomo/internal/config"
+	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/service"
@@ -80,7 +81,7 @@ func main() {
 	// Initialize repositories
 	memeRepo := repository.NewMemeRepository(db)
 	vectorRepo := repository.NewMemeVectorRepository(db)
-	descRepo := repository.NewMemeDescriptionRepository(db)
+	annotationRepo := repository.NewMemeAnnotationRepository(db)
 
 	embeddingRegistry, err := service.NewEmbeddingRegistry(&service.EmbeddingRegistryConfig{
 		Embeddings:        cfg.Embeddings,
@@ -110,7 +111,7 @@ func main() {
 	collectionName := ""
 	activeProfile := ""
 	activeEmbedding := ""
-	fallbackVectorType := ""
+	fallbackVectorType := domain.MemeVectorTypeUnspecified
 
 	if *embeddingName == "" {
 		var profileCfg *config.SearchProfileConfig
@@ -196,7 +197,7 @@ func main() {
 	ingestService := service.NewIngestService(
 		memeRepo,
 		vectorRepo,
-		descRepo,
+		annotationRepo,
 		qdrantRepo,
 		objectStorage,
 		vlmService,

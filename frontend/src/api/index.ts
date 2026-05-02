@@ -54,9 +54,37 @@ function normalizeResults(results: SearchResult[]): Meme[] {
     vlm_description: result.description, // keep for backward compatibility
     category: result.category,
     tags: result.tags,
-    width: result.width,
-    height: result.height,
+    width: result.image_info?.width ?? result.width,
+    height: result.image_info?.height ?? result.height,
+    image_info: result.image_info,
+    format: normalizeImageFormat(result.image_info?.format),
   }));
+}
+
+function normalizeImageFormat(format?: number | string): string | undefined {
+  if (format === undefined || format === null) {
+    return undefined;
+  }
+  switch (format) {
+    case 1:
+    case '1':
+    case 'jpg':
+    case 'jpeg':
+    case 'IMAGE_FORMAT_JPEG':
+      return 'jpg';
+    case 2:
+    case '2':
+    case 'png':
+    case 'IMAGE_FORMAT_PNG':
+      return 'png';
+    case 3:
+    case '3':
+    case 'webp':
+    case 'IMAGE_FORMAT_WEBP':
+      return 'webp';
+    default:
+      return undefined;
+  }
 }
 
 /**

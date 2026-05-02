@@ -4,10 +4,11 @@
 > All commands below assume `cd frontend`.
 
 ## Project Overview
-`emomo-frontend` is a React-based web application designed for searching, viewing, and discovering memes. It serves as the frontend for the Emomo platform, interacting with a backend API to fetch meme data based on semantic search queries (likely powered by VLM descriptions).
+`emomo-frontend` is a React-based web application designed for searching, viewing, and discovering memes. It serves as the frontend for the Emomo platform, interacting with a backend API whose default search path uses multimodal image embeddings. VLM/OCR descriptions are auxiliary metadata returned for display, not the primary retrieval mechanism.
 
 **Key Features:**
 - **Semantic Search:** Users can search for memes using natural language queries.
+- **Backend Filters:** Search can pass category/profile filters; "has visible text" is represented backend-side as a derived `text_presence` filter from `meme_annotations.labels.text.present`.
 - **Meme Discovery:** A homepage displaying recommended memes.
 - **Detailed View:** Modal view for individual memes with high-resolution images and metadata.
 - **Resilience:** Includes a "Demo Mode" with hardcoded data that activates automatically if the backend API is unreachable.

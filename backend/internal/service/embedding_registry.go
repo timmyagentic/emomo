@@ -314,16 +314,12 @@ func (r *EmbeddingRegistry) BuildProfileIngestIndexes(profile *config.SearchProf
 		if !ok {
 			return nil, fmt.Errorf("unknown image embedding %q for profile %q", profile.ImageEmbedding, profile.Name)
 		}
-		embCfg, _ := r.GetConfig(profile.ImageEmbedding)
 		indexes = append(indexes, IngestVectorIndex{
-			VectorType:         domain.MemeVectorTypeImage,
-			Collection:         repo.GetCollectionName(),
-			Provider:           embCfg.Provider,
-			Embedding:          provider,
-			QdrantRepo:         repo,
-			UseSparse:          false,
-			EmbeddingMode:      domain.MemeVectorEmbeddingModeIndependent,
-			EmbeddingDimension: provider.GetDimensions(),
+			VectorType: domain.MemeVectorTypeImage,
+			Collection: repo.GetCollectionName(),
+			Embedding:  provider,
+			QdrantRepo: repo,
+			UseSparse:  false,
 		})
 	}
 
@@ -332,16 +328,12 @@ func (r *EmbeddingRegistry) BuildProfileIngestIndexes(profile *config.SearchProf
 		if !ok {
 			return nil, fmt.Errorf("unknown caption embedding %q for profile %q", profile.CaptionEmbedding, profile.Name)
 		}
-		embCfg, _ := r.GetConfig(profile.CaptionEmbedding)
 		indexes = append(indexes, IngestVectorIndex{
-			VectorType:         domain.MemeVectorTypeCaption,
-			Collection:         repo.GetCollectionName(),
-			Provider:           embCfg.Provider,
-			Embedding:          provider,
-			QdrantRepo:         repo,
-			UseSparse:          true,
-			EmbeddingMode:      domain.MemeVectorEmbeddingModeIndependent,
-			EmbeddingDimension: provider.GetDimensions(),
+			VectorType: domain.MemeVectorTypeCaption,
+			Collection: repo.GetCollectionName(),
+			Embedding:  provider,
+			QdrantRepo: repo,
+			UseSparse:  true,
 		})
 	}
 

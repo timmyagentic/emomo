@@ -31,6 +31,7 @@ type AdminHandler struct {
 //   - ingestService: ingest service instance.
 //   - sources: map of source adapters keyed by name.
 //   - log: logger instance.
+//
 // Returns:
 //   - *AdminHandler: initialized handler.
 func NewAdminHandler(ingestService *service.IngestService, sources map[string]source.Source, log *logger.Logger) *AdminHandler {
@@ -73,6 +74,7 @@ type IngestStatusResponse struct {
 // AdminPage serves the admin dashboard HTML page.
 // Parameters:
 //   - c: Gin request context.
+//
 // Returns: none (writes HTML response).
 func (h *AdminHandler) AdminPage(c *gin.Context) {
 	html := `<!DOCTYPE html>
@@ -338,6 +340,7 @@ func (h *AdminHandler) AdminPage(c *gin.Context) {
 // TriggerIngest handles the ingest API endpoint.
 // Parameters:
 //   - c: Gin request context.
+//
 // Returns: none (writes JSON response).
 func (h *AdminHandler) TriggerIngest(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -424,6 +427,7 @@ func (h *AdminHandler) TriggerIngest(c *gin.Context) {
 // GetIngestStatus returns the current ingest status.
 // Parameters:
 //   - c: Gin request context.
+//
 // Returns: none (writes JSON response).
 func (h *AdminHandler) GetIngestStatus(c *gin.Context) {
 	h.mu.RLock()

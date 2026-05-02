@@ -30,78 +30,83 @@ func NewMemeVectorRepository(db *gorm.DB) *MemeVectorRepository {
 // Returns:
 //   - error: non-nil if the insert fails.
 func (r *MemeVectorRepository) Create(ctx context.Context, vector *domain.MemeVector) error {
-	if vector.VectorType == "" {
+	if vector.VectorType == domain.MemeVectorTypeUnspecified {
 		vector.VectorType = domain.MemeVectorTypeImage
-	}
-	if vector.EmbeddingMode == "" {
-		vector.EmbeddingMode = domain.MemeVectorEmbeddingModeIndependent
 	}
 	return r.db.WithContext(ctx).Create(vector).Error
 }
 
-// ExistsByMD5AndCollection checks if a vector record exists for the MD5 hash and collection.
+// Update persists changes to an existing meme vector record.
+func (r *MemeVectorRepository) Update(ctx context.Context, vector *domain.MemeVector) error {
+	if vector.VectorType == domain.MemeVectorTypeUnspecified {
+		vector.VectorType = domain.MemeVectorTypeImage
+	}
+	return r.db.WithContext(ctx).Save(vector).Error
+}
+
+// ExistsByMemeIDAndCollection checks if a vector record exists for the meme and collection.
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
-//   - md5Hash: MD5 hash of the meme content.
+//   - memeID: meme identifier.
 //   - collection: Qdrant collection name.
 //
 // Returns:
 //   - bool: true if a record exists.
 //   - error: non-nil if the lookup fails.
-func (r *MemeVectorRepository) ExistsByMD5AndCollection(ctx context.Context, md5Hash, collection string) (bool, error) {
+func (r *MemeVectorRepository) ExistsByMemeIDAndCollection(ctx context.Context, memeID, collection string) (bool, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&domain.MemeVector{}).
-		Where("md5_hash = ? AND collection = ?", md5Hash, collection).
+		Where("meme_id = ? AND collection = ?", memeID, collection).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
 	return count > 0, nil
 }
 
-// ExistsByMD5CollectionAndVectorType checks if a typed vector exists for the MD5 hash and collection.
+// ExistsByMemeIDCollectionAndVectorType checks if a typed vector exists for the meme and collection.
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
-//   - md5Hash: MD5 hash of the meme content.
+//   - memeID: meme identifier.
 //   - collection: Qdrant collection name.
 //   - vectorType: vector type such as image or caption.
 //
 // Returns:
 //   - bool: true if a matching active or historical record exists.
 //   - error: non-nil if the lookup fails.
-func (r *MemeVectorRepository) ExistsByMD5CollectionAndVectorType(ctx context.Context, md5Hash, collection, vectorType string) (bool, error) {
+func (r *MemeVectorRepository) ExistsByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType domain.MemeVectorType) (bool, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&domain.MemeVector{}).
-		Where("md5_hash = ? AND collection = ? AND vector_type = ?", md5Hash, collection, normalizeVectorType(vectorType)).
+		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, normalizeVectorType(vectorType)).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
 	return count > 0, nil
 }
 
-// GetByMD5AndCollection retrieves a vector record by MD5 hash and collection.
+// GetByMemeIDAndCollection retrieves a vector record by meme ID and collection.
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
-//   - md5Hash: MD5 hash of the meme content.
+//   - memeID: meme identifier.
 //   - collection: Qdrant collection name.
 //
 // Returns:
 //   - *domain.MemeVector: matching vector record if found.
 //   - error: non-nil if the lookup fails.
-func (r *MemeVectorRepository) GetByMD5AndCollection(ctx context.Context, md5Hash, collection string) (*domain.MemeVector, error) {
+func (r *MemeVectorRepository) GetByMemeIDAndCollection(ctx context.Context, memeID, collection string) (*domain.MemeVector, error) {
 	var vector domain.MemeVector
 	if err := r.db.WithContext(ctx).
-		Where("md5_hash = ? AND collection = ?", md5Hash, collection).
+		Where("meme_id = ? AND collection = ?", memeID, collection).
 		First(&vector).Error; err != nil {
 		return nil, err
 	}
 	return &vector, nil
 }
 
-// GetByMD5CollectionAndVectorType retrieves a vector record by MD5 hash, collection, and vector type.
-func (r *MemeVectorRepository) GetByMD5CollectionAndVectorType(ctx context.Context, md5Hash, collection, vectorType string) (*domain.MemeVector, error) {
+// GetByMemeIDCollectionAndVectorType retrieves a vector record by meme ID, collection, and vector type.
+func (r *MemeVectorRepository) GetByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType domain.MemeVectorType) (*domain.MemeVector, error) {
 	var vector domain.MemeVector
 	if err := r.db.WithContext(ctx).
-		Where("md5_hash = ? AND collection = ? AND vector_type = ?", md5Hash, collection, normalizeVectorType(vectorType)).
+		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, normalizeVectorType(vectorType)).
 		First(&vector).Error; err != nil {
 		return nil, err
 	}
@@ -194,15 +199,15 @@ func (r *MemeVectorRepository) DeleteByMemeIDAndCollection(ctx context.Context, 
 		Delete(&domain.MemeVector{}).Error
 }
 
-// DeleteByMD5CollectionAndVectorType deletes a vector record by MD5 hash, collection, and vector type.
-func (r *MemeVectorRepository) DeleteByMD5CollectionAndVectorType(ctx context.Context, md5Hash, collection, vectorType string) error {
+// DeleteByMemeIDCollectionAndVectorType deletes a vector record by meme ID, collection, and vector type.
+func (r *MemeVectorRepository) DeleteByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType domain.MemeVectorType) error {
 	return r.db.WithContext(ctx).
-		Where("md5_hash = ? AND collection = ? AND vector_type = ?", md5Hash, collection, normalizeVectorType(vectorType)).
+		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, normalizeVectorType(vectorType)).
 		Delete(&domain.MemeVector{}).Error
 }
 
-func normalizeVectorType(vectorType string) string {
-	if vectorType == "" {
+func normalizeVectorType(vectorType domain.MemeVectorType) domain.MemeVectorType {
+	if vectorType == domain.MemeVectorTypeUnspecified {
 		return domain.MemeVectorTypeImage
 	}
 	return vectorType

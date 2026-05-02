@@ -7,16 +7,6 @@ import (
 	"time"
 )
 
-// MemeStatus represents the processing status of a meme record.
-// Values include MemeStatusPending, MemeStatusActive, and MemeStatusFailed.
-type MemeStatus string
-
-const (
-	MemeStatusPending MemeStatus = "pending"
-	MemeStatusActive  MemeStatus = "active"
-	MemeStatusFailed  MemeStatus = "failed"
-)
-
 // StringArray is a custom type for storing string arrays as JSON in the database.
 type StringArray []string
 
@@ -59,25 +49,16 @@ func (a *StringArray) Scan(value interface{}) error {
 }
 
 // Meme represents a meme/sticker in the system.
-// Fields include identifiers, storage metadata, content metadata, and processing status.
+// Fields include stable identifiers, storage location, intrinsic image info, and user-facing labels.
 type Meme struct {
-	ID             string      `gorm:"type:text;primaryKey" json:"id"`
-	SourceType     string      `gorm:"type:text;not null;index:idx_memes_source,unique" json:"source_type"`
-	SourceID       string      `gorm:"type:text;not null;index:idx_memes_source,unique" json:"source_id"`
-	StorageKey     string      `gorm:"type:text" json:"storage_key"`
-	LocalPath      string      `gorm:"column:local_path" json:"local_path,omitempty"`
-	Width          int         `json:"width"`
-	Height         int         `json:"height"`
-	Format         string      `json:"format"`
-	IsAnimated     bool        `json:"is_animated"` // Kept for schema compatibility; new ingestion stores false.
-	FileSize       int64       `json:"file_size"`
-	MD5Hash        string      `gorm:"uniqueIndex:idx_memes_md5" json:"md5_hash"`
-	PerceptualHash string      `gorm:"type:text" json:"perceptual_hash,omitempty"`
-	Tags           StringArray `gorm:"type:text" json:"tags"`
-	Category       string      `gorm:"type:text;index:idx_memes_category" json:"category"`
-	Status         MemeStatus  `gorm:"type:text;index:idx_memes_status;default:pending" json:"status"`
-	CreatedAt      time.Time   `json:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at"`
+	ID          string      `gorm:"type:text;primaryKey" json:"id"`
+	StorageKey  string      `gorm:"type:text;not null" json:"storage_key"`
+	ContentHash string      `gorm:"type:text;not null;uniqueIndex:idx_memes_content_hash" json:"content_hash"`
+	ImageInfo   ImageInfo   `gorm:"type:text;not null" json:"image_info"`
+	Tags        StringArray `gorm:"type:text" json:"tags"`
+	Category    string      `gorm:"type:text;index:idx_memes_category" json:"category"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 // TableName returns the database table name for Meme.

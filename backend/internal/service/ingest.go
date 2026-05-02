@@ -24,22 +24,23 @@ import (
 	"github.com/timmy/emomo/internal/source"
 	"github.com/timmy/emomo/internal/storage"
 	_ "golang.org/x/image/webp"
+	"gorm.io/gorm"
 )
 
 // IngestService handles the data ingestion pipeline.
 type IngestService struct {
-	memeRepo   *repository.MemeRepository
-	vectorRepo *repository.MemeVectorRepository
-	descRepo   *repository.MemeDescriptionRepository
-	qdrantRepo *repository.QdrantRepository
-	storage    storage.ObjectStorage
-	vlm        *VLMService
-	embedding  EmbeddingProvider
-	indexes    []IngestVectorIndex
-	logger     *logger.Logger
-	workers    int
-	batchSize  int
-	collection string // Target Qdrant collection name
+	memeRepo       *repository.MemeRepository
+	vectorRepo     *repository.MemeVectorRepository
+	annotationRepo *repository.MemeAnnotationRepository
+	qdrantRepo     *repository.QdrantRepository
+	storage        storage.ObjectStorage
+	vlm            *VLMService
+	embedding      EmbeddingProvider
+	indexes        []IngestVectorIndex
+	logger         *logger.Logger
+	workers        int
+	batchSize      int
+	collection     string // Target Qdrant collection name
 }
 
 // IngestConfig holds configuration for the ingest service.
@@ -47,27 +48,24 @@ type IngestConfig struct {
 	Workers       int
 	BatchSize     int
 	Collection    string // Target Qdrant collection name
-	VectorType    string // Fallback vector type when VectorIndexes is empty
+	VectorType    domain.MemeVectorType
 	VectorIndexes []IngestVectorIndex
 }
 
 // IngestVectorIndex describes one vector route to write during ingestion.
 type IngestVectorIndex struct {
-	VectorType         string
-	Collection         string
-	Provider           string
-	Embedding          EmbeddingProvider
-	QdrantRepo         *repository.QdrantRepository
-	UseSparse          bool
-	EmbeddingMode      string
-	EmbeddingDimension int
+	VectorType domain.MemeVectorType
+	Collection string
+	Embedding  EmbeddingProvider
+	QdrantRepo *repository.QdrantRepository
+	UseSparse  bool
 }
 
 // NewIngestService creates a new ingest service.
 // Parameters:
 //   - memeRepo: repository for meme records.
 //   - vectorRepo: repository for meme vectors.
-//   - descRepo: repository for meme descriptions.
+//   - annotationRepo: repository for meme annotations.
 //   - qdrantRepo: Qdrant repository for vector storage.
 //   - objectStorage: object storage client for image files.
 //   - vlm: vision-language model service for descriptions.
@@ -80,7 +78,7 @@ type IngestVectorIndex struct {
 func NewIngestService(
 	memeRepo *repository.MemeRepository,
 	vectorRepo *repository.MemeVectorRepository,
-	descRepo *repository.MemeDescriptionRepository,
+	annotationRepo *repository.MemeAnnotationRepository,
 	qdrantRepo *repository.QdrantRepository,
 	objectStorage storage.ObjectStorage,
 	vlm *VLMService,
@@ -93,30 +91,28 @@ func NewIngestService(
 		vectorType := normalizeIngestVectorType(cfg.VectorType)
 		indexes = []IngestVectorIndex{
 			{
-				VectorType:         vectorType,
-				Collection:         cfg.Collection,
-				Embedding:          embedding,
-				QdrantRepo:         qdrantRepo,
-				UseSparse:          true,
-				EmbeddingMode:      domain.MemeVectorEmbeddingModeIndependent,
-				EmbeddingDimension: embedding.GetDimensions(),
+				VectorType: vectorType,
+				Collection: cfg.Collection,
+				Embedding:  embedding,
+				QdrantRepo: qdrantRepo,
+				UseSparse:  true,
 			},
 		}
 	}
 
 	return &IngestService{
-		memeRepo:   memeRepo,
-		vectorRepo: vectorRepo,
-		descRepo:   descRepo,
-		qdrantRepo: qdrantRepo,
-		storage:    objectStorage,
-		vlm:        vlm,
-		embedding:  embedding,
-		indexes:    indexes,
-		logger:     log,
-		workers:    cfg.Workers,
-		batchSize:  cfg.BatchSize,
-		collection: cfg.Collection,
+		memeRepo:       memeRepo,
+		vectorRepo:     vectorRepo,
+		annotationRepo: annotationRepo,
+		qdrantRepo:     qdrantRepo,
+		storage:        objectStorage,
+		vlm:            vlm,
+		embedding:      embedding,
+		indexes:        indexes,
+		logger:         log,
+		workers:        cfg.Workers,
+		batchSize:      cfg.BatchSize,
+		collection:     cfg.Collection,
 	}
 }
 
@@ -279,6 +275,9 @@ var errSkipDuplicate = fmt.Errorf("skipped: duplicate MD5")
 // errSkipUnsupportedImageFormat is a sentinel error for unsupported source images.
 var errSkipUnsupportedImageFormat = errors.New("skipped: unsupported image format")
 
+// errSkipOptionalVectorIndex is used when an auxiliary vector route has no input.
+var errSkipOptionalVectorIndex = errors.New("skipped: optional vector index")
+
 func (s *IngestService) worker(ctx context.Context, workerID int, sourceType string, items <-chan source.MemeItem, results chan<- *processResult, opts *IngestOptions) {
 	for item := range items {
 		select {
@@ -337,31 +336,35 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 			item.Format, actualFormat)
 	}
 
-	// Calculate MD5 hash (of the processed/converted image)
-	md5Hash := calculateMD5(imageData)
+	// Calculate content hash of the processed/converted image.
+	contentHash := calculateMD5(imageData)
 
-	targetIndexes, err := s.missingVectorIndexes(ctx, md5Hash, opts.Force)
-	if err != nil {
-		return err
-	}
-	if len(targetIndexes) == 0 {
-		return errSkipDuplicate
-	}
-
-	// Check if we have an existing meme record (for resource reuse)
-	existingMeme, err := s.memeRepo.GetByMD5Hash(ctx, md5Hash)
+	// Check if we have an existing meme record for resource reuse.
+	existingMeme, err := s.memeRepo.GetByContentHash(ctx, contentHash)
 	hasExistingMeme := err == nil && existingMeme != nil
+	targetIndexes := s.indexes
+	if len(targetIndexes) == 0 {
+		return fmt.Errorf("no ingest vector indexes configured")
+	}
+	if hasExistingMeme {
+		targetIndexes, err = s.missingVectorIndexes(ctx, existingMeme.ID, opts.Force)
+		if err != nil {
+			return err
+		}
+		if len(targetIndexes) == 0 {
+			return errSkipDuplicate
+		}
+	}
 
 	var memeID string
 	var storageKey string
 	var storageURL string
 	var vlmDescription string
 	var ocrText string
-	var descriptionID string
-	var width, height int
+	var annotationID string
 	uploaded := false
-	createdNewMeme := false        // Track if we created a new meme record for rollback
-	createdNewDescription := false // Track if we created a new description record for rollback
+	createdNewMeme := false       // Track if we created a new meme record for rollback
+	createdNewAnnotation := false // Track if we created a new annotation record for rollback
 
 	// rollbackMeme cleans up the meme record if we created one
 	rollbackMeme := func() {
@@ -374,13 +377,13 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		}
 	}
 
-	// rollbackDescription cleans up the description record if we created one
-	rollbackDescription := func() {
-		if createdNewDescription && descriptionID != "" && s.descRepo != nil {
-			if delErr := s.descRepo.Delete(ctx, descriptionID); delErr != nil {
-				logger.CtxError(ctx, "Failed to rollback description record: description_id=%s, error=%v", descriptionID, delErr)
+	// rollbackAnnotation cleans up the annotation record if we created one
+	rollbackAnnotation := func() {
+		if createdNewAnnotation && annotationID != "" && s.annotationRepo != nil {
+			if delErr := s.annotationRepo.Delete(ctx, annotationID); delErr != nil {
+				logger.CtxError(ctx, "Failed to rollback annotation record: annotation_id=%s, error=%v", annotationID, delErr)
 			} else {
-				logger.CtxDebug(ctx, "Rolled back description record: description_id=%s", descriptionID)
+				logger.CtxDebug(ctx, "Rolled back annotation record: annotation_id=%s", annotationID)
 			}
 		}
 	}
@@ -401,24 +404,27 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		memeID = existingMeme.ID
 		storageKey = existingMeme.StorageKey
 		storageURL = s.storage.GetURL(storageKey)
-		width = existingMeme.Width
-		height = existingMeme.Height
 
-		logger.CtxInfo(ctx, "Reusing existing meme record: md5=%s, meme_id=%s, collection=%s",
-			md5Hash, memeID, s.collection)
+		logger.CtxInfo(ctx, "Reusing existing meme record: content_hash=%s, meme_id=%s, collection=%s",
+			contentHash, memeID, s.collection)
 	} else {
 		// NEW meme: full processing pipeline
 		memeID = uuid.New().String()
 
 		// Get image dimensions
-		width, height, err = getImageDimensions(imageData)
+		width, height, err := getImageDimensions(imageData)
 		if err != nil {
 			logger.CtxWarn(ctx, "Failed to get image dimensions: error=%v", err)
 			width, height = 0, 0
 		}
+		imageInfo := domain.ImageInfo{
+			Width:  int32(width),
+			Height: int32(height),
+			Format: domain.ImageFormatFromString(processedFormat),
+		}
 
 		// Upload to storage (use MD5 prefix for bucketing)
-		storageKey = fmt.Sprintf("%s/%s.%s", md5Hash[:2], md5Hash, processedFormat)
+		storageKey = fmt.Sprintf("%s/%s.%s", contentHash[:2], contentHash, processedFormat)
 		contentType := getContentType(processedFormat)
 
 		// Check if file already exists in storage
@@ -436,24 +442,16 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 
 		storageURL = s.storage.GetURL(storageKey)
 
-		// Create meme record (without VLM description - stored in meme_descriptions table)
+		// Create meme record without AI-derived annotation fields.
 		meme := &domain.Meme{
-			ID:         memeID,
-			SourceType: sourceType,
-			SourceID:   item.SourceID,
-			StorageKey: storageKey,
-			LocalPath:  item.LocalPath,
-			Width:      width,
-			Height:     height,
-			Format:     processedFormat,
-			IsAnimated: false,
-			FileSize:   int64(len(imageData)),
-			MD5Hash:    md5Hash,
-			Tags:       item.Tags,
-			Category:   item.Category,
-			Status:     domain.MemeStatusActive,
-			CreatedAt:  time.Now(),
-			UpdatedAt:  time.Now(),
+			ID:          memeID,
+			StorageKey:  storageKey,
+			ContentHash: contentHash,
+			ImageInfo:   imageInfo,
+			Tags:        item.Tags,
+			Category:    item.Category,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
 		}
 
 		// Save meme to database first
@@ -465,75 +463,12 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		createdNewMeme = true // Mark that we created a new meme record
 	}
 
-	// Get or create VLM description for current VLM model
-	if s.descRepo != nil {
-		existingDesc, err := s.descRepo.GetByMD5AndModel(ctx, md5Hash, s.vlm.GetModel())
-		if err == nil && existingDesc != nil {
-			// Reuse existing description for this VLM model
-			vlmDescription = existingDesc.Description
-			descriptionID = existingDesc.ID
-			ocrText = normalizeOCRText(existingDesc.OCRText)
-			if ocrText == "" {
-				ocrText, err = s.extractOCRText(ctx, imageData, processedFormat)
-				if err != nil {
-					logger.CtxWarn(ctx, "Failed to extract OCR text: md5=%s, error=%v", md5Hash, err)
-				} else if ocrText != "" {
-					if updateErr := s.descRepo.UpdateOCRText(ctx, existingDesc.ID, ocrText); updateErr != nil {
-						logger.CtxWarn(ctx, "Failed to update OCR text: description_id=%s, error=%v", existingDesc.ID, updateErr)
-					}
-				}
-			}
-			logger.CtxDebug(ctx, "Reusing existing VLM description: md5=%s, vlm_model=%s", md5Hash, s.vlm.GetModel())
-		} else {
-			// Generate new VLM description
-			vlmDescription, err = s.vlm.DescribeImage(ctx, imageData, processedFormat)
-			if err != nil {
-				rollbackMeme()
-				rollbackStorage()
-				return fmt.Errorf("failed to generate VLM description: %w", err)
-			}
-
-			ocrText, err = s.extractOCRText(ctx, imageData, processedFormat)
-			if err != nil {
-				logger.CtxWarn(ctx, "Failed to extract OCR text: md5=%s, error=%v", md5Hash, err)
-				ocrText = ""
-			}
-
-			// Save description to meme_descriptions table
-			descRecord := &domain.MemeDescription{
-				ID:          uuid.New().String(),
-				MemeID:      memeID,
-				MD5Hash:     md5Hash,
-				VLMModel:    s.vlm.GetModel(),
-				Description: vlmDescription,
-				OCRText:     ocrText,
-				CreatedAt:   time.Now(),
-			}
-			if err := s.descRepo.Create(ctx, descRecord); err != nil {
-				rollbackMeme()
-				rollbackStorage()
-				return fmt.Errorf("failed to save VLM description: %w", err)
-			}
-			descriptionID = descRecord.ID
-			createdNewDescription = true
-			logger.CtxDebug(ctx, "Created new VLM description: md5=%s, vlm_model=%s, description_id=%s",
-				md5Hash, s.vlm.GetModel(), descriptionID)
-		}
-	} else {
-		// Fallback: generate VLM description without storing to database
-		vlmDescription, err = s.vlm.DescribeImage(ctx, imageData, processedFormat)
-		if err != nil {
-			rollbackMeme()
-			rollbackStorage()
-			return fmt.Errorf("failed to generate VLM description: %w", err)
-		}
-
-		ocrText, err = s.extractOCRText(ctx, imageData, processedFormat)
-		if err != nil {
-			logger.CtxWarn(ctx, "Failed to extract OCR text: md5=%s, error=%v", md5Hash, err)
-			ocrText = ""
-		}
-	}
+	annotation := s.prepareAnnotationBestEffort(ctx, memeID, contentHash, imageData, processedFormat)
+	vlmDescription = annotation.Description
+	ocrText = annotation.OCRText
+	annotationID = annotation.ID
+	ocrReliable := annotation.OCRReliable
+	createdNewAnnotation = annotation.Created
 
 	compactDesc := compactDescription(vlmDescription)
 	captionText := buildCaptionEmbeddingText(
@@ -546,18 +481,19 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 	bm25Text := buildBM25Text(ocrText, compactDesc, item.Tags)
 	payload := &repository.MemePayload{
 		MemeID:         memeID,
-		SourceType:     sourceType,
 		Category:       item.Category,
 		Tags:           item.Tags,
 		VLMDescription: vlmDescription,
 		OCRText:        ocrText,
+		TextPresence:   string(classifyTextPresence(ocrText, ocrReliable)),
 		StorageURL:     storageURL,
 	}
 
 	if err := s.upsertVectorIndexes(ctx, targetIndexes, vectorUpsertInput{
 		MemeID:         memeID,
-		MD5Hash:        md5Hash,
-		DescriptionID:  descriptionID,
+		ContentHash:    contentHash,
+		AnnotationID:   annotationID,
+		Force:          opts.Force,
 		ImageURL:       storageURL,
 		ImageData:      imageData,
 		ImageMediaType: getContentType(processedFormat),
@@ -568,7 +504,7 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		if createdNewMeme {
 			s.rollbackVectorIndexes(ctx, memeID, targetIndexes)
 		}
-		rollbackDescription()
+		rollbackAnnotation()
 		rollbackMeme()
 		rollbackStorage()
 		return err
@@ -591,10 +527,129 @@ func (s *IngestService) extractOCRText(ctx context.Context, imageData []byte, fo
 	return normalizeOCRText(text), nil
 }
 
+type annotationResult struct {
+	ID          string
+	Description string
+	OCRText     string
+	OCRReliable bool
+	Created     bool
+}
+
+func (s *IngestService) prepareAnnotationBestEffort(ctx context.Context, memeID, contentHash string, imageData []byte, format string) annotationResult {
+	result := annotationResult{}
+	if s.vlm == nil {
+		return result
+	}
+
+	analyzerModel := s.vlm.GetModel()
+	if s.annotationRepo != nil && analyzerModel != "" {
+		existingAnnotation, err := s.annotationRepo.GetByMemeIDAndModel(ctx, memeID, analyzerModel)
+		if err == nil && existingAnnotation != nil {
+			result.ID = existingAnnotation.ID
+			result.Description = existingAnnotation.Description
+			result.OCRText = normalizeOCRText(existingAnnotation.OCRText)
+			result.OCRReliable = hasReliableTextPresence(existingAnnotation, result.OCRText)
+			if shouldExtractOCRForAnnotation(existingAnnotation, result.OCRText) {
+				ocrText, err := s.extractOCRText(ctx, imageData, format)
+				if err != nil {
+					logger.CtxWarn(ctx, "Failed to extract OCR text: content_hash=%s, error=%v", contentHash, err)
+				} else {
+					result.OCRText = ocrText
+					result.OCRReliable = true
+					if updateErr := s.annotationRepo.UpdateOCRText(ctx, existingAnnotation.ID, ocrText); updateErr != nil {
+						logger.CtxWarn(ctx, "Failed to update OCR text: annotation_id=%s, error=%v", existingAnnotation.ID, updateErr)
+					}
+				}
+			}
+			logger.CtxDebug(ctx, "Reusing existing annotation: content_hash=%s, analyzer_model=%s", contentHash, analyzerModel)
+			return result
+		}
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.CtxWarn(ctx, "Failed to load meme annotation: meme_id=%s, analyzer_model=%s, error=%v", memeID, analyzerModel, err)
+		}
+	}
+
+	description, err := s.vlm.DescribeImage(ctx, imageData, format)
+	if err != nil {
+		logger.CtxWarn(ctx, "Failed to generate VLM description; continuing with image vector only: content_hash=%s, error=%v", contentHash, err)
+		return result
+	}
+	result.Description = description
+
+	ocrText, err := s.extractOCRText(ctx, imageData, format)
+	if err != nil {
+		logger.CtxWarn(ctx, "Failed to extract OCR text: content_hash=%s, error=%v", contentHash, err)
+	} else {
+		result.OCRText = ocrText
+		result.OCRReliable = true
+	}
+
+	if s.annotationRepo == nil || analyzerModel == "" {
+		return result
+	}
+
+	annotationRecord := buildMemeAnnotation(uuid.New().String(), memeID, analyzerModel, result.Description, result.OCRText, result.OCRReliable)
+	if err := s.annotationRepo.Create(ctx, annotationRecord); err != nil {
+		logger.CtxWarn(ctx, "Failed to save meme annotation; continuing without annotation link: meme_id=%s, error=%v", memeID, err)
+		return result
+	}
+
+	result.ID = annotationRecord.ID
+	result.Created = true
+	logger.CtxDebug(ctx, "Created new meme annotation: content_hash=%s, analyzer_model=%s, annotation_id=%s",
+		contentHash, analyzerModel, result.ID)
+	return result
+}
+
+func buildMemeAnnotation(id, memeID, analyzerModel, description, ocrText string, ocrReliable bool) *domain.MemeAnnotation {
+	labels := domain.AnnotationLabels{}
+	if ocrReliable {
+		textPresence, _ := domain.TextPresenceFromOCRText(ocrText)
+		labels.Text = &domain.TextLabel{Present: textPresence == domain.TextPresenceWithText}
+	}
+	return &domain.MemeAnnotation{
+		ID:            id,
+		MemeID:        memeID,
+		AnalyzerModel: analyzerModel,
+		Description:   description,
+		OCRText:       ocrText,
+		Labels:        labels,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+}
+
+func classifyTextPresence(ocrText string, ocrReliable bool) domain.TextPresence {
+	presence, _ := classifyTextPresenceWithCount(ocrText, ocrReliable)
+	return presence
+}
+
+func classifyTextPresenceWithCount(ocrText string, ocrReliable bool) (domain.TextPresence, int) {
+	if !ocrReliable {
+		return domain.TextPresenceUnknown, 0
+	}
+	return domain.TextPresenceFromOCRText(ocrText)
+}
+
+func hasReliableTextPresence(annotation *domain.MemeAnnotation, ocrText string) bool {
+	if annotation == nil {
+		return ocrText != ""
+	}
+	return annotation.Labels.Text != nil || ocrText != ""
+}
+
+func shouldExtractOCRForAnnotation(annotation *domain.MemeAnnotation, ocrText string) bool {
+	if ocrText != "" {
+		return false
+	}
+	return annotation == nil || annotation.Labels.Text == nil
+}
+
 type vectorUpsertInput struct {
 	MemeID         string
-	MD5Hash        string
-	DescriptionID  string
+	ContentHash    string
+	AnnotationID   string
+	Force          bool
 	ImageURL       string
 	ImageData      []byte
 	ImageMediaType string
@@ -603,17 +658,20 @@ type vectorUpsertInput struct {
 	Payload        *repository.MemePayload
 }
 
-func (s *IngestService) missingVectorIndexes(ctx context.Context, md5Hash string, force bool) ([]IngestVectorIndex, error) {
+func (s *IngestService) missingVectorIndexes(ctx context.Context, memeID string, force bool) ([]IngestVectorIndex, error) {
 	if len(s.indexes) == 0 {
 		return nil, fmt.Errorf("no ingest vector indexes configured")
 	}
-	if force || s.vectorRepo == nil {
+	if force {
+		return s.indexes, nil
+	}
+	if s.vectorRepo == nil {
 		return s.indexes, nil
 	}
 
 	missing := make([]IngestVectorIndex, 0, len(s.indexes))
 	for _, index := range s.indexes {
-		exists, err := s.vectorRepo.ExistsByMD5CollectionAndVectorType(ctx, md5Hash, index.Collection, normalizeIngestVectorType(index.VectorType))
+		exists, err := s.vectorRepo.ExistsByMemeIDCollectionAndVectorType(ctx, memeID, index.Collection, normalizeIngestVectorType(index.VectorType))
 		if err != nil {
 			return nil, fmt.Errorf("failed to check vector existence: %w", err)
 		}
@@ -626,14 +684,30 @@ func (s *IngestService) missingVectorIndexes(ctx context.Context, md5Hash string
 
 func (s *IngestService) upsertVectorIndexes(ctx context.Context, indexes []IngestVectorIndex, input vectorUpsertInput) error {
 	var errs []error
+	written := 0
+	skipped := 0
 	for _, index := range indexes {
 		if err := s.upsertVectorIndex(ctx, index, input); err != nil {
+			if errors.Is(err, errSkipOptionalVectorIndex) {
+				skipped++
+				logger.CtxDebug(ctx, "Skipped optional vector index: meme_id=%s, collection=%s, vector_type=%s",
+					input.MemeID, index.Collection, domain.MemeVectorTypeToString(normalizeIngestVectorType(index.VectorType)))
+				continue
+			}
 			logger.CtxWarn(ctx, "Failed to upsert vector index: meme_id=%s, collection=%s, vector_type=%s, error=%v",
 				input.MemeID, index.Collection, normalizeIngestVectorType(index.VectorType), err)
 			errs = append(errs, err)
+			continue
 		}
+		written++
 	}
-	return errors.Join(errs...)
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	if written == 0 && skipped > 0 {
+		return fmt.Errorf("no vector indexes were written")
+	}
+	return nil
 }
 
 func (s *IngestService) rollbackVectorIndexes(ctx context.Context, memeID string, indexes []IngestVectorIndex) {
@@ -680,11 +754,11 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 
 	vectorType := normalizeIngestVectorType(index.VectorType)
 	doc := EmbeddingDocument{}
-	inputHash := input.MD5Hash
+	inputHash := input.ContentHash
 	switch vectorType {
 	case domain.MemeVectorTypeCaption:
 		if input.CaptionText == "" {
-			return fmt.Errorf("caption vector requires caption text")
+			return fmt.Errorf("%w: caption vector requires caption text", errSkipOptionalVectorIndex)
 		}
 		doc.Text = input.CaptionText
 		inputHash = calculateSHA256(input.CaptionText)
@@ -696,12 +770,23 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 		doc.ImageData = input.ImageData
 		doc.ImageMediaType = input.ImageMediaType
 	default:
-		return fmt.Errorf("unsupported vector type: %s", vectorType)
+		return fmt.Errorf("unsupported vector type: %s", domain.MemeVectorTypeToString(vectorType))
 	}
 
 	embedding, err := index.Embedding.EmbedDocument(ctx, doc)
 	if err != nil {
-		return fmt.Errorf("failed to generate %s embedding: %w", vectorType, err)
+		return fmt.Errorf("failed to generate %s embedding: %w", domain.MemeVectorTypeToString(vectorType), err)
+	}
+
+	var existing *domain.MemeVector
+	if input.Force && s.vectorRepo != nil {
+		current, err := s.vectorRepo.GetByMemeIDCollectionAndVectorType(ctx, input.MemeID, index.Collection, vectorType)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("failed to load existing vector before force replacement: %w", err)
+		}
+		if err == nil {
+			existing = current
+		}
 	}
 
 	pointID := uuid.New().String()
@@ -720,24 +805,34 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 	}
 
 	vectorRecord := &domain.MemeVector{
-		ID:                uuid.New().String(),
-		MemeID:            input.MemeID,
-		MD5Hash:           input.MD5Hash,
-		Collection:        index.Collection,
-		VectorType:        vectorType,
-		EmbeddingModel:    index.Embedding.GetModel(),
-		EmbeddingProvider: index.Provider,
-		EmbeddingMode:     normalizeEmbeddingMode(index.EmbeddingMode),
-		Dimension:         index.EmbeddingDimension,
-		InputHash:         inputHash,
-		DescriptionID:     input.DescriptionID,
-		QdrantPointID:     pointID,
-		Status:            domain.MemeVectorStatusActive,
-		CreatedAt:         time.Now(),
+		ID:             uuid.New().String(),
+		MemeID:         input.MemeID,
+		Collection:     index.Collection,
+		VectorType:     vectorType,
+		EmbeddingModel: index.Embedding.GetModel(),
+		InputHash:      inputHash,
+		AnnotationID:   input.AnnotationID,
+		QdrantPointID:  pointID,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
-	if vectorRecord.Dimension <= 0 {
-		vectorRecord.Dimension = index.Embedding.GetDimensions()
+	if existing != nil {
+		oldPointID := existing.QdrantPointID
+		vectorRecord.ID = existing.ID
+		vectorRecord.CreatedAt = existing.CreatedAt
+		if err := s.vectorRepo.Update(ctx, vectorRecord); err != nil {
+			if delErr := index.QdrantRepo.Delete(ctx, pointID); delErr != nil {
+				logger.CtxError(ctx, "Failed to rollback replacement Qdrant point: point_id=%s, error=%v", pointID, delErr)
+			}
+			return fmt.Errorf("failed to update vector record: %w", err)
+		}
+		if oldPointID != "" && oldPointID != pointID {
+			if delErr := index.QdrantRepo.Delete(ctx, oldPointID); delErr != nil {
+				logger.CtxWarn(ctx, "Failed to delete old Qdrant point after force replacement: point_id=%s, error=%v", oldPointID, delErr)
+			}
+		}
+		return nil
 	}
 
 	if err := s.vectorRepo.Create(ctx, vectorRecord); err != nil {
@@ -750,31 +845,24 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 	return nil
 }
 
-func vectorRouteKey(collection, vectorType string) string {
-	return collection + "\x00" + vectorType
+func vectorRouteKey(collection string, vectorType domain.MemeVectorType) string {
+	return collection + "\x00" + domain.MemeVectorTypeToString(vectorType)
 }
 
-func normalizeIngestVectorType(vectorType string) string {
+func normalizeIngestVectorType(vectorType domain.MemeVectorType) domain.MemeVectorType {
 	switch vectorType {
-	case domain.MemeVectorTypeCaption, domain.MemeVectorTypeFused:
+	case domain.MemeVectorTypeCaption:
 		return vectorType
 	default:
 		return domain.MemeVectorTypeImage
 	}
 }
 
-func IngestVectorTypeForDocumentMode(documentMode string) string {
+func IngestVectorTypeForDocumentMode(documentMode string) domain.MemeVectorType {
 	if normalizeEmbeddingDocumentMode(documentMode) == embeddingDocumentText {
 		return domain.MemeVectorTypeCaption
 	}
 	return domain.MemeVectorTypeImage
-}
-
-func normalizeEmbeddingMode(mode string) string {
-	if mode == domain.MemeVectorEmbeddingModeFusion {
-		return domain.MemeVectorEmbeddingModeFusion
-	}
-	return domain.MemeVectorEmbeddingModeIndependent
 }
 
 func (s *IngestService) readImage(item *source.MemeItem) ([]byte, error) {
@@ -910,22 +998,15 @@ func convertToJPEG(imageData []byte, format string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// RetryPending retries processing for memes with pending status.
-// Parameters:
-//   - ctx: context for cancellation and deadlines.
-//   - limit: maximum number of pending memes to retry.
-//
-// Returns:
-//   - *IngestStats: statistics for the retry run.
-//   - error: non-nil if the retry processing fails.
+// RetryPending backfills missing vector records for existing memes.
 func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestStats, error) {
 	stats := &IngestStats{
 		StartTime: time.Now(),
 	}
 
-	memes, err := s.memeRepo.ListByStatus(ctx, domain.MemeStatusPending, limit, 0)
+	memes, err := s.memeRepo.List(ctx, limit, 0)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pending memes: %w", err)
+		return nil, fmt.Errorf("failed to list memes: %w", err)
 	}
 
 	stats.TotalItems = int64(len(memes))
@@ -937,20 +1018,13 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 		default:
 		}
 
-		targetIndexes, err := s.missingVectorIndexes(ctx, meme.MD5Hash, false)
+		targetIndexes, err := s.missingVectorIndexes(ctx, meme.ID, false)
 		if err != nil {
 			logger.CtxError(ctx, "Failed to check vector completeness: meme_id=%s, error=%v", meme.ID, err)
 			stats.FailedItems++
 			continue
 		}
 		if len(targetIndexes) == 0 {
-			meme.Status = domain.MemeStatusActive
-			meme.UpdatedAt = time.Now()
-			if err := s.memeRepo.Update(ctx, &meme); err != nil {
-				logger.CtxError(ctx, "Failed to update meme status: meme_id=%s, error=%v", meme.ID, err)
-				stats.FailedItems++
-				continue
-			}
 			stats.ProcessedItems++
 			continue
 		}
@@ -974,75 +1048,13 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 		// Get or create VLM description for current VLM model
 		var description string
 		var ocrText string
-		var descriptionID string
-		if s.descRepo != nil {
-			existingDesc, err := s.descRepo.GetByMD5AndModel(ctx, meme.MD5Hash, s.vlm.GetModel())
-			if err == nil && existingDesc != nil {
-				// Reuse existing description for this VLM model
-				description = existingDesc.Description
-				descriptionID = existingDesc.ID
-				ocrText = normalizeOCRText(existingDesc.OCRText)
-				if ocrText == "" {
-					ocrText, err = s.extractOCRText(ctx, imageData, meme.Format)
-					if err != nil {
-						logger.CtxWarn(ctx, "Failed to extract OCR text: meme_id=%s, error=%v", meme.ID, err)
-					} else if ocrText != "" {
-						if updateErr := s.descRepo.UpdateOCRText(ctx, existingDesc.ID, ocrText); updateErr != nil {
-							logger.CtxWarn(ctx, "Failed to update OCR text: description_id=%s, error=%v", existingDesc.ID, updateErr)
-						}
-					}
-				}
-				logger.CtxDebug(ctx, "Reusing existing VLM description: md5=%s, vlm_model=%s", meme.MD5Hash, s.vlm.GetModel())
-			} else {
-				// Generate new VLM description
-				description, err = s.vlm.DescribeImage(ctx, imageData, meme.Format)
-				if err != nil {
-					logger.CtxWarn(ctx, "Failed to generate VLM description: error=%v", err)
-					stats.FailedItems++
-					continue
-				}
-
-				ocrText, err = s.extractOCRText(ctx, imageData, meme.Format)
-				if err != nil {
-					logger.CtxWarn(ctx, "Failed to extract OCR text: meme_id=%s, error=%v", meme.ID, err)
-					ocrText = ""
-				}
-
-				// Save description to meme_descriptions table
-				descRecord := &domain.MemeDescription{
-					ID:          uuid.New().String(),
-					MemeID:      meme.ID,
-					MD5Hash:     meme.MD5Hash,
-					VLMModel:    s.vlm.GetModel(),
-					Description: description,
-					OCRText:     ocrText,
-					CreatedAt:   time.Now(),
-				}
-				if err := s.descRepo.Create(ctx, descRecord); err != nil {
-					logger.CtxError(ctx, "Failed to save VLM description: meme_id=%s, error=%v", meme.ID, err)
-					stats.FailedItems++
-					continue
-				}
-				descriptionID = descRecord.ID
-				logger.CtxDebug(ctx, "Created new VLM description: md5=%s, vlm_model=%s, description_id=%s",
-					meme.MD5Hash, s.vlm.GetModel(), descriptionID)
-			}
-		} else {
-			// Fallback: generate VLM description without storing to database
-			var err error
-			description, err = s.vlm.DescribeImage(ctx, imageData, meme.Format)
-			if err != nil {
-				logger.CtxWarn(ctx, "Failed to generate VLM description: error=%v", err)
-				stats.FailedItems++
-				continue
-			}
-
-			ocrText, err = s.extractOCRText(ctx, imageData, meme.Format)
-			if err != nil {
-				logger.CtxWarn(ctx, "Failed to extract OCR text: meme_id=%s, error=%v", meme.ID, err)
-				ocrText = ""
-			}
-		}
+		var annotationID string
+		imageFormat := domain.ImageFormatToString(meme.ImageInfo.Format)
+		annotation := s.prepareAnnotationBestEffort(ctx, meme.ID, meme.ContentHash, imageData, imageFormat)
+		description = annotation.Description
+		ocrText = annotation.OCRText
+		annotationID = annotation.ID
+		ocrReliable := annotation.OCRReliable
 
 		compactDesc := compactDescription(description)
 		captionText := buildCaptionEmbeddingText(
@@ -1056,36 +1068,27 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 		imageURL := s.storage.GetURL(meme.StorageKey)
 		payload := &repository.MemePayload{
 			MemeID:         meme.ID,
-			SourceType:     meme.SourceType,
 			Category:       meme.Category,
 			Tags:           meme.Tags,
 			VLMDescription: description,
 			OCRText:        ocrText,
+			TextPresence:   string(classifyTextPresence(ocrText, ocrReliable)),
 			StorageURL:     imageURL,
 		}
 
 		if err := s.upsertVectorIndexes(ctx, targetIndexes, vectorUpsertInput{
 			MemeID:         meme.ID,
-			MD5Hash:        meme.MD5Hash,
-			DescriptionID:  descriptionID,
+			ContentHash:    meme.ContentHash,
+			AnnotationID:   annotationID,
+			Force:          false,
 			ImageURL:       imageURL,
 			ImageData:      imageData,
-			ImageMediaType: getContentType(meme.Format),
+			ImageMediaType: getContentType(imageFormat),
 			CaptionText:    captionText,
 			BM25Text:       bm25Text,
 			Payload:        payload,
 		}); err != nil {
 			logger.CtxError(ctx, "Failed to upsert vector indexes: meme_id=%s, error=%v", meme.ID, err)
-			stats.FailedItems++
-			continue
-		}
-
-		// Update meme status to active
-		meme.Status = domain.MemeStatusActive
-		meme.UpdatedAt = time.Now()
-
-		if err := s.memeRepo.Update(ctx, &meme); err != nil {
-			logger.CtxError(ctx, "Failed to update database: error=%v", err)
 			stats.FailedItems++
 			continue
 		}

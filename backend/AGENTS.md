@@ -6,8 +6,10 @@
 ## Project Structure & Module Organization
 - `cmd/`: Go entry points (`cmd/api`, `cmd/ingest`).
 - `internal/`: Go application code (API handlers, services, repositories, sources, storage).
+- `proto/`: protobuf IDL for column-level structured values and closed enums (not a wire/RPC IDL).
+- `internal/idl/`: generated Go protobuf code.
+- `internal/repository/db.go`: owns all database migrations via GORM AutoMigrate + explicit `prepareLegacy*` / `migrate*` / `dropLegacy*` helpers. There is no separate SQL migration runner.
 - `configs/`: YAML config files and examples.
-- `migrations/`: SQL migrations.
 - `scripts/`: Backend-only helper scripts (`import-data.sh`, `check-data-dir.sh`, `setup.sh`, `clear-qdrant.sh`).
 - `data/`: Local data directories (gitignored except for `.gitkeep`).
 - `Dockerfile`, `.dockerignore`: Container build definition (also pushed to Hugging Face Space via subtree split).
@@ -19,11 +21,14 @@ Sibling directories at repo root: `../frontend/` (React/Vite UI), `../deployment
 - `cd backend && go build ./... && go test ./...`: build and test all Go packages.
 - `cd backend && ./scripts/import-data.sh -p ./data/memes -l 50`: ingest local static image memes (recommended).
 - `cd backend && go run ./cmd/ingest --source=localdir --path=./data/memes --limit=50`: ingest local static image memes (alternative).
-- `docker compose -f deployments/docker-compose.yml up -d` (from repo root): start API + Grafana Alloy.
+- `cd backend && go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate`: regenerate Go code after protobuf IDL changes.
+- `docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d` (from repo root): start API + Grafana Alloy.
 
 ## Coding Style & Naming Conventions
 - Go: follow `gofmt` defaults (tabs for indentation); package names short and lowercase.
 - Config: keep new keys grouped by subsystem under `backend/configs/`.
+- Schema: keep core relational data centered on `memes`, `meme_annotations`, and `meme_vectors`; update `proto/emomo/v1/schema.proto` only for column-level structured values and closed enums. Do not add top-level `Meme` / `MemeAnnotation` / `MemeVector` messages — the relational rows are GORM structs.
+- Migrations: extend the helpers in `internal/repository/db.go` (`prepareLegacy*`, `migrate*`, `dropLegacy*`, `migrateCoreTableSecurity`) and add a regression test in `internal/repository/db_test.go`. Do not introduce a parallel SQL migration runner.
 - Logging: prefer the helpers in `internal/logger` (context-aware fields).
 
 ## Testing Guidelines

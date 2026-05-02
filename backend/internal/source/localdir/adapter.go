@@ -74,7 +74,7 @@ func NewAdapter(opts Options) *Adapter {
 	}
 }
 
-// GetSourceID returns the source identifier to store as meme.source_type.
+// GetSourceID returns the runtime source identifier used in ingest logs.
 func (a *Adapter) GetSourceID() string {
 	return a.sourceID
 }

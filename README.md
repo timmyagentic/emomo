@@ -2,9 +2,13 @@
 
 > AI 表情包语义搜索系统 — Go 后端 + React 前端 monorepo
 
-Emomo 让你用自然语言搜表情包。系统由 Go 后端（搜索 + 本地静态图片目录摄入）和 React 前端（用户界面）组成。
+Emomo 让你用自然语言搜表情包。系统由 Go 后端（搜索 + 本地静态图片目录摄入）和 React 前端（用户界面）组成。当前默认检索链路使用 Qwen3-VL 多模态 embedding：导入时直接为图片生成 image 向量，搜索时将用户文本嵌入到同一语义空间并与图片向量匹配；VLM 描述和 OCR 作为 caption/keyword 辅助信号与展示元数据，不再是唯一或主检索路径。
 
 资源约束：表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
+
+当前关系库只保留三张核心表：`memes`、`meme_annotations`、`meme_vectors`。类型契约使用 protobuf 定义在 [backend/proto/emomo/v1/schema.proto](backend/proto/emomo/v1/schema.proto)，其中 `ImageFormat`、`VectorType` 等有限集合会以 enum number 存入数据库。数据库结构详见 [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)。
+
+Supabase/PostgreSQL 部署会为这三张核心表启用 Row Level Security；前端不直接访问 Supabase 表，而是通过 Go API 访问数据。
 
 ## 仓库结构
 
@@ -50,28 +54,38 @@ npm install
 npm run dev
 ```
 
-### Jina v4 图像向量摄入（可选）
+### Qwen3-VL 多模态向量摄入
 
-使用配置中的 Jina embedding 做摄入时，在 `backend/` 下执行，例如：
+默认配置会使用 `qwen3vl` profile 同时写入 image 与 caption 两路向量，其中 image 路直接对图片生成向量：
 
 ```bash
 cd backend
-./scripts/import-data.sh -p ./data/memes -e jina -l 50
-# 或: go run ./cmd/ingest --source=localdir --path=./data/memes --embedding=jina --limit=50
+./scripts/import-data.sh -p ./data/memes -l 50
+# 或显式指定 profile:
+./scripts/import-data.sh -p ./data/memes --profile qwen3vl -l 50
 ```
 
 详见 [docs/MULTI_EMBEDDING.md](docs/MULTI_EMBEDDING.md) 与 [backend/configs/config.yaml](backend/configs/config.yaml)。
+
+### 更新 protobuf IDL
+
+修改 schema 级类型后，从 `backend/` 重新生成 Go 代码：
+
+```bash
+cd backend
+go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
+```
 
 ## 技术栈速览
 
 | 子项目 | 关键技术 |
 |--------|---------|
-| backend | Go 1.24, Gin, GORM, Qdrant (gRPC), S3/R2, OpenAI-compatible VLM, Jina v4 / ModelScope embeddings, BM25 hybrid 检索, Grafana Alloy + Loki |
+| backend | Go 1.24, Gin, GORM, Qdrant (gRPC), S3/R2, Qwen3-VL 多模态 embeddings, OpenAI-compatible VLM/OCR 辅助分析, BM25 hybrid 检索, Grafana Alloy + Loki |
 | frontend | React 19, TypeScript, Vite 7, Framer Motion, Playwright e2e |
 
 ## 部署
 
-- **Docker Compose（本机）**：`docker compose -f deployments/docker-compose.yml up -d`，会起 API 容器 + Grafana Alloy 日志采集（Qdrant 与对象存储需自备）。
+- **Docker Compose（本机）**：`docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d`，会起 API 容器 + Grafana Alloy 日志采集（Qdrant 与对象存储需自备）。
 - **Render**：根的 [render.yaml](render.yaml) 把后端服务的 rootDir 设为 `backend/`。
 - **Railway**：根的 [railway.json](railway.json) 指向 `backend/Dockerfile`。
 - **Hugging Face Space**：[`.github/workflows/sync_to_hf.yml`](.github/workflows/sync_to_hf.yml) 在每次 push 到 main 时把 `backend/` 子树拆出来 force-push 到 Space 的 `main` 分支，所以 Space 看到的根就是 `backend/`。

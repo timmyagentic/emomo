@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+// Package emomo.v1 defines the *structured value* IDL for emomo.
+//
+// SCOPE:
+//   This schema is intentionally limited to (a) closed enumerations whose
+//   numeric value is persisted, and (b) JSON-shaped values that are stored
+//   inline as columns in the relational database. It is NOT a transport /
+//   wire IDL — there are no top-level Meme / MemeAnnotation / MemeVector
+//   messages here, because emomo's HTTP API uses Go structs + encoding/json
+//   directly and does not speak protobuf on the wire.
+//
+//   Tables (memes, meme_annotations, meme_vectors) and their non-structured
+//   columns are defined by GORM model structs in backend/internal/domain/
+//   (see also backend/internal/repository/db.go for migrations). This file
+//   only owns the column-level structured values listed below.
+//
+// Owned by this IDL:
+//   - enum ImageFormat   (memes.image_info.format, persisted as enum number)
+//   - enum VectorType    (meme_vectors.vector_type, persisted as INTEGER)
+//   - message ImageInfo  (memes.image_info JSON column)
+//   - message TextLabel  (nested in MemeAnnotationLabels)
+//   - message MemeAnnotationLabels (meme_annotations.labels JSON column)
+
+package emomo.v1;
+
+option go_package = "github.com/timmy/emomo/internal/idl/emomo/v1;emomov1";
+
+enum ImageFormat {
+  IMAGE_FORMAT_UNSPECIFIED = 0;
+  IMAGE_FORMAT_JPEG = 1;
+  IMAGE_FORMAT_PNG = 2;
+  IMAGE_FORMAT_WEBP = 3;
+}
+
+enum VectorType {
+  VECTOR_TYPE_UNSPECIFIED = 0;
+  VECTOR_TYPE_IMAGE = 1;
+  VECTOR_TYPE_CAPTION = 2;
+}
+
+message ImageInfo {
+  int32 width = 1;
+  int32 height = 2;
+  ImageFormat format = 3;
+}
+
+message TextLabel {
+  bool present = 1;
+}
+
+message MemeAnnotationLabels {
+  TextLabel text = 1;
+}

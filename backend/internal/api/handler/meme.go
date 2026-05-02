@@ -16,6 +16,7 @@ type MemeHandler struct {
 // NewMemeHandler creates a new meme handler.
 // Parameters:
 //   - searchService: search service instance.
+//
 // Returns:
 //   - *MemeHandler: initialized handler.
 func NewMemeHandler(searchService *service.SearchService) *MemeHandler {
@@ -27,6 +28,7 @@ func NewMemeHandler(searchService *service.SearchService) *MemeHandler {
 // ListMemes handles GET /api/v1/memes.
 // Parameters:
 //   - c: Gin request context.
+//
 // Returns: none (writes JSON response).
 func (h *MemeHandler) ListMemes(c *gin.Context) {
 	category := c.Query("category")
@@ -48,6 +50,7 @@ func (h *MemeHandler) ListMemes(c *gin.Context) {
 // GetMeme handles GET /api/v1/memes/:id.
 // Parameters:
 //   - c: Gin request context.
+//
 // Returns: none (writes JSON response).
 func (h *MemeHandler) GetMeme(c *gin.Context) {
 	id := c.Param("id")
