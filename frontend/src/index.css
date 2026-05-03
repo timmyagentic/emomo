@@ -3,6 +3,15 @@
    Global Styles & CSS Variables
    ======================================== */
 
+/* HarmonyOS Sans — brand body font (self-hosted) */
+@font-face {
+  font-family: 'HarmonyOS Sans';
+  src: url('/fonts/HarmonyOS_Sans_Medium.ttf') format('truetype');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Color Palette - Warm Light Theme */
   --bg-primary: #FDF8F3;
@@ -65,7 +74,7 @@
 
   /* Typography */
   --font-display: 'ZCOOL KuaiLe', cursive;
-  --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'HarmonyOS Sans', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-accent: 'Caveat', cursive;
 
   /* Font Sizes */
