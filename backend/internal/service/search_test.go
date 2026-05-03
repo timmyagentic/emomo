@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/repository"
 )
 
@@ -49,7 +50,7 @@ func TestResolveRequestedProfileFallsBackWhenDefaultProfileUnregistered(t *testi
 		DefaultProfile: "qwen3vl",
 	})
 
-	_, _, ok, err := searchService.resolveRequestedProfile(&SearchRequest{})
+	_, _, ok, err := searchService.resolveRequestedProfile(&pb.SearchRequest{})
 	if err != nil {
 		t.Fatalf("resolveRequestedProfile() error = %v, want nil", err)
 	}
@@ -57,7 +58,7 @@ func TestResolveRequestedProfileFallsBackWhenDefaultProfileUnregistered(t *testi
 		t.Fatal("resolveRequestedProfile() ok = true, want false")
 	}
 
-	_, _, _, err = searchService.resolveRequestedProfile(&SearchRequest{Profile: "qwen3vl"})
+	_, _, _, err = searchService.resolveRequestedProfile(&pb.SearchRequest{Profile: "qwen3vl"})
 	if err == nil {
 		t.Fatal("resolveRequestedProfile() explicit profile error = nil, want error")
 	}
@@ -87,10 +88,10 @@ func TestFuseProfileResultsCombinesRoutesByMemeID(t *testing.T) {
 	if len(results) != 3 {
 		t.Fatalf("fuseProfileResults returned %d results, want 3", len(results))
 	}
-	if results[0].ID != "meme-b" {
-		t.Fatalf("first result ID = %q, want meme-b", results[0].ID)
+	if results[0].GetMeme().GetId() != "meme-b" {
+		t.Fatalf("first result ID = %q, want meme-b", results[0].GetMeme().GetId())
 	}
-	if results[0].Score != 1 {
-		t.Fatalf("first result score = %v, want normalized score 1", results[0].Score)
+	if results[0].GetScore() != 1 {
+		t.Fatalf("first result score = %v, want normalized score 1", results[0].GetScore())
 	}
 }

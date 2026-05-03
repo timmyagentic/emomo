@@ -10,7 +10,7 @@
 - S3 兼容对象存储（Cloudflare R2 / AWS S3 / MinIO 等）
 - 前端部署（可选，如 Vercel）
 
-当前默认检索链路是“导入时直接生成图片向量，搜索时文本 query 直接匹配图片向量”。VLM/OCR 只作为 annotation、caption/BM25 和展示元数据，不是主检索前置步骤。关系库核心表为 `memes`、`meme_annotations`、`meme_vectors`，schema 级类型由 `backend/proto/emomo/v1/schema.proto` 定义。
+当前默认检索链路是“导入时直接生成图片向量，搜索时文本 query 直接匹配图片向量”。VLM/OCR 只作为 annotation、caption/BM25 和展示元数据，不是主检索前置步骤。关系库核心表为 `memes`、`meme_annotations`、`meme_vectors`，protobuf 消息 schema 定义在 `backend/proto/emomo/v1/{types,meme,api}.proto`。
 
 ## 方案选择
 

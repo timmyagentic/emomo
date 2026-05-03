@@ -25,7 +25,7 @@
 ```text
 /
 ├── src/
-│   ├── api/            # API client functions (search, fetch memes)
+│   ├── api/            # API client functions; protobuf DTOs stop here
 │   ├── components/     # UI Components (Header, MemeGrid, etc.)
 │   ├── types/          # Shared TypeScript definitions (Meme, API responses)
 │   ├── App.tsx         # Main application logic (Routing/State)
@@ -69,6 +69,6 @@ npm run build
 ## Development Conventions
 - **Components:** Create new components in `src/components/` with a corresponding `PascalCase.module.css` file.
 - **State Management:** Uses React hooks (`useState`, `useEffect`) for local state. Complex global state is currently minimal.
-- **API:** All network requests are encapsulated in `src/api/index.ts`.
-- **Types:** Define shared interfaces in `src/types/index.ts`.
+- **API:** All network requests are encapsulated in `src/api/index.ts`. Decode/encode generated protobuf DTOs at this boundary, then project them into UI-owned shapes.
+- **Types:** Define shared UI interfaces in `src/types/index.ts`. Do not use generated protobuf types as component state/props or local fallback-data shapes after API decoding.
 - **Styling:** Prefer CSS Modules for component-specific styles. Global styles go in `src/App.css` or `src/index.css`.

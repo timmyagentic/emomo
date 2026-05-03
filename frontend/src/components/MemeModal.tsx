@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Meme } from '../types';
+import type { DisplayMeme } from '../types';
 import styles from './MemeModal.module.css';
 
 /**
@@ -8,7 +8,7 @@ import styles from './MemeModal.module.css';
  */
 interface MemeModalProps {
   /** The meme to display in the modal. If null, the modal is hidden. */
-  meme: Meme | null;
+  meme: DisplayMeme | null;
   /** Whether the modal is currently open. */
   isOpen: boolean;
   /** Callback function to close the modal. */
@@ -111,7 +111,7 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const activeMemeId = meme?.id;
   const imageError = imageErrorState.hasError && imageErrorState.memeId === activeMemeId;
-  const description = meme?.vlm_description || meme?.description || '';
+  const description = meme?.description || '';
   const scorePercent = typeof meme?.score === 'number' && meme.score > 0
     ? Math.round(meme.score * 100)
     : null;
@@ -261,7 +261,7 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
                 </div>
               ) : (
                 <motion.img
-                  src={meme.url || meme.original_url}
+                  src={meme.url}
                   alt={description || 'Meme'}
                   className={styles.image}
                   initial={{ opacity: 0 }}

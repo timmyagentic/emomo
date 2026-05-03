@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/config"
-	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/repository"
 )
@@ -315,7 +315,7 @@ func (r *EmbeddingRegistry) BuildProfileIngestIndexes(profile *config.SearchProf
 			return nil, fmt.Errorf("unknown image embedding %q for profile %q", profile.ImageEmbedding, profile.Name)
 		}
 		indexes = append(indexes, IngestVectorIndex{
-			VectorType: domain.MemeVectorTypeImage,
+			VectorType: pb.VectorType_VECTOR_TYPE_IMAGE,
 			Collection: repo.GetCollectionName(),
 			Embedding:  provider,
 			QdrantRepo: repo,
@@ -329,7 +329,7 @@ func (r *EmbeddingRegistry) BuildProfileIngestIndexes(profile *config.SearchProf
 			return nil, fmt.Errorf("unknown caption embedding %q for profile %q", profile.CaptionEmbedding, profile.Name)
 		}
 		indexes = append(indexes, IngestVectorIndex{
-			VectorType: domain.MemeVectorTypeCaption,
+			VectorType: pb.VectorType_VECTOR_TYPE_CAPTION,
 			Collection: repo.GetCollectionName(),
 			Embedding:  provider,
 			QdrantRepo: repo,

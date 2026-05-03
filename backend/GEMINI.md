@@ -19,7 +19,7 @@ All commands below assume `cd backend` unless noted.
 *   **Web Framework:** Gin (Go).
 *   **Databases:** PostgreSQL (primary metadata, GORM) and Qdrant (vector search).
 *   **Storage:** S3-compatible object storage (Cloudflare R2, AWS S3, or MinIO).
-*   **Schema-level types:** protobuf value schema lives in `proto/emomo/v1/schema.proto`; generated Go code lives in `internal/idl/emomo/v1/`. The schema is intentionally structured-value-only (`ImageInfo`, `MemeAnnotationLabels`, `TextLabel` + `ImageFormat` / `VectorType` enums), not a wire / RPC contract; relational rows themselves are GORM structs in `internal/domain/`.
+*   **Protobuf message schema:** hand-written `.proto` source lives in `proto/emomo/v1/` (`types.proto` / `meme.proto` / `api.proto`); generated Go code lands in `gen/emomo/v1/` (imported as `pb`). Protobuf defines API DTOs, generated frontend/backend DTOs, closed cross-boundary enums, and the allowlisted structured DB JSON values `memes.image_info` / `meme_annotations.labels`. It does not own relational table shape, migrations, runtime config, open business sets, repository internals, or React UI state. It is **not** an RPC contract — handlers under `internal/api/handler/` are still Gin handlers that read and write protobuf messages via `protojson`.
 *   **AI Models:** Qwen3-VL multimodal embeddings are the default for image/caption/query vectors; OpenAI-compatible VLM/OCR is auxiliary.
 *   **Infrastructure:** Docker Compose for local development (`../deployments/docker-compose.yml`).
 
@@ -46,8 +46,8 @@ graph LR
 *   `cmd/api/`: REST API server entry (`main.go`).
 *   `cmd/ingest/`: Ingestion CLI (`main.go`).
 *   `internal/api/`: HTTP handlers and routers.
-*   `proto/`: protobuf value schema for column-level structured values and closed enums (not a wire/RPC contract).
-*   `internal/idl/`: generated Go protobuf code.
+*   `proto/emomo/v1/`: hand-written `.proto` source (`types.proto` / `meme.proto` / `api.proto`).
+*   `gen/emomo/v1/`: generated Go protobuf code; do not hand-edit.
 *   `internal/service/`: Business logic (search, ingest, VLM/OCR, embedding, query expansion).
 *   `internal/repository/`: Data access layer (DB, Qdrant). `db.go` owns every database migration in code (GORM AutoMigrate + `prepareLegacy*` / `migrate*` / `dropLegacy*` helpers); there is no SQL migration runner.
 *   `internal/source/`: Adapters for ingestion sources (`localdir`).
@@ -77,8 +77,8 @@ graph LR
 *   **Add new embedding model:**
     1.  Add an entry under `embeddings:` in `configs/config.yaml` (provider, dimensions, collection, api_key_env).
     2.  Verify it loads via `internal/service/embedding_registry.go`.
-*   **Change schema-level types:**
-    1.  Edit `proto/emomo/v1/schema.proto`. Only add column-level structured values or closed enums — the project does not speak protobuf on the wire, so do not reintroduce top-level `Meme` / `MemeAnnotation` / `MemeVector` messages.
+*   **Change protobuf messages:**
+    1.  Edit one of `proto/emomo/v1/types.proto` (closed cross-boundary enums + allowlisted JSON-column messages), `meme.proto` (API entity DTOs — Meme / MemeAnnotation / MemeVector / SearchResult), or `api.proto` (HTTP request/response + SSE event messages).
     2.  Run `GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate`.
     3.  Keep the relational schema centered on `memes`, `meme_annotations`, and `meme_vectors`.
 *   **Database migrations:** managed entirely in code via `internal/repository/db.go` (GORM AutoMigrate plus explicit `prepareLegacy*` / `migrate*` / `dropLegacy*` helpers). Add new migration logic and a regression test in `internal/repository/db_test.go`; do not introduce a parallel SQL migration runner.

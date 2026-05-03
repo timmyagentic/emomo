@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/domain"
+	"github.com/timmy/emomo/internal/persistence"
 	"gorm.io/gorm"
 )
 
@@ -30,17 +32,13 @@ func NewMemeVectorRepository(db *gorm.DB) *MemeVectorRepository {
 // Returns:
 //   - error: non-nil if the insert fails.
 func (r *MemeVectorRepository) Create(ctx context.Context, vector *domain.MemeVector) error {
-	if vector.VectorType == domain.MemeVectorTypeUnspecified {
-		vector.VectorType = domain.MemeVectorTypeImage
-	}
+	vector.VectorType = persistence.NormalizeVectorType(vector.VectorType)
 	return r.db.WithContext(ctx).Create(vector).Error
 }
 
 // Update persists changes to an existing meme vector record.
 func (r *MemeVectorRepository) Update(ctx context.Context, vector *domain.MemeVector) error {
-	if vector.VectorType == domain.MemeVectorTypeUnspecified {
-		vector.VectorType = domain.MemeVectorTypeImage
-	}
+	vector.VectorType = persistence.NormalizeVectorType(vector.VectorType)
 	return r.db.WithContext(ctx).Save(vector).Error
 }
 
@@ -73,10 +71,10 @@ func (r *MemeVectorRepository) ExistsByMemeIDAndCollection(ctx context.Context, 
 // Returns:
 //   - bool: true if a matching active or historical record exists.
 //   - error: non-nil if the lookup fails.
-func (r *MemeVectorRepository) ExistsByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType domain.MemeVectorType) (bool, error) {
+func (r *MemeVectorRepository) ExistsByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType pb.VectorType) (bool, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&domain.MemeVector{}).
-		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, normalizeVectorType(vectorType)).
+		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, persistence.NormalizeVectorType(vectorType)).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -103,10 +101,10 @@ func (r *MemeVectorRepository) GetByMemeIDAndCollection(ctx context.Context, mem
 }
 
 // GetByMemeIDCollectionAndVectorType retrieves a vector record by meme ID, collection, and vector type.
-func (r *MemeVectorRepository) GetByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType domain.MemeVectorType) (*domain.MemeVector, error) {
+func (r *MemeVectorRepository) GetByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType pb.VectorType) (*domain.MemeVector, error) {
 	var vector domain.MemeVector
 	if err := r.db.WithContext(ctx).
-		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, normalizeVectorType(vectorType)).
+		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, persistence.NormalizeVectorType(vectorType)).
 		First(&vector).Error; err != nil {
 		return nil, err
 	}
@@ -200,15 +198,8 @@ func (r *MemeVectorRepository) DeleteByMemeIDAndCollection(ctx context.Context, 
 }
 
 // DeleteByMemeIDCollectionAndVectorType deletes a vector record by meme ID, collection, and vector type.
-func (r *MemeVectorRepository) DeleteByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType domain.MemeVectorType) error {
+func (r *MemeVectorRepository) DeleteByMemeIDCollectionAndVectorType(ctx context.Context, memeID, collection string, vectorType pb.VectorType) error {
 	return r.db.WithContext(ctx).
-		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, normalizeVectorType(vectorType)).
+		Where("meme_id = ? AND collection = ? AND vector_type = ?", memeID, collection, persistence.NormalizeVectorType(vectorType)).
 		Delete(&domain.MemeVector{}).Error
-}
-
-func normalizeVectorType(vectorType domain.MemeVectorType) domain.MemeVectorType {
-	if vectorType == domain.MemeVectorTypeUnspecified {
-		return domain.MemeVectorTypeImage
-	}
-	return vectorType
 }

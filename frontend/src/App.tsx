@@ -6,17 +6,17 @@ import {
   searchMemesStream,
   getMemes,
   getStats,
-  type SearchStage,
-  type SearchProgressEvent,
+  type SearchStageSlug,
+  type SearchProgressView,
 } from './api';
 import { curatedMemes } from './data/curatedMemes';
-import type { Meme } from './types';
+import type { DisplayMeme } from './types';
 import './App.css';
 
 // Search state for streaming progress
 interface SearchState {
   isStreaming: boolean;
-  stage: SearchStage;
+  stage: SearchStageSlug;
   message: string;
   thinkingText: string;
   expandedQuery?: string;
@@ -25,8 +25,8 @@ interface SearchState {
 const FEED_PAGE_SIZE = 12;
 
 function App() {
-  const [memes, setMemes] = useState<Meme[]>([]);
-  const [feedMemes, setFeedMemes] = useState<Meme[]>(curatedMemes.slice(0, FEED_PAGE_SIZE));
+  const [memes, setMemes] = useState<DisplayMeme[]>([]);
+  const [feedMemes, setFeedMemes] = useState<DisplayMeme[]>(curatedMemes.slice(0, FEED_PAGE_SIZE));
   const [feedTotal, setFeedTotal] = useState<number | null>(null);
   const [hasFeedMore, setHasFeedMore] = useState(true);
   const [isFeedLoading, setIsFeedLoading] = useState(true);
@@ -36,7 +36,7 @@ function App() {
   const [inputQuery, setInputQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [memeCount, setMemeCount] = useState(5791);
-  const [selectedMeme, setSelectedMeme] = useState<Meme | null>(null);
+  const [selectedMeme, setSelectedMeme] = useState<DisplayMeme | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchState, setSearchState] = useState<SearchState | null>(null);
   const hasFetchedRef = useRef(false);
@@ -102,9 +102,9 @@ function App() {
     const loadStats = async () => {
       try {
         const stats = await getStats();
-        if (stats.total_memes > 0) {
-          setMemeCount(stats.total_memes);
-          setFeedTotal(stats.total_memes);
+        if (stats.totalMemes > 0) {
+          setMemeCount(stats.totalMemes);
+          setFeedTotal(stats.totalMemes);
         }
       } catch (error) {
         console.error('Failed to load stats:', error);
@@ -156,7 +156,7 @@ function App() {
       await searchMemesStream(
         query,
         20,
-        (event: SearchProgressEvent) => {
+        (event: SearchProgressView) => {
           if (abortController.signal.aborted) {
             return;
           }
@@ -164,8 +164,8 @@ function App() {
           // Update search state based on event
           if (event.stage === 'thinking') {
             // Accumulate thinking text for typewriter effect
-            if (event.is_delta && event.thinking_text) {
-              accumulatedThinking += event.thinking_text;
+            if (event.isDelta && event.thinkingText) {
+              accumulatedThinking += event.thinkingText;
               setSearchState((prev) =>
                 prev
                   ? {
@@ -191,7 +191,6 @@ function App() {
             const filtered = curatedMemes.filter(
               (m) =>
                 m.description?.toLowerCase().includes(query.toLowerCase()) ||
-                m.vlm_description?.toLowerCase().includes(query.toLowerCase()) ||
                 m.tags?.some((t) => t.toLowerCase().includes(query.toLowerCase())) ||
                 m.category?.toLowerCase().includes(query.toLowerCase())
             );
@@ -204,7 +203,7 @@ function App() {
                     ...prev,
                     stage: event.stage,
                     message: event.message || prev.message,
-                    expandedQuery: event.expanded_query || prev.expandedQuery,
+                    expandedQuery: event.expandedQuery || prev.expandedQuery,
                   }
                 : null
             );
@@ -223,7 +222,6 @@ function App() {
       const filtered = curatedMemes.filter(
         (m) =>
           m.description?.toLowerCase().includes(query.toLowerCase()) ||
-          m.vlm_description?.toLowerCase().includes(query.toLowerCase()) ||
           m.tags?.some((t) => t.toLowerCase().includes(query.toLowerCase())) ||
           m.category?.toLowerCase().includes(query.toLowerCase())
       );
@@ -271,7 +269,7 @@ function App() {
   }, [feedTotal, hasFeedMore, hasSearched, loadFeedPage]);
 
   // Handle meme click
-  const handleMemeClick = useCallback((meme: Meme) => {
+  const handleMemeClick = useCallback((meme: DisplayMeme) => {
     setSelectedMeme(meme);
   }, []);
 

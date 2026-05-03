@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/config"
-	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/service"
@@ -111,7 +111,7 @@ func main() {
 	collectionName := ""
 	activeProfile := ""
 	activeEmbedding := ""
-	fallbackVectorType := domain.MemeVectorTypeUnspecified
+	fallbackVectorType := pb.VectorType_VECTOR_TYPE_UNSPECIFIED
 
 	if *embeddingName == "" {
 		var profileCfg *config.SearchProfileConfig

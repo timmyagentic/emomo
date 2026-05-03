@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import type { Meme } from '../types';
+import type { DisplayMeme } from '../types';
 import MemeCard from './MemeCard';
 import styles from './MemeGrid.module.css';
 
@@ -11,7 +11,7 @@ const countFormatter = new Intl.NumberFormat('en-US');
  */
 interface MemeGridProps {
   /** The list of memes to display in the grid. */
-  memes: Meme[];
+  memes: DisplayMeme[];
   /**
    * Indicates whether the grid is in a loading state.
    * If true, displays loading skeletons instead of memes.
@@ -22,7 +22,7 @@ interface MemeGridProps {
    * Callback function triggered when a meme card is clicked.
    * @param meme - The meme data associated with the clicked card.
    */
-  onMemeClick?: (meme: Meme) => void;
+  onMemeClick?: (meme: DisplayMeme) => void;
   /**
    * Message to display when the meme list is empty.
    * @default '暂无表情包'

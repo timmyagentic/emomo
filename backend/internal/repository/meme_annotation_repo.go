@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/domain"
+	"github.com/timmy/emomo/internal/persistence"
 	"gorm.io/gorm"
 )
 
@@ -25,14 +27,19 @@ func (r *MemeAnnotationRepository) Create(ctx context.Context, annotation *domai
 // UpdateOCRText updates OCR text and its derived text-presence fields.
 func (r *MemeAnnotationRepository) UpdateOCRText(ctx context.Context, id, ocrText string) error {
 	presence, _ := domain.TextPresenceFromOCRText(ocrText)
+	labels := &pb.MemeAnnotationLabels{
+		Text: &pb.TextLabel{Present: presence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT},
+	}
+	labelsJSON, err := persistence.MarshalProtoColumn(labels)
+	if err != nil {
+		return err
+	}
 	return r.db.WithContext(ctx).
 		Model(&domain.MemeAnnotation{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"ocr_text": ocrText,
-			"labels": domain.AnnotationLabels{
-				Text: &domain.TextLabel{Present: presence == domain.TextPresenceWithText},
-			},
+			"labels":   labelsJSON,
 		}).Error
 }
 

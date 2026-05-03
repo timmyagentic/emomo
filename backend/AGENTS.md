@@ -6,8 +6,8 @@
 ## Project Structure & Module Organization
 - `cmd/`: Go entry points (`cmd/api`, `cmd/ingest`).
 - `internal/`: Go application code (API handlers, services, repositories, sources, storage).
-- `proto/`: protobuf value schema for column-level structured values and closed enums (not a wire/RPC contract).
-- `internal/idl/`: generated Go protobuf code.
+- `proto/emomo/v1/`: hand-written `.proto` source — `types.proto` (closed cross-boundary enums + allowlisted JSON-column messages), `meme.proto` (API entity DTOs), `api.proto` (HTTP request/response + SSE event DTOs).
+- `gen/emomo/v1/`: generated Go code (`*.pb.go`); imported as `pb "github.com/timmy/emomo/gen/emomo/v1"`. Do not hand-edit.
 - `internal/repository/db.go`: owns all database migrations via GORM AutoMigrate + explicit `prepareLegacy*` / `migrate*` / `dropLegacy*` helpers. There is no separate SQL migration runner.
 - `configs/`: YAML config files and examples.
 - `scripts/`: Backend-only helper scripts (`import-data.sh`, `check-data-dir.sh`, `setup.sh`, `clear-qdrant.sh`).
@@ -21,13 +21,13 @@ Sibling directories at repo root: `../frontend/` (React/Vite UI), `../deployment
 - `cd backend && go build ./... && go test ./...`: build and test all Go packages.
 - `cd backend && ./scripts/import-data.sh -p ./data/memes -l 50`: ingest local static image memes (recommended).
 - `cd backend && go run ./cmd/ingest --source=localdir --path=./data/memes --limit=50`: ingest local static image memes (alternative).
-- `cd backend && GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate`: regenerate Go code after schema-level type changes.
+- `cd backend && GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate`: regenerate Go code under `gen/` after editing any `.proto` (also re-run `cd ../frontend && npm run gen` to refresh TS).
 - `docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d` (from repo root): start API + Grafana Alloy.
 
 ## Coding Style & Naming Conventions
 - Go: follow `gofmt` defaults (tabs for indentation); package names short and lowercase.
 - Config: keep new keys grouped by subsystem under `backend/configs/`.
-- Schema: keep core relational data centered on `memes`, `meme_annotations`, and `meme_vectors`; update `proto/emomo/v1/schema.proto` only for column-level structured values and closed enums. Do not add top-level `Meme` / `MemeAnnotation` / `MemeVector` messages — the relational rows are GORM structs.
+- Schema: keep core relational data centered on `memes`, `meme_annotations`, and `meme_vectors`. Protobuf owns API DTOs, generated frontend/backend DTOs, closed cross-boundary enums, and only the explicit structured JSON columns `memes.image_info` / `meme_annotations.labels`. The GORM models plus `internal/repository/db.go` own relational tables, columns, indexes, and migrations. Do not move open business/config values (`category`, `tags`, `collection`, embedding/analyzer model names, source IDs) into protobuf enums. Re-run `buf generate` after editing `.proto` so `gen/` stays in sync.
 - Migrations: extend the helpers in `internal/repository/db.go` (`prepareLegacy*`, `migrate*`, `dropLegacy*`, `disableCoreTableRLS`) and add a regression test in `internal/repository/db_test.go`. Do not introduce a parallel SQL migration runner.
 - Row Level Security: core tables intentionally run with RLS off (`disableCoreTableRLS` turns it off on every `InitDB`); access control is at the connection layer. Do not re-enable RLS without also committing explicit `REVOKE` / `CREATE POLICY` statements.
 - Logging: prefer the helpers in `internal/logger` (context-aware fields).

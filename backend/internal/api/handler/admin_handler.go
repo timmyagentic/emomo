@@ -2,14 +2,17 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/service"
 	"github.com/timmy/emomo/internal/source"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // AdminHandler handles admin operations.
@@ -50,25 +53,25 @@ func (h *AdminHandler) log(c *gin.Context) *logger.Logger {
 	return h.logger
 }
 
-// IngestRequest represents the ingest API request.
-type IngestRequest struct {
-	Source string `json:"source" binding:"required"`
-	Limit  int    `json:"limit" binding:"required,min=1,max=10000"`
-	Force  bool   `json:"force"`
-}
-
-// IngestResponse represents the ingest API response.
-type IngestResponse struct {
-	Message string               `json:"message"`
-	Stats   *service.IngestStats `json:"stats,omitempty"`
-}
-
-// IngestStatusResponse represents the ingest status.
-type IngestStatusResponse struct {
-	IsRunning     bool                 `json:"is_running"`
-	LastRunTime   string               `json:"last_run_time,omitempty"`
-	LastRunStatus string               `json:"last_run_status,omitempty"`
-	CurrentStats  *service.IngestStats `json:"current_stats,omitempty"`
+// ingestStatsToPb projects the service-internal IngestStats into the
+// wire-shape protobuf message embedded in trigger / status responses.
+func ingestStatsToPb(s *service.IngestStats) *pb.IngestStats {
+	if s == nil {
+		return nil
+	}
+	out := &pb.IngestStats{
+		TotalItems:     s.TotalItems,
+		ProcessedItems: s.ProcessedItems,
+		SkippedItems:   s.SkippedItems,
+		FailedItems:    s.FailedItems,
+	}
+	if !s.StartTime.IsZero() {
+		out.StartTime = timestamppb.New(s.StartTime)
+	}
+	if !s.EndTime.IsZero() {
+		out.EndTime = timestamppb.New(s.EndTime)
+	}
+	return out
 }
 
 // AdminPage serves the admin dashboard HTML page.
@@ -312,10 +315,10 @@ func (h *AdminHandler) AdminPage(c *gin.Context) {
                     if (data.stats) {
                         statsDiv.style.display = 'block';
                         statsDiv.innerHTML = ` + "`" + `
-                            <div class="stats-row"><span>总计</span><span>${data.stats.TotalItems}</span></div>
-                            <div class="stats-row"><span>已处理</span><span>${data.stats.ProcessedItems}</span></div>
-                            <div class="stats-row"><span>跳过</span><span>${data.stats.SkippedItems}</span></div>
-                            <div class="stats-row"><span>失败</span><span>${data.stats.FailedItems}</span></div>
+                            <div class="stats-row"><span>总计</span><span>${data.stats.total_items ?? 0}</span></div>
+                            <div class="stats-row"><span>已处理</span><span>${data.stats.processed_items ?? 0}</span></div>
+                            <div class="stats-row"><span>跳过</span><span>${data.stats.skipped_items ?? 0}</span></div>
+                            <div class="stats-row"><span>失败</span><span>${data.stats.failed_items ?? 0}</span></div>
                         ` + "`" + `;
                     }
                 } else {
@@ -337,61 +340,62 @@ func (h *AdminHandler) AdminPage(c *gin.Context) {
 	c.String(http.StatusOK, html)
 }
 
-// TriggerIngest handles the ingest API endpoint.
-// Parameters:
-//   - c: Gin request context.
-//
-// Returns: none (writes JSON response).
+// TriggerIngest handles POST /api/v1/ingest.
 func (h *AdminHandler) TriggerIngest(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	var req IngestRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	req := &pb.TriggerIngestRequest{}
+	if err := readProtoJSON(c, req); err != nil {
 		logger.CtxWarn(ctx, "Invalid ingest request: client_ip=%s, error=%v", c.ClientIP(), err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, http.StatusBadRequest, err)
+		return
+	}
+	if req.GetSource() == "" {
+		writeError(c, http.StatusBadRequest, fmt.Errorf("source is required"))
+		return
+	}
+	if req.GetLimit() < 1 || req.GetLimit() > 10000 {
+		writeError(c, http.StatusBadRequest, fmt.Errorf("limit must be between 1 and 10000"))
 		return
 	}
 
 	logger.CtxInfo(ctx, "Received ingest request: source=%s, limit=%d, force=%v, client_ip=%s",
-		req.Source, req.Limit, req.Force, c.ClientIP())
+		req.GetSource(), req.GetLimit(), req.GetForce(), c.ClientIP())
 
-	// Check if ingest is already running
 	h.mu.RLock()
 	if h.isRunning {
 		h.mu.RUnlock()
 		logger.CtxWarn(ctx, "Ingest request rejected: already running, source=%s, client_ip=%s",
-			req.Source, c.ClientIP())
-		c.JSON(http.StatusConflict, gin.H{"error": "Ingest is already running"})
+			req.GetSource(), c.ClientIP())
+		writeError(c, http.StatusConflict, fmt.Errorf("ingest is already running"))
 		return
 	}
 	h.mu.RUnlock()
 
-	// Get source
-	src, ok := h.sources[req.Source]
+	src, ok := h.sources[req.GetSource()]
 	if !ok {
-		logger.CtxWarn(ctx, "Unknown source requested: source=%s, client_ip=%s", req.Source, c.ClientIP())
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Unknown source: " + req.Source})
+		logger.CtxWarn(ctx, "Unknown source requested: source=%s, client_ip=%s", req.GetSource(), c.ClientIP())
+		writeError(c, http.StatusBadRequest, fmt.Errorf("unknown source: %s", req.GetSource()))
 		return
 	}
 
-	// Set running state
 	h.mu.Lock()
 	h.isRunning = true
 	h.currentStats = nil
 	h.mu.Unlock()
 
 	logger.CtxInfo(ctx, "Starting ingest process: source=%s, limit=%d, force=%v",
-		req.Source, req.Limit, req.Force)
+		req.GetSource(), req.GetLimit(), req.GetForce())
 
-	// Run ingest (use background context to avoid cancellation on HTTP timeout)
+	// Run ingest with a background context so an HTTP timeout doesn't cancel
+	// the long-running pipeline.
 	ingestCtx := context.Background()
 	startTime := time.Now()
-	stats, err := h.ingestService.IngestFromSource(ingestCtx, src, req.Limit, &service.IngestOptions{
-		Force: req.Force,
+	stats, err := h.ingestService.IngestFromSource(ingestCtx, src, int(req.GetLimit()), &service.IngestOptions{
+		Force: req.GetForce(),
 	})
 	duration := time.Since(startTime)
 
-	// Update state
 	h.mu.Lock()
 	h.isRunning = false
 	h.currentStats = stats
@@ -407,8 +411,8 @@ func (h *AdminHandler) TriggerIngest(c *gin.Context) {
 		logger.With(logger.Fields{
 			logger.FieldDurationMs: duration.Milliseconds(),
 		}).Error(ctx, "Ingest process failed: source=%s, limit=%d, force=%v, error=%v",
-			req.Source, req.Limit, req.Force, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			req.GetSource(), req.GetLimit(), req.GetForce(), err)
+		writeError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -416,19 +420,15 @@ func (h *AdminHandler) TriggerIngest(c *gin.Context) {
 		logger.FieldDurationMs: duration.Milliseconds(),
 		logger.FieldCount:      stats.ProcessedItems,
 	}).Info(ctx, "Ingest process completed: source=%s, total=%d, processed=%d, skipped=%d, failed=%d",
-		req.Source, stats.TotalItems, stats.ProcessedItems, stats.SkippedItems, stats.FailedItems)
+		req.GetSource(), stats.TotalItems, stats.ProcessedItems, stats.SkippedItems, stats.FailedItems)
 
-	c.JSON(http.StatusOK, IngestResponse{
+	writeProtoJSON(c, http.StatusOK, &pb.TriggerIngestResponse{
 		Message: "Ingest completed successfully",
-		Stats:   stats,
+		Stats:   ingestStatsToPb(stats),
 	})
 }
 
-// GetIngestStatus returns the current ingest status.
-// Parameters:
-//   - c: Gin request context.
-//
-// Returns: none (writes JSON response).
+// GetIngestStatus handles GET /api/v1/ingest/status.
 func (h *AdminHandler) GetIngestStatus(c *gin.Context) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -436,15 +436,13 @@ func (h *AdminHandler) GetIngestStatus(c *gin.Context) {
 	ctx := c.Request.Context()
 	logger.CtxDebug(ctx, "Ingest status requested: client_ip=%s, is_running=%v", c.ClientIP(), h.isRunning)
 
-	resp := IngestStatusResponse{
+	resp := &pb.GetIngestStatusResponse{
 		IsRunning:     h.isRunning,
 		LastRunStatus: h.lastRunStatus,
-		CurrentStats:  h.currentStats,
+		CurrentStats:  ingestStatsToPb(h.currentStats),
 	}
-
 	if !h.lastRunTime.IsZero() {
-		resp.LastRunTime = h.lastRunTime.Format(time.RFC3339)
+		resp.LastRunTime = timestamppb.New(h.lastRunTime)
 	}
-
-	c.JSON(http.StatusOK, resp)
+	writeProtoJSON(c, http.StatusOK, resp)
 }

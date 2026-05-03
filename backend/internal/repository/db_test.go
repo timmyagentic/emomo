@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/config"
 	"github.com/timmy/emomo/internal/domain"
 	"gorm.io/driver/sqlite"
@@ -56,7 +57,7 @@ func TestInitDBAutoMigrateCreatesCleanCoreTables(t *testing.T) {
 
 	image := *base
 	image.ID = "vector-image"
-	image.VectorType = domain.MemeVectorTypeImage
+	image.VectorType = pb.VectorType_VECTOR_TYPE_IMAGE
 	image.InputHash = "image-hash"
 	image.QdrantPointID = "00000000-0000-0000-0000-000000000001"
 	if err := repo.Create(ctx, &image); err != nil {
@@ -65,7 +66,7 @@ func TestInitDBAutoMigrateCreatesCleanCoreTables(t *testing.T) {
 
 	caption := *base
 	caption.ID = "vector-caption"
-	caption.VectorType = domain.MemeVectorTypeCaption
+	caption.VectorType = pb.VectorType_VECTOR_TYPE_CAPTION
 	caption.InputHash = "caption-hash"
 	caption.QdrantPointID = "00000000-0000-0000-0000-000000000002"
 	if err := repo.Create(ctx, &caption); err != nil {
@@ -106,16 +107,16 @@ func TestInitDBAutoMigrateMigratesLegacyDescriptionsToAnnotations(t *testing.T) 
 	if annotation.AnalyzerModel != "legacy-vlm" {
 		t.Fatalf("AnalyzerModel = %q, want legacy-vlm", annotation.AnalyzerModel)
 	}
-	if annotation.Labels.Text == nil || !annotation.Labels.Text.Present {
-		t.Fatalf("Labels.Text = %+v, want present=true", annotation.Labels.Text)
+	if annotation.Labels == nil || annotation.Labels.GetText() == nil || !annotation.Labels.GetText().GetPresent() {
+		t.Fatalf("Labels.Text = %+v, want present=true", annotation.Labels.GetText())
 	}
 
 	var unknownAnnotation domain.MemeAnnotation
 	if err := db.First(&unknownAnnotation, "id = ?", "desc-2").Error; err != nil {
 		t.Fatalf("failed to load migrated unknown annotation: %v", err)
 	}
-	if unknownAnnotation.Labels.Text != nil {
-		t.Fatalf("blank legacy OCR Labels.Text = %+v, want nil", unknownAnnotation.Labels.Text)
+	if unknownAnnotation.Labels != nil && unknownAnnotation.Labels.GetText() != nil {
+		t.Fatalf("blank legacy OCR Labels.Text = %+v, want nil", unknownAnnotation.Labels.GetText())
 	}
 
 	var vector domain.MemeVector
@@ -160,7 +161,7 @@ func TestInitDBAutoMigrateBackfillsCleanFieldsFromLegacyColumns(t *testing.T) {
 	if meme.ContentHash != "legacy-md5" {
 		t.Fatalf("ContentHash = %q, want legacy-md5", meme.ContentHash)
 	}
-	if meme.ImageInfo.Width != 320 || meme.ImageInfo.Height != 240 || meme.ImageInfo.Format != domain.ImageFormatPNG {
+	if meme.ImageInfo.GetWidth() != 320 || meme.ImageInfo.GetHeight() != 240 || meme.ImageInfo.GetFormat() != pb.ImageFormat_IMAGE_FORMAT_PNG {
 		t.Fatalf("ImageInfo = %+v, want 320x240 png", meme.ImageInfo)
 	}
 
@@ -168,7 +169,7 @@ func TestInitDBAutoMigrateBackfillsCleanFieldsFromLegacyColumns(t *testing.T) {
 	if err := db.First(&vector, "id = ?", "vector-legacy").Error; err != nil {
 		t.Fatalf("failed to load migrated vector: %v", err)
 	}
-	if vector.VectorType != domain.MemeVectorTypeCaption {
+	if vector.VectorType != pb.VectorType_VECTOR_TYPE_CAPTION {
 		t.Fatalf("VectorType = %v, want caption enum", vector.VectorType)
 	}
 }
@@ -205,7 +206,7 @@ func setupLegacyDescriptionsSchema(db *gorm.DB) error {
 		ID:             "vector-1",
 		MemeID:         "meme-1",
 		Collection:     "meme_caption_qwen3vl_1024",
-		VectorType:     domain.MemeVectorTypeCaption,
+		VectorType:     pb.VectorType_VECTOR_TYPE_CAPTION,
 		EmbeddingModel: "Qwen/Qwen3-VL-Embedding-8B",
 		InputHash:      "caption-hash",
 		QdrantPointID:  "00000000-0000-0000-0000-000000000001",

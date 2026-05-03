@@ -57,7 +57,7 @@ cd backend && GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.
 - Default retrieval is not "image -> VLM description -> text vector". Ingest writes direct image embeddings to Qdrant, and text queries are embedded into the same multimodal space.
 - VLM/OCR data is auxiliary. It is stored in `meme_annotations` and used for display, OCR text, caption/BM25 routes, and structured filters.
 - The relational database has three core tables: `memes`, `meme_annotations`, and `meme_vectors`.
-- Schema-level enums and structured values are defined with protobuf in `backend/proto/emomo/v1/schema.proto`.
+- Protobuf defines the backend HTTP request/response/SSE DTOs, generated frontend/backend DTOs, closed cross-boundary enums, and the explicit structured DB JSON values `memes.image_info` and `meme_annotations.labels`. It does not own relational table shape, migrations, runtime config, open string sets, repository internals, or React UI state. Source `.proto` files live in `backend/proto/emomo/v1/` (`types.proto` / `meme.proto` / `api.proto`); generated code lands in `backend/gen/` (Go) and `frontend/gen/` (TS).
 
 ## 5. Conventions
 

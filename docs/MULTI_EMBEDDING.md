@@ -4,7 +4,7 @@
 
 VLM 描述和 OCR 仍然存在，但它们是 caption/keyword 辅助信号和展示元数据，不再是唯一或主检索路径。
 
-schema 级类型使用 protobuf 维护：`backend/proto/emomo/v1/schema.proto` 定义了 `ImageFormat`、`VectorType`、`ImageInfo`、`MemeAnnotationLabels` 等结构。数据库里只保留三张核心表：`memes`、`meme_annotations`、`meme_vectors`。
+protobuf message schema 维护在 `backend/proto/emomo/v1/`：`types.proto` 定义 `ImageFormat`、`VectorType`、`TextPresence` 等跨边界封闭枚举，以及 allowlisted DB JSON 结构 `ImageInfo`、`MemeAnnotationLabels`；`meme.proto` / `api.proto` 定义 API entity DTO 与 HTTP request/response 消息。数据库里只保留三张核心表：`memes`、`meme_annotations`、`meme_vectors`；表结构、索引和迁移由 GORM model + `backend/internal/repository/db.go` 管，不由 protobuf 管。
 
 ## 默认架构
 
@@ -141,9 +141,11 @@ go run ./cmd/reembed --profile qwen3vl --vector-type caption
   "top_k": 20,
   "profile": "qwen3vl",
   "category": "学生党表情包",
-  "text_presence": "with_text"
+  "text_presence": 2
 }
 ```
+
+`text_presence` 使用 protobuf enum number：`1=unknown`、`2=with_text`、`3=without_text`；`0` 或省略表示不筛选。
 
 服务内部流程：
 

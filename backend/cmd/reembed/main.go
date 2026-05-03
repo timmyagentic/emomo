@@ -33,9 +33,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/config"
 	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
+	"github.com/timmy/emomo/internal/persistence"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/service"
 	"github.com/timmy/emomo/internal/storage"
@@ -208,10 +210,10 @@ func buildReembedVectorIndexes(
 		log.WithField("embedding", name).Fatal("Unknown embedding configuration name")
 	}
 	embCfg, _ := registry.GetConfig(name)
-	resolvedType := domain.MemeVectorTypeCaption
+	resolvedType := pb.VectorType_VECTOR_TYPE_CAPTION
 	useSparse := true
 	if embCfg.GetDocumentMode() == "image" {
-		resolvedType = domain.MemeVectorTypeImage
+		resolvedType = pb.VectorType_VECTOR_TYPE_IMAGE
 		useSparse = false
 	}
 	return []service.IngestVectorIndex{
@@ -230,7 +232,10 @@ func filterVectorIndexes(indexes []service.IngestVectorIndex, vectorType string,
 	case "", "all":
 		return indexes
 	case "image", "caption":
-		requestedType := domain.ParseMemeVectorType(vectorType)
+		requestedType, err := persistence.ParseVectorType(vectorType)
+		if err != nil {
+			log.WithError(err).WithField("vector_type", vectorType).Fatal("Unsupported vector type; use image, caption, or all")
+		}
 		filtered := make([]service.IngestVectorIndex, 0, len(indexes))
 		for _, index := range indexes {
 			if index.VectorType == requestedType {
@@ -373,7 +378,7 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 	vlmDescription := ""
 	ocrText := ""
 	annotationID := ""
-	textPresence := domain.TextPresenceUnknown
+	textPresence := pb.TextPresence_TEXT_PRESENCE_UNKNOWN
 	if annotation != nil {
 		vlmDescription = annotation.Description
 		ocrText = service.NormalizeOCRText(annotation.OCRText)
@@ -395,7 +400,7 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 		Tags:           meme.Tags,
 		VLMDescription: vlmDescription,
 		OCRText:        ocrText,
-		TextPresence:   string(textPresence),
+		TextPresence:   persistence.TextPresenceToString(textPresence),
 		StorageURL:     imageURL,
 	}
 
@@ -462,12 +467,12 @@ type vectorPayloadInput struct {
 }
 
 func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index service.IngestVectorIndex, captionText string, stats *runStats) bool {
-	if index.VectorType == domain.MemeVectorTypeCaption && captionText == "" {
+	if index.VectorType == pb.VectorType_VECTOR_TYPE_CAPTION && captionText == "" {
 		atomic.AddInt64(&stats.SkippedNoURL, 1)
 		w.log.WithFields(logger.Fields{
 			"meme_id":     meme.ID,
 			"collection":  index.Collection,
-			"vector_type": domain.MemeVectorTypeToString(index.VectorType),
+			"vector_type": persistence.VectorTypeShortName(index.VectorType),
 		}).Warn("Skipping caption vector because caption text is empty")
 		return false
 	}
@@ -478,7 +483,7 @@ func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index
 			w.log.WithError(err).WithFields(logger.Fields{
 				"meme_id":     meme.ID,
 				"collection":  index.Collection,
-				"vector_type": domain.MemeVectorTypeToString(index.VectorType),
+				"vector_type": persistence.VectorTypeShortName(index.VectorType),
 			}).Error("Failed to check vector existence")
 			return false
 		}
@@ -507,13 +512,13 @@ func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index
 	doc := service.EmbeddingDocument{}
 	inputHash := meme.ContentHash
 	switch index.VectorType {
-	case domain.MemeVectorTypeCaption:
+	case pb.VectorType_VECTOR_TYPE_CAPTION:
 		doc.Text = input.CaptionText
 		inputHash = calculateTextSHA256(input.CaptionText)
-	case domain.MemeVectorTypeImage:
+	case pb.VectorType_VECTOR_TYPE_IMAGE:
 		doc.ImageURL = input.ImageURL
 	default:
-		return fmt.Errorf("unsupported vector type: %s", domain.MemeVectorTypeToString(index.VectorType))
+		return fmt.Errorf("unsupported vector type: %s", persistence.VectorTypeShortName(index.VectorType))
 	}
 
 	embedding, err := w.embedWithRetry(ctx, index.Embedding, doc, meme.ID)

@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/config"
 	"github.com/timmy/emomo/internal/domain"
+	_ "github.com/timmy/emomo/internal/persistence" // register protojson serializer
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -778,10 +780,10 @@ func copyLegacyDescriptionsToAnnotations(db *gorm.DB) error {
 		if createdAt.IsZero() {
 			createdAt = time.Now()
 		}
-		labels := domain.AnnotationLabels{}
+		labels := &pb.MemeAnnotationLabels{}
 		if row.OCRText != "" {
 			presence, _ := domain.TextPresenceFromOCRText(row.OCRText)
-			labels.Text = &domain.TextLabel{Present: presence == domain.TextPresenceWithText}
+			labels.Text = &pb.TextLabel{Present: presence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT}
 		}
 		annotation := domain.MemeAnnotation{
 			ID:            row.ID,

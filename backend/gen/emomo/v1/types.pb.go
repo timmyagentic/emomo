@@ -2,29 +2,32 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        (unknown)
-// source: emomo/v1/schema.proto
+// source: emomo/v1/types.proto
 
-// Package emomo.v1 defines emomo's protobuf value schema.
+// Package emomo.v1 defines emomo's protobuf API and structured-value schema.
 //
-// SCOPE:
-//   This schema is intentionally limited to (a) closed enumerations whose
-//   numeric value is persisted, and (b) JSON-shaped values that are stored
-//   inline as columns in the relational database. It is NOT a transport or
-//   wire/RPC contract — there are no top-level Meme / MemeAnnotation / MemeVector
-//   messages here, because emomo's HTTP API uses Go structs + encoding/json
-//   directly and does not speak protobuf on the wire.
+// SCOPE
+//   Protobuf is used for:
+//     1. HTTP request / response / SSE message bodies.
+//     2. Frontend and backend generated DTOs.
+//     3. Closed cross-boundary enums.
+//     4. Explicitly allowlisted SQL column-level structured values
+//        (currently image_info and labels JSON columns).
 //
-//   Tables (memes, meme_annotations, meme_vectors) and their non-structured
-//   columns are defined by GORM model structs in backend/internal/domain/
-//   (see also backend/internal/repository/db.go for migrations). This file
-//   only owns the column-level structured values listed below.
+//   It is NOT a transport-level RPC contract: emomo's HTTP API stays RESTful
+//   (POST /api/v1/search, GET /api/v1/memes/:id, ...). Endpoint-to-message
+//   binding is documented as a comment on each Request message and is
+//   enforced by the hand-written Gin handlers — there is intentionally no
+//   `service` definition, no google.api.http annotation, and no connect / gRPC
+//   layer. It also does not own relational table shape, migrations, runtime
+//   config, open business strings, repository internals, or frontend UI state.
+//   Wire format is protojson with UseEnumNumbers=true.
 //
-// Owned by this schema:
-//   - enum ImageFormat   (memes.image_info.format, persisted as enum number)
-//   - enum VectorType    (meme_vectors.vector_type, persisted as INTEGER)
-//   - message ImageInfo  (memes.image_info JSON column)
-//   - message TextLabel  (nested in MemeAnnotationLabels)
-//   - message MemeAnnotationLabels (meme_annotations.labels JSON column)
+// LAYOUT
+//   - types.proto  : closed enums + column-level structured values.
+//   - meme.proto   : API entity DTOs (Meme / MemeAnnotation / MemeVector /
+//                    SearchResult).
+//   - api.proto    : HTTP request / response messages and SSE events.
 
 package emomov1
 
@@ -43,6 +46,9 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ImageFormat enumerates the image container types emomo persists for memes.
+// The numeric value is stored inside memes.image_info.format JSON column,
+// so it MUST remain wire-stable (do not renumber existing entries).
 type ImageFormat int32
 
 const (
@@ -79,11 +85,11 @@ func (x ImageFormat) String() string {
 }
 
 func (ImageFormat) Descriptor() protoreflect.EnumDescriptor {
-	return file_emomo_v1_schema_proto_enumTypes[0].Descriptor()
+	return file_emomo_v1_types_proto_enumTypes[0].Descriptor()
 }
 
 func (ImageFormat) Type() protoreflect.EnumType {
-	return &file_emomo_v1_schema_proto_enumTypes[0]
+	return &file_emomo_v1_types_proto_enumTypes[0]
 }
 
 func (x ImageFormat) Number() protoreflect.EnumNumber {
@@ -92,9 +98,11 @@ func (x ImageFormat) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ImageFormat.Descriptor instead.
 func (ImageFormat) EnumDescriptor() ([]byte, []int) {
-	return file_emomo_v1_schema_proto_rawDescGZIP(), []int{0}
+	return file_emomo_v1_types_proto_rawDescGZIP(), []int{0}
 }
 
+// VectorType enumerates the embedding routes emomo stores per meme. The
+// numeric value is persisted in meme_vectors.vector_type INTEGER column.
 type VectorType int32
 
 const (
@@ -128,11 +136,11 @@ func (x VectorType) String() string {
 }
 
 func (VectorType) Descriptor() protoreflect.EnumDescriptor {
-	return file_emomo_v1_schema_proto_enumTypes[1].Descriptor()
+	return file_emomo_v1_types_proto_enumTypes[1].Descriptor()
 }
 
 func (VectorType) Type() protoreflect.EnumType {
-	return &file_emomo_v1_schema_proto_enumTypes[1]
+	return &file_emomo_v1_types_proto_enumTypes[1]
 }
 
 func (x VectorType) Number() protoreflect.EnumNumber {
@@ -141,9 +149,72 @@ func (x VectorType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VectorType.Descriptor instead.
 func (VectorType) EnumDescriptor() ([]byte, []int) {
-	return file_emomo_v1_schema_proto_rawDescGZIP(), []int{1}
+	return file_emomo_v1_types_proto_rawDescGZIP(), []int{1}
 }
 
+// TextPresence classifies whether OCR found visible text inside a meme image.
+// Used both as a search-time filter (denormalized to qdrant payload) and as a
+// derived attribute on SearchResult.
+//
+// Wire form is the enum number (UseEnumNumbers=true). When projected into the
+// qdrant payload, the value is mapped to a stable lowercase string
+// ("with_text", "without_text", "unknown") via a backend helper — qdrant uses
+// keyword filtering and that mapping must remain stable.
+type TextPresence int32
+
+const (
+	TextPresence_TEXT_PRESENCE_UNSPECIFIED  TextPresence = 0
+	TextPresence_TEXT_PRESENCE_UNKNOWN      TextPresence = 1
+	TextPresence_TEXT_PRESENCE_WITH_TEXT    TextPresence = 2
+	TextPresence_TEXT_PRESENCE_WITHOUT_TEXT TextPresence = 3
+)
+
+// Enum value maps for TextPresence.
+var (
+	TextPresence_name = map[int32]string{
+		0: "TEXT_PRESENCE_UNSPECIFIED",
+		1: "TEXT_PRESENCE_UNKNOWN",
+		2: "TEXT_PRESENCE_WITH_TEXT",
+		3: "TEXT_PRESENCE_WITHOUT_TEXT",
+	}
+	TextPresence_value = map[string]int32{
+		"TEXT_PRESENCE_UNSPECIFIED":  0,
+		"TEXT_PRESENCE_UNKNOWN":      1,
+		"TEXT_PRESENCE_WITH_TEXT":    2,
+		"TEXT_PRESENCE_WITHOUT_TEXT": 3,
+	}
+)
+
+func (x TextPresence) Enum() *TextPresence {
+	p := new(TextPresence)
+	*p = x
+	return p
+}
+
+func (x TextPresence) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TextPresence) Descriptor() protoreflect.EnumDescriptor {
+	return file_emomo_v1_types_proto_enumTypes[2].Descriptor()
+}
+
+func (TextPresence) Type() protoreflect.EnumType {
+	return &file_emomo_v1_types_proto_enumTypes[2]
+}
+
+func (x TextPresence) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TextPresence.Descriptor instead.
+func (TextPresence) EnumDescriptor() ([]byte, []int) {
+	return file_emomo_v1_types_proto_rawDescGZIP(), []int{2}
+}
+
+// ImageInfo stores intrinsic image properties as a single JSON value inside
+// the memes.image_info column. The encoding is protojson + UseEnumNumbers=true
+// + UseProtoNames=true; legacy rows already follow this shape.
 type ImageInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Width         int32                  `protobuf:"varint,1,opt,name=width,proto3" json:"width,omitempty"`
@@ -155,7 +226,7 @@ type ImageInfo struct {
 
 func (x *ImageInfo) Reset() {
 	*x = ImageInfo{}
-	mi := &file_emomo_v1_schema_proto_msgTypes[0]
+	mi := &file_emomo_v1_types_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -167,7 +238,7 @@ func (x *ImageInfo) String() string {
 func (*ImageInfo) ProtoMessage() {}
 
 func (x *ImageInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_schema_proto_msgTypes[0]
+	mi := &file_emomo_v1_types_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -180,7 +251,7 @@ func (x *ImageInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageInfo.ProtoReflect.Descriptor instead.
 func (*ImageInfo) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_schema_proto_rawDescGZIP(), []int{0}
+	return file_emomo_v1_types_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ImageInfo) GetWidth() int32 {
@@ -204,6 +275,8 @@ func (x *ImageInfo) GetFormat() ImageFormat {
 	return ImageFormat_IMAGE_FORMAT_UNSPECIFIED
 }
 
+// TextLabel describes a single structured analyzer label about visible text
+// presence inside a meme. Nested inside MemeAnnotationLabels.
 type TextLabel struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Present       bool                   `protobuf:"varint,1,opt,name=present,proto3" json:"present,omitempty"`
@@ -213,7 +286,7 @@ type TextLabel struct {
 
 func (x *TextLabel) Reset() {
 	*x = TextLabel{}
-	mi := &file_emomo_v1_schema_proto_msgTypes[1]
+	mi := &file_emomo_v1_types_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -225,7 +298,7 @@ func (x *TextLabel) String() string {
 func (*TextLabel) ProtoMessage() {}
 
 func (x *TextLabel) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_schema_proto_msgTypes[1]
+	mi := &file_emomo_v1_types_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -238,7 +311,7 @@ func (x *TextLabel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TextLabel.ProtoReflect.Descriptor instead.
 func (*TextLabel) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_schema_proto_rawDescGZIP(), []int{1}
+	return file_emomo_v1_types_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *TextLabel) GetPresent() bool {
@@ -248,6 +321,10 @@ func (x *TextLabel) GetPresent() bool {
 	return false
 }
 
+// MemeAnnotationLabels is the JSON value stored inside the
+// meme_annotations.labels column. Its top-level shape is intentionally a
+// container so future label categories (e.g. nsfw, has_face) can be added
+// without altering existing rows.
 type MemeAnnotationLabels struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Text          *TextLabel             `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
@@ -257,7 +334,7 @@ type MemeAnnotationLabels struct {
 
 func (x *MemeAnnotationLabels) Reset() {
 	*x = MemeAnnotationLabels{}
-	mi := &file_emomo_v1_schema_proto_msgTypes[2]
+	mi := &file_emomo_v1_types_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -269,7 +346,7 @@ func (x *MemeAnnotationLabels) String() string {
 func (*MemeAnnotationLabels) ProtoMessage() {}
 
 func (x *MemeAnnotationLabels) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_schema_proto_msgTypes[2]
+	mi := &file_emomo_v1_types_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -282,7 +359,7 @@ func (x *MemeAnnotationLabels) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemeAnnotationLabels.ProtoReflect.Descriptor instead.
 func (*MemeAnnotationLabels) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_schema_proto_rawDescGZIP(), []int{2}
+	return file_emomo_v1_types_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MemeAnnotationLabels) GetText() *TextLabel {
@@ -292,11 +369,11 @@ func (x *MemeAnnotationLabels) GetText() *TextLabel {
 	return nil
 }
 
-var File_emomo_v1_schema_proto protoreflect.FileDescriptor
+var File_emomo_v1_types_proto protoreflect.FileDescriptor
 
-const file_emomo_v1_schema_proto_rawDesc = "" +
+const file_emomo_v1_types_proto_rawDesc = "" +
 	"\n" +
-	"\x15emomo/v1/schema.proto\x12\bemomo.v1\"h\n" +
+	"\x14emomo/v1/types.proto\x12\bemomo.v1\"h\n" +
 	"\tImageInfo\x12\x14\n" +
 	"\x05width\x18\x01 \x01(\x05R\x05width\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x05R\x06height\x12-\n" +
@@ -314,32 +391,38 @@ const file_emomo_v1_schema_proto_rawDesc = "" +
 	"VectorType\x12\x1b\n" +
 	"\x17VECTOR_TYPE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11VECTOR_TYPE_IMAGE\x10\x01\x12\x17\n" +
-	"\x13VECTOR_TYPE_CAPTION\x10\x02B6Z4github.com/timmy/emomo/internal/idl/emomo/v1;emomov1b\x06proto3"
+	"\x13VECTOR_TYPE_CAPTION\x10\x02*\x85\x01\n" +
+	"\fTextPresence\x12\x1d\n" +
+	"\x19TEXT_PRESENCE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15TEXT_PRESENCE_UNKNOWN\x10\x01\x12\x1b\n" +
+	"\x17TEXT_PRESENCE_WITH_TEXT\x10\x02\x12\x1e\n" +
+	"\x1aTEXT_PRESENCE_WITHOUT_TEXT\x10\x03B-Z+github.com/timmy/emomo/gen/emomo/v1;emomov1b\x06proto3"
 
 var (
-	file_emomo_v1_schema_proto_rawDescOnce sync.Once
-	file_emomo_v1_schema_proto_rawDescData []byte
+	file_emomo_v1_types_proto_rawDescOnce sync.Once
+	file_emomo_v1_types_proto_rawDescData []byte
 )
 
-func file_emomo_v1_schema_proto_rawDescGZIP() []byte {
-	file_emomo_v1_schema_proto_rawDescOnce.Do(func() {
-		file_emomo_v1_schema_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_emomo_v1_schema_proto_rawDesc), len(file_emomo_v1_schema_proto_rawDesc)))
+func file_emomo_v1_types_proto_rawDescGZIP() []byte {
+	file_emomo_v1_types_proto_rawDescOnce.Do(func() {
+		file_emomo_v1_types_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_emomo_v1_types_proto_rawDesc), len(file_emomo_v1_types_proto_rawDesc)))
 	})
-	return file_emomo_v1_schema_proto_rawDescData
+	return file_emomo_v1_types_proto_rawDescData
 }
 
-var file_emomo_v1_schema_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_emomo_v1_schema_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_emomo_v1_schema_proto_goTypes = []any{
+var file_emomo_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_emomo_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_emomo_v1_types_proto_goTypes = []any{
 	(ImageFormat)(0),             // 0: emomo.v1.ImageFormat
 	(VectorType)(0),              // 1: emomo.v1.VectorType
-	(*ImageInfo)(nil),            // 2: emomo.v1.ImageInfo
-	(*TextLabel)(nil),            // 3: emomo.v1.TextLabel
-	(*MemeAnnotationLabels)(nil), // 4: emomo.v1.MemeAnnotationLabels
+	(TextPresence)(0),            // 2: emomo.v1.TextPresence
+	(*ImageInfo)(nil),            // 3: emomo.v1.ImageInfo
+	(*TextLabel)(nil),            // 4: emomo.v1.TextLabel
+	(*MemeAnnotationLabels)(nil), // 5: emomo.v1.MemeAnnotationLabels
 }
-var file_emomo_v1_schema_proto_depIdxs = []int32{
+var file_emomo_v1_types_proto_depIdxs = []int32{
 	0, // 0: emomo.v1.ImageInfo.format:type_name -> emomo.v1.ImageFormat
-	3, // 1: emomo.v1.MemeAnnotationLabels.text:type_name -> emomo.v1.TextLabel
+	4, // 1: emomo.v1.MemeAnnotationLabels.text:type_name -> emomo.v1.TextLabel
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -347,27 +430,27 @@ var file_emomo_v1_schema_proto_depIdxs = []int32{
 	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_emomo_v1_schema_proto_init() }
-func file_emomo_v1_schema_proto_init() {
-	if File_emomo_v1_schema_proto != nil {
+func init() { file_emomo_v1_types_proto_init() }
+func file_emomo_v1_types_proto_init() {
+	if File_emomo_v1_types_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emomo_v1_schema_proto_rawDesc), len(file_emomo_v1_schema_proto_rawDesc)),
-			NumEnums:      2,
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emomo_v1_types_proto_rawDesc), len(file_emomo_v1_types_proto_rawDesc)),
+			NumEnums:      3,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_emomo_v1_schema_proto_goTypes,
-		DependencyIndexes: file_emomo_v1_schema_proto_depIdxs,
-		EnumInfos:         file_emomo_v1_schema_proto_enumTypes,
-		MessageInfos:      file_emomo_v1_schema_proto_msgTypes,
+		GoTypes:           file_emomo_v1_types_proto_goTypes,
+		DependencyIndexes: file_emomo_v1_types_proto_depIdxs,
+		EnumInfos:         file_emomo_v1_types_proto_enumTypes,
+		MessageInfos:      file_emomo_v1_types_proto_msgTypes,
 	}.Build()
-	File_emomo_v1_schema_proto = out.File
-	file_emomo_v1_schema_proto_goTypes = nil
-	file_emomo_v1_schema_proto_depIdxs = nil
+	File_emomo_v1_types_proto = out.File
+	file_emomo_v1_types_proto_goTypes = nil
+	file_emomo_v1_types_proto_depIdxs = nil
 }

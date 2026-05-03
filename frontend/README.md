@@ -4,6 +4,8 @@
 
 Emomo is a meme search engine application that allows users to find memes using semantic search queries. The backend default search path compares text query embeddings directly against multimodal image vectors; VLM/OCR descriptions are returned as auxiliary display metadata. This frontend provides a responsive interface for searching, browsing, and viewing memes.
 
+The backend API contract is generated from `../backend/proto/emomo/v1/` into `gen/emomo/v1/`. Generated protobuf types are used only at the API boundary in `src/api/`; after decoding, data is projected into UI-owned types in `src/types/` so React state, props, and local fallback data are not coupled to protobuf message shapes.
+
 ## Features
 
 - **Semantic Search**: Find memes by describing them in natural language (e.g., "happy cat", "surprised dog").

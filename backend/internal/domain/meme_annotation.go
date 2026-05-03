@@ -3,27 +3,23 @@ package domain
 import (
 	"strings"
 	"time"
+
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 )
 
-// TextPresence represents whether OCR found visible text in a meme image.
-type TextPresence string
-
-const (
-	TextPresenceUnknown     TextPresence = "unknown"
-	TextPresenceWithText    TextPresence = "with_text"
-	TextPresenceWithoutText TextPresence = "without_text"
-)
-
-// MemeAnnotation stores optional VLM/OCR output and structured analyzer labels for a meme.
+// MemeAnnotation stores VLM/OCR output and structured analyzer labels for a
+// meme + analyzer model pair. The labels JSON column is typed as a generated
+// protobuf message pointer so the on-disk shape stays in lock-step with
+// proto/emomo/v1/types.proto.
 type MemeAnnotation struct {
-	ID            string           `gorm:"type:text;primaryKey" json:"id"`
-	MemeID        string           `gorm:"type:text;not null;uniqueIndex:idx_meme_annotations_meme_model;index:idx_meme_annotations_meme" json:"meme_id"`
-	AnalyzerModel string           `gorm:"type:text;not null;uniqueIndex:idx_meme_annotations_meme_model" json:"analyzer_model"`
-	Description   string           `gorm:"type:text" json:"description"`
-	OCRText       string           `gorm:"type:text" json:"ocr_text"`
-	Labels        AnnotationLabels `gorm:"type:text;not null" json:"labels"`
-	CreatedAt     time.Time        `json:"created_at"`
-	UpdatedAt     time.Time        `json:"updated_at"`
+	ID            string                   `gorm:"type:text;primaryKey" json:"id"`
+	MemeID        string                   `gorm:"type:text;not null;uniqueIndex:idx_meme_annotations_meme_model;index:idx_meme_annotations_meme" json:"meme_id"`
+	AnalyzerModel string                   `gorm:"type:text;not null;uniqueIndex:idx_meme_annotations_meme_model" json:"analyzer_model"`
+	Description   string                   `gorm:"type:text" json:"description"`
+	OCRText       string                   `gorm:"type:text" json:"ocr_text"`
+	Labels        *pb.MemeAnnotationLabels `gorm:"type:text;not null;serializer:protojson" json:"labels"`
+	CreatedAt     time.Time                `json:"created_at"`
+	UpdatedAt     time.Time                `json:"updated_at"`
 }
 
 // TableName returns the database table name for MemeAnnotation.
@@ -31,11 +27,23 @@ func (MemeAnnotation) TableName() string {
 	return "meme_annotations"
 }
 
-// TextPresenceFromOCRText classifies normalized OCR text into a filterable state.
-func TextPresenceFromOCRText(text string) (TextPresence, int) {
+// HasText reports whether the annotation's structured labels reliably mark
+// visible text as present. Used by ingest / search filters.
+func (m *MemeAnnotation) HasText() bool {
+	if m == nil || m.Labels == nil {
+		return false
+	}
+	return m.Labels.GetText().GetPresent()
+}
+
+// TextPresenceFromOCRText classifies normalized OCR text into the protobuf
+// enum + a non-whitespace character count. Empty or sentinel inputs ("无文字"
+// etc.) yield WITHOUT_TEXT/0; any non-trivial content yields WITH_TEXT plus
+// the count of meaningful characters (used to score reliability).
+func TextPresenceFromOCRText(text string) (pb.TextPresence, int) {
 	normalized := normalizeOCRPresenceText(text)
 	if normalized == "" {
-		return TextPresenceWithoutText, 0
+		return pb.TextPresence_TEXT_PRESENCE_WITHOUT_TEXT, 0
 	}
 	count := 0
 	for _, r := range normalized {
@@ -43,7 +51,20 @@ func TextPresenceFromOCRText(text string) (TextPresence, int) {
 			count++
 		}
 	}
-	return TextPresenceWithText, count
+	return pb.TextPresence_TEXT_PRESENCE_WITH_TEXT, count
+}
+
+// TextPresenceFromLabels reads structured analyzer labels and returns the
+// search-facing TextPresence enum. Absence of labels is treated as
+// TEXT_PRESENCE_UNKNOWN (the analyzer hasn't classified yet).
+func TextPresenceFromLabels(labels *pb.MemeAnnotationLabels) pb.TextPresence {
+	if labels == nil || labels.GetText() == nil {
+		return pb.TextPresence_TEXT_PRESENCE_UNKNOWN
+	}
+	if labels.GetText().GetPresent() {
+		return pb.TextPresence_TEXT_PRESENCE_WITH_TEXT
+	}
+	return pb.TextPresence_TEXT_PRESENCE_WITHOUT_TEXT
 }
 
 func normalizeOCRPresenceText(text string) string {

@@ -15,7 +15,7 @@ The relational schema is intentionally small:
 - `meme_annotations`: VLM/OCR description, OCR text, and structured labels such as `labels.text.present`.
 - `meme_vectors`: Qdrant point index records keyed by `meme_id + collection + vector_type`.
 
-Schema-level structured values and closed enums are defined in protobuf at `backend/proto/emomo/v1/schema.proto`. `image_info` and `labels` are protobuf-shaped JSON values; `vector_type` is a protobuf enum stored as an integer. The proto schema is *structured-value only* — the relational tables themselves are described by GORM structs in `backend/internal/domain/`, and migrations are owned by `backend/internal/repository/db.go` (no separate SQL migration runner).
+Protobuf message schema lives in `backend/proto/emomo/v1/` (`types.proto` for closed cross-boundary enums and allowlisted JSON-column messages, `meme.proto` for API entity DTOs, `api.proto` for HTTP request/response/SSE messages); the generated Go code lives in `backend/gen/emomo/v1/`. `image_info` and `labels` are the only DB JSON columns currently allowed to use protobuf-backed `protojson` serialization via `backend/internal/persistence`; `vector_type` is a protobuf enum stored as an integer. Migrations and relational table shape remain owned by `backend/internal/repository/db.go` (GORM AutoMigrate + explicit helpers) — no separate SQL migration runner.
 
 ## Prepare Data
 

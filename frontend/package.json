@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "gen": "buf generate --template buf.gen.yaml",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "playwright test",
@@ -13,11 +14,14 @@
     "test:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.12.0",
     "framer-motion": "^12.23.26",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@bufbuild/buf": "^1.69.0",
+    "@bufbuild/protoc-gen-es": "^2.12.0",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.57.0",
     "@types/node": "^24.10.1",

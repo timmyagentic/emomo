@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/api"
 	"github.com/timmy/emomo/internal/config"
-	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/service"
@@ -134,7 +134,7 @@ func main() {
 	defaultProvider, defaultQdrantRepo := embeddingRegistry.Default()
 	defaultEmbeddingName := embeddingRegistry.DefaultName()
 	defaultQdrantCollection := defaultQdrantRepo.GetCollectionName()
-	defaultVectorType := domain.MemeVectorTypeUnspecified
+	defaultVectorType := pb.VectorType_VECTOR_TYPE_UNSPECIFIED
 	if defaultEmbeddingCfg := cfg.GetDefaultEmbedding(); defaultEmbeddingCfg != nil {
 		defaultVectorType = service.IngestVectorTypeForDocumentMode(defaultEmbeddingCfg.GetDocumentMode())
 	}

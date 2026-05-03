@@ -540,8 +540,7 @@ meme-library/
 │   ├── domain/                 # 领域模型
 │   │   ├── meme.go             # 表情包实体
 │   │   ├── meme_annotation.go  # VLM/OCR 分析与结构化 labels
-│   │   ├── meme_vector.go      # Qdrant point 索引记录
-│   │   └── idl_types.go        # protobuf enum/JSON wrapper
+│   │   └── meme_vector.go      # Qdrant point 索引记录
 │   │
 │   ├── service/                # 业务逻辑层
 │   │   ├── search.go           # 搜索服务（文搜图 + 图搜图）
@@ -566,8 +565,6 @@ meme-library/
 │   │   ├── minio.go
 │   │   └── s3.go
 │   │
-│   └── idl/                    # protobuf 生成代码
-│
 ├── data/                       # 本地数据目录（.gitignore）
 │   ├── memes.db                # SQLite 数据库文件
 │   └── cache/                  # 可选缓存
@@ -576,7 +573,8 @@ meme-library/
 │   ├── config.yaml             # 主配置
 │   └── config.example.yaml     # 示例配置
 │
-├── proto/                      # protobuf value schema
+├── proto/                      # 手写 protobuf API/structured-value schema (.proto 源)
+├── gen/                        # buf 生成的 Go protobuf DTO 代码
 │
 ├── deployments/                # 部署相关
 │   ├── docker-compose.yml      # API + Alloy（Qdrant/存储外部）

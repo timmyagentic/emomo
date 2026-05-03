@@ -18,8 +18,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
+	"github.com/timmy/emomo/internal/persistence"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/source"
 	"github.com/timmy/emomo/internal/storage"
@@ -48,13 +50,13 @@ type IngestConfig struct {
 	Workers       int
 	BatchSize     int
 	Collection    string // Target Qdrant collection name
-	VectorType    domain.MemeVectorType
+	VectorType    pb.VectorType
 	VectorIndexes []IngestVectorIndex
 }
 
 // IngestVectorIndex describes one vector route to write during ingestion.
 type IngestVectorIndex struct {
-	VectorType domain.MemeVectorType
+	VectorType pb.VectorType
 	Collection string
 	Embedding  EmbeddingProvider
 	QdrantRepo *repository.QdrantRepository
@@ -417,10 +419,10 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 			logger.CtxWarn(ctx, "Failed to get image dimensions: error=%v", err)
 			width, height = 0, 0
 		}
-		imageInfo := domain.ImageInfo{
+		imageInfo := &pb.ImageInfo{
 			Width:  int32(width),
 			Height: int32(height),
-			Format: domain.ImageFormatFromString(processedFormat),
+			Format: persistence.ImageFormatFromExt(processedFormat),
 		}
 
 		// Upload to storage (use MD5 prefix for bucketing)
@@ -485,7 +487,7 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		Tags:           item.Tags,
 		VLMDescription: vlmDescription,
 		OCRText:        ocrText,
-		TextPresence:   string(classifyTextPresence(ocrText, ocrReliable)),
+		TextPresence:   persistence.TextPresenceToString(classifyTextPresence(ocrText, ocrReliable)),
 		StorageURL:     storageURL,
 	}
 
@@ -602,10 +604,10 @@ func (s *IngestService) prepareAnnotationBestEffort(ctx context.Context, memeID,
 }
 
 func buildMemeAnnotation(id, memeID, analyzerModel, description, ocrText string, ocrReliable bool) *domain.MemeAnnotation {
-	labels := domain.AnnotationLabels{}
+	labels := &pb.MemeAnnotationLabels{}
 	if ocrReliable {
 		textPresence, _ := domain.TextPresenceFromOCRText(ocrText)
-		labels.Text = &domain.TextLabel{Present: textPresence == domain.TextPresenceWithText}
+		labels.Text = &pb.TextLabel{Present: textPresence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT}
 	}
 	return &domain.MemeAnnotation{
 		ID:            id,
@@ -619,14 +621,14 @@ func buildMemeAnnotation(id, memeID, analyzerModel, description, ocrText string,
 	}
 }
 
-func classifyTextPresence(ocrText string, ocrReliable bool) domain.TextPresence {
+func classifyTextPresence(ocrText string, ocrReliable bool) pb.TextPresence {
 	presence, _ := classifyTextPresenceWithCount(ocrText, ocrReliable)
 	return presence
 }
 
-func classifyTextPresenceWithCount(ocrText string, ocrReliable bool) (domain.TextPresence, int) {
+func classifyTextPresenceWithCount(ocrText string, ocrReliable bool) (pb.TextPresence, int) {
 	if !ocrReliable {
-		return domain.TextPresenceUnknown, 0
+		return pb.TextPresence_TEXT_PRESENCE_UNKNOWN, 0
 	}
 	return domain.TextPresenceFromOCRText(ocrText)
 }
@@ -635,14 +637,17 @@ func hasReliableTextPresence(annotation *domain.MemeAnnotation, ocrText string) 
 	if annotation == nil {
 		return ocrText != ""
 	}
-	return annotation.Labels.Text != nil || ocrText != ""
+	if annotation.Labels.GetText() != nil {
+		return true
+	}
+	return ocrText != ""
 }
 
 func shouldExtractOCRForAnnotation(annotation *domain.MemeAnnotation, ocrText string) bool {
 	if ocrText != "" {
 		return false
 	}
-	return annotation == nil || annotation.Labels.Text == nil
+	return annotation == nil || annotation.Labels.GetText() == nil
 }
 
 type vectorUpsertInput struct {
@@ -691,7 +696,7 @@ func (s *IngestService) upsertVectorIndexes(ctx context.Context, indexes []Inges
 			if errors.Is(err, errSkipOptionalVectorIndex) {
 				skipped++
 				logger.CtxDebug(ctx, "Skipped optional vector index: meme_id=%s, collection=%s, vector_type=%s",
-					input.MemeID, index.Collection, domain.MemeVectorTypeToString(normalizeIngestVectorType(index.VectorType)))
+					input.MemeID, index.Collection, persistence.VectorTypeShortName(normalizeIngestVectorType(index.VectorType)))
 				continue
 			}
 			logger.CtxWarn(ctx, "Failed to upsert vector index: meme_id=%s, collection=%s, vector_type=%s, error=%v",
@@ -756,13 +761,13 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 	doc := EmbeddingDocument{}
 	inputHash := input.ContentHash
 	switch vectorType {
-	case domain.MemeVectorTypeCaption:
+	case pb.VectorType_VECTOR_TYPE_CAPTION:
 		if input.CaptionText == "" {
 			return fmt.Errorf("%w: caption vector requires caption text", errSkipOptionalVectorIndex)
 		}
 		doc.Text = input.CaptionText
 		inputHash = calculateSHA256(input.CaptionText)
-	case domain.MemeVectorTypeImage:
+	case pb.VectorType_VECTOR_TYPE_IMAGE:
 		if input.ImageURL == "" {
 			return fmt.Errorf("image vector requires image url")
 		}
@@ -770,12 +775,12 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 		doc.ImageData = input.ImageData
 		doc.ImageMediaType = input.ImageMediaType
 	default:
-		return fmt.Errorf("unsupported vector type: %s", domain.MemeVectorTypeToString(vectorType))
+		return fmt.Errorf("unsupported vector type: %s", persistence.VectorTypeShortName(vectorType))
 	}
 
 	embedding, err := index.Embedding.EmbedDocument(ctx, doc)
 	if err != nil {
-		return fmt.Errorf("failed to generate %s embedding: %w", domain.MemeVectorTypeToString(vectorType), err)
+		return fmt.Errorf("failed to generate %s embedding: %w", persistence.VectorTypeShortName(vectorType), err)
 	}
 
 	var existing *domain.MemeVector
@@ -845,24 +850,24 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 	return nil
 }
 
-func vectorRouteKey(collection string, vectorType domain.MemeVectorType) string {
-	return collection + "\x00" + domain.MemeVectorTypeToString(vectorType)
+func vectorRouteKey(collection string, vectorType pb.VectorType) string {
+	return collection + "\x00" + persistence.VectorTypeShortName(vectorType)
 }
 
-func normalizeIngestVectorType(vectorType domain.MemeVectorType) domain.MemeVectorType {
+func normalizeIngestVectorType(vectorType pb.VectorType) pb.VectorType {
 	switch vectorType {
-	case domain.MemeVectorTypeCaption:
+	case pb.VectorType_VECTOR_TYPE_CAPTION:
 		return vectorType
 	default:
-		return domain.MemeVectorTypeImage
+		return pb.VectorType_VECTOR_TYPE_IMAGE
 	}
 }
 
-func IngestVectorTypeForDocumentMode(documentMode string) domain.MemeVectorType {
+func IngestVectorTypeForDocumentMode(documentMode string) pb.VectorType {
 	if normalizeEmbeddingDocumentMode(documentMode) == embeddingDocumentText {
-		return domain.MemeVectorTypeCaption
+		return pb.VectorType_VECTOR_TYPE_CAPTION
 	}
-	return domain.MemeVectorTypeImage
+	return pb.VectorType_VECTOR_TYPE_IMAGE
 }
 
 func (s *IngestService) readImage(item *source.MemeItem) ([]byte, error) {
@@ -1049,7 +1054,7 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 		var description string
 		var ocrText string
 		var annotationID string
-		imageFormat := domain.ImageFormatToString(meme.ImageInfo.Format)
+		imageFormat := persistence.ImageFormatToExt(meme.ImageInfo.GetFormat())
 		annotation := s.prepareAnnotationBestEffort(ctx, meme.ID, meme.ContentHash, imageData, imageFormat)
 		description = annotation.Description
 		ocrText = annotation.OCRText
@@ -1072,7 +1077,7 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 			Tags:           meme.Tags,
 			VLMDescription: description,
 			OCRText:        ocrText,
-			TextPresence:   string(classifyTextPresence(ocrText, ocrReliable)),
+			TextPresence:   persistence.TextPresenceToString(classifyTextPresence(ocrText, ocrReliable)),
 			StorageURL:     imageURL,
 		}
 

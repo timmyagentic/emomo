@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/service"
 )
 
@@ -15,11 +16,6 @@ type SearchHandler struct {
 }
 
 // NewSearchHandler creates a new search handler.
-// Parameters:
-//   - searchService: search service instance.
-//
-// Returns:
-//   - *SearchHandler: initialized handler.
 func NewSearchHandler(searchService *service.SearchService) *SearchHandler {
 	return &SearchHandler{
 		searchService: searchService,
@@ -27,161 +23,151 @@ func NewSearchHandler(searchService *service.SearchService) *SearchHandler {
 }
 
 // TextSearch handles POST /api/v1/search.
-// Parameters:
-//   - c: Gin request context.
-//
-// Returns: none (writes JSON response).
 func (h *SearchHandler) TextSearch(c *gin.Context) {
-	var req service.SearchRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request: " + err.Error(),
-		})
+	req := &pb.SearchRequest{}
+	if err := readProtoJSON(c, req); err != nil {
+		writeError(c, http.StatusBadRequest, fmt.Errorf("invalid request: %w", err))
 		return
 	}
+	overrideQueryParams(c, req)
 
-	// Allow query parameter to override collection
-	if collection := c.Query("collection"); collection != "" && req.Collection == "" {
-		req.Collection = collection
-	}
-	if profile := c.Query("profile"); profile != "" && req.Profile == "" {
-		req.Profile = profile
-	}
-
-	result, err := h.searchService.TextSearch(c.Request.Context(), &req)
+	resp, err := h.searchService.TextSearch(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Search failed: " + err.Error(),
-		})
+		writeError(c, http.StatusInternalServerError, fmt.Errorf("search failed: %w", err))
 		return
 	}
-
-	c.JSON(http.StatusOK, result)
+	writeProtoJSON(c, http.StatusOK, resp)
 }
 
 // GetCategories handles GET /api/v1/categories.
-// Parameters:
-//   - c: Gin request context.
-//
-// Returns: none (writes JSON response).
 func (h *SearchHandler) GetCategories(c *gin.Context) {
 	categories, err := h.searchService.GetCategories(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to get categories: " + err.Error(),
-		})
+		writeError(c, http.StatusInternalServerError, fmt.Errorf("failed to get categories: %w", err))
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"categories": categories,
-		"total":      len(categories),
+	writeProtoJSON(c, http.StatusOK, &pb.GetCategoriesResponse{
+		Categories: categories,
+		Total:      int32(len(categories)),
 	})
 }
 
 // GetStats handles GET /api/v1/stats.
-// Parameters:
-//   - c: Gin request context.
-//
-// Returns: none (writes JSON response).
 func (h *SearchHandler) GetStats(c *gin.Context) {
-	stats, err := h.searchService.GetStats(c.Request.Context())
+	resp, err := h.searchService.GetStats(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to get stats: " + err.Error(),
-		})
+		writeError(c, http.StatusInternalServerError, fmt.Errorf("failed to get stats: %w", err))
 		return
 	}
-
-	c.JSON(http.StatusOK, stats)
+	writeProtoJSON(c, http.StatusOK, resp)
 }
 
-// TextSearchStream handles POST /api/v1/search/stream with SSE.
-// Parameters:
-//   - c: Gin request context.
-//
-// Returns: none (writes SSE events).
+// TextSearchStream handles POST /api/v1/search/stream with SSE. Each event is
+// a single `data:` line carrying a protojson-encoded SearchProgressEvent.
+// The `event:` line carries the lowercase stage label for human debugging
+// only; clients should route on the `stage` field of the JSON payload.
 func (h *SearchHandler) TextSearchStream(c *gin.Context) {
-	var req service.SearchRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request: " + err.Error(),
-		})
+	req := &pb.SearchRequest{}
+	if err := readProtoJSON(c, req); err != nil {
+		writeError(c, http.StatusBadRequest, fmt.Errorf("invalid request: %w", err))
 		return
 	}
+	overrideQueryParams(c, req)
 
-	// Allow query parameter to override collection
-	if collection := c.Query("collection"); collection != "" && req.Collection == "" {
-		req.Collection = collection
-	}
-	if profile := c.Query("profile"); profile != "" && req.Profile == "" {
-		req.Profile = profile
-	}
-
-	// Set SSE headers
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no") // Disable nginx buffering
+	c.Header("X-Accel-Buffering", "no")
 
 	ctx := c.Request.Context()
+	progressCh := make(chan *pb.SearchProgressEvent, 100)
 
-	// Create progress channel
-	progressCh := make(chan service.SearchProgress, 100)
-
-	// Start search in goroutine
-	var searchResult *service.SearchResponse
-	var searchErr error
+	var (
+		searchResult *pb.SearchResponse
+		searchErr    error
+	)
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
-		searchResult, searchErr = h.searchService.TextSearchWithProgress(ctx, &req, progressCh)
+		searchResult, searchErr = h.searchService.TextSearchWithProgress(ctx, req, progressCh)
 	}()
 
-	// Get the response writer for flushing
 	w := c.Writer
 
-	// Stream progress events
 	for {
 		select {
 		case <-ctx.Done():
-			// Client disconnected
 			return
-		case progress, ok := <-progressCh:
+		case event, ok := <-progressCh:
 			if !ok {
-				// Channel closed, wait for search to complete
 				<-done
-				// Send final result
 				if searchErr != nil {
-					errData, _ := json.Marshal(gin.H{
-						"stage": "error",
-						"error": searchErr.Error(),
+					writeSSEEvent(c, &pb.SearchProgressEvent{
+						Stage: pb.SearchStage_SEARCH_STAGE_ERROR,
+						Payload: &pb.SearchProgressEvent_Error{
+							Error: &pb.SearchError{Error: searchErr.Error()},
+						},
 					})
-					fmt.Fprintf(w, "event: error\ndata: %s\n\n", errData)
 				} else if searchResult != nil {
-					resultData, _ := json.Marshal(gin.H{
-						"stage":          "complete",
-						"results":        searchResult.Results,
-						"total":          searchResult.Total,
-						"query":          searchResult.Query,
-						"expanded_query": searchResult.ExpandedQuery,
-						"collection":     searchResult.Collection,
-						"profile":        searchResult.Profile,
+					writeSSEEvent(c, &pb.SearchProgressEvent{
+						Stage: pb.SearchStage_SEARCH_STAGE_COMPLETE,
+						Payload: &pb.SearchProgressEvent_Complete{
+							Complete: &pb.SearchComplete{
+								Results:       searchResult.GetResults(),
+								Total:         searchResult.GetTotal(),
+								Query:         searchResult.GetQuery(),
+								ExpandedQuery: searchResult.GetExpandedQuery(),
+								Collection:    searchResult.GetCollection(),
+								Profile:       searchResult.GetProfile(),
+							},
+						},
 					})
-					fmt.Fprintf(w, "event: complete\ndata: %s\n\n", resultData)
 				}
 				w.Flush()
 				return
 			}
-			// Write SSE event
-			eventType := "progress"
-			if progress.Stage == "thinking" {
-				eventType = "thinking"
-			}
-			data, _ := json.Marshal(progress)
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, data)
+			writeSSEEvent(c, event)
 			w.Flush()
 		}
+	}
+}
+
+// writeSSEEvent writes a SearchProgressEvent as a single SSE event. The
+// `event:` line carries the lowercase stage label for debugging; the `data:`
+// line carries the protojson body.
+func writeSSEEvent(c *gin.Context, event *pb.SearchProgressEvent) {
+	body, err := protojsonMarshal.Marshal(event)
+	if err != nil {
+		fmt.Fprintf(c.Writer, "event: error\ndata: {\"stage\":8,\"payload\":{\"error\":{\"error\":%q}}}\n\n", err.Error())
+		return
+	}
+	fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", sseStageName(event.GetStage()), body)
+}
+
+// sseStageName converts a SearchStage enum to a backwards-compatible
+// lowercase short name for the SSE `event:` line. The frontend used to
+// receive these names (event: thinking, event: complete, ...) and falls back
+// to them when the JSON body lacks a `stage` field; we preserve them so the
+// wire-level shape of the SSE protocol stays stable.
+func sseStageName(stage pb.SearchStage) string {
+	name := pb.SearchStage_name[int32(stage)]
+	name = strings.TrimPrefix(name, "SEARCH_STAGE_")
+	if name == "" || name == "UNSPECIFIED" {
+		return "progress"
+	}
+	return strings.ToLower(name)
+}
+
+// overrideQueryParams lets callers override `collection` and `profile` via
+// query string when the JSON body did not specify them. This preserves the
+// pre-refactor behaviour of accepting both POST body fields and ?collection=
+// / ?profile= query params.
+func overrideQueryParams(c *gin.Context, req *pb.SearchRequest) {
+	if collection := c.Query("collection"); collection != "" && req.GetCollection() == "" {
+		req.Collection = collection
+	}
+	if profile := c.Query("profile"); profile != "" && req.GetProfile() == "" {
+		req.Profile = profile
 	}
 }

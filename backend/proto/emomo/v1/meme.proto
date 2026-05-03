@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+// API entity DTOs for emomo. See types.proto for scope notes. These messages
+// describe HTTP wire shapes returned in search/list/detail responses; they are
+// not the owner of relational table DDL or migrations.
+
+package emomo.v1;
+
+import "emomo/v1/types.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/timmy/emomo/gen/emomo/v1;emomov1";
+
+// Meme is the canonical record for a single meme/sticker. Persisted in the
+// `memes` table; the `url` field is computed at HTTP boundary from
+// storage_key + storage backend and is NOT stored.
+message Meme {
+  string id = 1;
+  string storage_key = 2;
+  string content_hash = 3;
+  ImageInfo image_info = 4;
+  repeated string tags = 5;
+  string category = 6;
+  // url is server-computed (presigned or public storage URL) and only
+  // populated when serving HTTP responses; empty when the message is used
+  // purely as a DB row carrier.
+  string url = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// MemeAnnotation stores VLM/OCR output and structured analyzer labels for a
+// single meme + analyzer model pair. Persisted in `meme_annotations` table.
+message MemeAnnotation {
+  string id = 1;
+  string meme_id = 2;
+  string analyzer_model = 3;
+  string description = 4;
+  string ocr_text = 5;
+  MemeAnnotationLabels labels = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+// MemeVector records the relationship between a meme and its embedding in a
+// specific Qdrant collection / vector route. Persisted in `meme_vectors`.
+message MemeVector {
+  string id = 1;
+  string meme_id = 2;
+  string collection = 3;
+  VectorType vector_type = 4;
+  string embedding_model = 5;
+  string input_hash = 6;
+  string annotation_id = 7;
+  string qdrant_point_id = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// SearchResult is the unified shape returned by /search and /memes (list /
+// get) endpoints. For list endpoints, score is 0 and description /
+// text_presence are unset (not a search context).
+message SearchResult {
+  // Underlying meme record (id, url, image_info, tags, category, ...).
+  Meme meme = 1;
+  // Similarity score in [0, 1]; 0 for non-search contexts.
+  float score = 2;
+  // VLM-generated description joined from meme_annotations at search time.
+  string description = 3;
+  // Whether OCR detected visible text. Sourced from qdrant payload.
+  TextPresence text_presence = 4;
+}

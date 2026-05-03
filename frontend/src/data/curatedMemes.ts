@@ -1,15 +1,22 @@
-import type { Meme } from '../types';
+import type { DisplayMeme, ImageFormatSlug } from '../types';
 import { curatedMemesData } from './curatedMemesData';
 
-export const curatedMemes: Meme[] = curatedMemesData.map((item) => ({
+function normalizeCuratedFormat(value: string | undefined): ImageFormatSlug | undefined {
+  if (!value) return undefined;
+  const lower = value.toLowerCase();
+  if (lower === 'jpg' || lower === 'jpeg') return 'jpg';
+  if (lower === 'png') return 'png';
+  if (lower === 'webp') return 'webp';
+  return undefined;
+}
+
+export const curatedMemes: DisplayMeme[] = curatedMemesData.map((item) => ({
   id: item.id,
   url: item.url,
-  original_url: item.url,
   width: item.width,
   height: item.height,
-  format: item.format,
-  vlm_description: item.description,
-  description: item.description,
-  tags: item.tags,
+  format: normalizeCuratedFormat(item.format),
+  description: item.description ?? '',
+  tags: item.tags ?? [],
   category: item.category,
 }));

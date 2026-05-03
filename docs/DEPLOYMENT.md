@@ -16,7 +16,7 @@
 
 > 说明：`deployments/docker-compose*.yml` 仅包含 API 与 Grafana Alloy，Qdrant 与对象存储需自行提供（云服务或本地容器）。
 > 当前检索主链路是 Qwen3-VL 多模态 image embedding：导入时直接把图片写成向量，搜索时文本 query 直接匹配图片向量；VLM/OCR 只作为 annotation、caption/BM25 和展示元数据。
-> 关系库核心表是 `memes`、`meme_annotations`、`meme_vectors`，schema 级类型由 `backend/proto/emomo/v1/schema.proto` 定义。
+> 关系库核心表是 `memes`、`meme_annotations`、`meme_vectors`，protobuf 消息 schema 定义在 `backend/proto/emomo/v1/{types,meme,api}.proto`，生成代码集中在 `backend/gen/` 与 `frontend/gen/`。
 > 使用 Supabase/PostgreSQL 时，核心表启用 Row Level Security；浏览器端不直连这些表，前端应继续通过 Go API 访问数据。
 
 ## CORS 配置（前端部署在 Vercel）

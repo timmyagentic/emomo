@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"github.com/qdrant/go-client/qdrant"
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/domain"
+	_ "github.com/timmy/emomo/internal/persistence" // register protojson serializer
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/source"
 	"google.golang.org/grpc"
@@ -102,7 +104,7 @@ func TestProcessItemRollsBackNewMemeWhenVectorWriteFails(t *testing.T) {
 			Collection: "broken_collection",
 			VectorIndexes: []IngestVectorIndex{
 				{
-					VectorType: domain.MemeVectorTypeImage,
+					VectorType: pb.VectorType_VECTOR_TYPE_IMAGE,
 					Collection: "broken_collection",
 					Embedding:  fixedEmbeddingProvider{},
 				},
@@ -186,13 +188,13 @@ func TestProcessItemWritesImageVectorWhenVLMFails(t *testing.T) {
 			BatchSize: 1,
 			VectorIndexes: []IngestVectorIndex{
 				{
-					VectorType: domain.MemeVectorTypeImage,
+					VectorType: pb.VectorType_VECTOR_TYPE_IMAGE,
 					Collection: "image_collection",
 					Embedding:  fixedEmbeddingProvider{},
 					QdrantRepo: qdrantRepo,
 				},
 				{
-					VectorType: domain.MemeVectorTypeCaption,
+					VectorType: pb.VectorType_VECTOR_TYPE_CAPTION,
 					Collection: "caption_collection",
 					Embedding:  fixedEmbeddingProvider{},
 					QdrantRepo: qdrantRepo,
@@ -221,7 +223,7 @@ func TestProcessItemWritesImageVectorWhenVLMFails(t *testing.T) {
 	}
 	hasImageVector := false
 	for _, vector := range vectors {
-		if vector.VectorType == domain.MemeVectorTypeImage {
+		if vector.VectorType == pb.VectorType_VECTOR_TYPE_IMAGE {
 			hasImageVector = true
 		}
 	}
@@ -253,10 +255,10 @@ func TestProcessItemForceKeepsOldVectorWhenReplacementFails(t *testing.T) {
 		ID:          "meme-existing",
 		StorageKey:  "ab/existing.png",
 		ContentHash: calculateMD5(testPNG1x1),
-		ImageInfo: domain.ImageInfo{
+		ImageInfo: &pb.ImageInfo{
 			Width:  1,
 			Height: 1,
-			Format: domain.ImageFormatPNG,
+			Format: pb.ImageFormat_IMAGE_FORMAT_PNG,
 		},
 		Category:  "reaction",
 		Tags:      domain.StringArray{"happy"},
@@ -272,7 +274,7 @@ func TestProcessItemForceKeepsOldVectorWhenReplacementFails(t *testing.T) {
 		ID:             "vector-existing",
 		MemeID:         meme.ID,
 		Collection:     "image_collection",
-		VectorType:     domain.MemeVectorTypeImage,
+		VectorType:     pb.VectorType_VECTOR_TYPE_IMAGE,
 		EmbeddingModel: "test-embedding",
 		InputHash:      meme.ContentHash,
 		QdrantPointID:  "00000000-0000-0000-0000-000000000001",
@@ -289,8 +291,8 @@ func TestProcessItemForceKeepsOldVectorWhenReplacementFails(t *testing.T) {
 		AnalyzerModel: "test-vlm",
 		Description:   "开心表情",
 		OCRText:       "你好",
-		Labels: domain.AnnotationLabels{
-			Text: &domain.TextLabel{Present: true},
+		Labels: &pb.MemeAnnotationLabels{
+			Text: &pb.TextLabel{Present: true},
 		},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -320,7 +322,7 @@ func TestProcessItemForceKeepsOldVectorWhenReplacementFails(t *testing.T) {
 			BatchSize: 1,
 			VectorIndexes: []IngestVectorIndex{
 				{
-					VectorType: domain.MemeVectorTypeImage,
+					VectorType: pb.VectorType_VECTOR_TYPE_IMAGE,
 					Collection: "image_collection",
 					Embedding:  fixedEmbeddingProvider{},
 				},
@@ -359,15 +361,15 @@ func TestNewIngestServiceFallbackIndexUsesConfiguredVectorType(t *testing.T) {
 		nil,
 		&IngestConfig{
 			Collection: "caption_collection",
-			VectorType: domain.MemeVectorTypeCaption,
+			VectorType: pb.VectorType_VECTOR_TYPE_CAPTION,
 		},
 	)
 
 	if len(ingest.indexes) != 1 {
 		t.Fatalf("fallback indexes = %d, want 1", len(ingest.indexes))
 	}
-	if ingest.indexes[0].VectorType != domain.MemeVectorTypeCaption {
-		t.Fatalf("fallback vector type = %q, want %q", ingest.indexes[0].VectorType, domain.MemeVectorTypeCaption)
+	if ingest.indexes[0].VectorType != pb.VectorType_VECTOR_TYPE_CAPTION {
+		t.Fatalf("fallback vector type = %q, want %q", ingest.indexes[0].VectorType, pb.VectorType_VECTOR_TYPE_CAPTION)
 	}
 }
 
@@ -375,8 +377,8 @@ func TestShouldExtractOCRForAnnotationSkipsKnownWithoutText(t *testing.T) {
 	t.Parallel()
 
 	annotation := &domain.MemeAnnotation{
-		Labels: domain.AnnotationLabels{
-			Text: &domain.TextLabel{Present: false},
+		Labels: &pb.MemeAnnotationLabels{
+			Text: &pb.TextLabel{Present: false},
 		},
 	}
 	if shouldExtractOCRForAnnotation(annotation, "") {
@@ -406,7 +408,7 @@ func TestMissingVectorIndexesForceKeepsExistingVectorRecords(t *testing.T) {
 		ID:             "vector-caption",
 		MemeID:         "meme-1",
 		Collection:     "caption_collection",
-		VectorType:     domain.MemeVectorTypeCaption,
+		VectorType:     pb.VectorType_VECTOR_TYPE_CAPTION,
 		EmbeddingModel: "test-embedding",
 		InputHash:      "old-caption-hash",
 		QdrantPointID:  "00000000-0000-0000-0000-000000000001",
@@ -421,7 +423,7 @@ func TestMissingVectorIndexesForceKeepsExistingVectorRecords(t *testing.T) {
 		vectorRepo: repo,
 		indexes: []IngestVectorIndex{
 			{
-				VectorType: domain.MemeVectorTypeCaption,
+				VectorType: pb.VectorType_VECTOR_TYPE_CAPTION,
 				Collection: "caption_collection",
 			},
 		},
@@ -435,7 +437,7 @@ func TestMissingVectorIndexesForceKeepsExistingVectorRecords(t *testing.T) {
 		t.Fatalf("missingVectorIndexes() returned %d indexes, want 1", len(missing))
 	}
 
-	exists, err := repo.ExistsByMemeIDCollectionAndVectorType(ctx, "meme-1", "caption_collection", domain.MemeVectorTypeCaption)
+	exists, err := repo.ExistsByMemeIDCollectionAndVectorType(ctx, "meme-1", "caption_collection", pb.VectorType_VECTOR_TYPE_CAPTION)
 	if err != nil {
 		t.Fatalf("ExistsByMemeIDCollectionAndVectorType() error = %v", err)
 	}

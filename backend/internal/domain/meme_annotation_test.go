@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+
+	pb "github.com/timmy/emomo/gen/emomo/v1"
+)
 
 func TestTextPresenceFromOCRText(t *testing.T) {
 	t.Parallel()
@@ -8,25 +12,25 @@ func TestTextPresenceFromOCRText(t *testing.T) {
 	tests := []struct {
 		name         string
 		ocrText      string
-		wantPresence TextPresence
+		wantPresence pb.TextPresence
 		wantCount    int
 	}{
 		{
 			name:         "with text",
 			ocrText:      "你 好",
-			wantPresence: TextPresenceWithText,
+			wantPresence: pb.TextPresence_TEXT_PRESENCE_WITH_TEXT,
 			wantCount:    2,
 		},
 		{
 			name:         "empty text",
 			ocrText:      "  \n\t ",
-			wantPresence: TextPresenceWithoutText,
+			wantPresence: pb.TextPresence_TEXT_PRESENCE_WITHOUT_TEXT,
 			wantCount:    0,
 		},
 		{
 			name:         "explicit no text marker",
 			ocrText:      "无文字",
-			wantPresence: TextPresenceWithoutText,
+			wantPresence: pb.TextPresence_TEXT_PRESENCE_WITHOUT_TEXT,
 			wantCount:    0,
 		},
 	}
@@ -37,7 +41,7 @@ func TestTextPresenceFromOCRText(t *testing.T) {
 
 			gotPresence, gotCount := TextPresenceFromOCRText(tt.ocrText)
 			if gotPresence != tt.wantPresence {
-				t.Fatalf("TextPresenceFromOCRText(%q) presence = %q, want %q", tt.ocrText, gotPresence, tt.wantPresence)
+				t.Fatalf("TextPresenceFromOCRText(%q) presence = %v, want %v", tt.ocrText, gotPresence, tt.wantPresence)
 			}
 			if gotCount != tt.wantCount {
 				t.Fatalf("TextPresenceFromOCRText(%q) count = %d, want %d", tt.ocrText, gotCount, tt.wantCount)

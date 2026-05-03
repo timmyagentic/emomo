@@ -12,13 +12,33 @@
 
 三张核心表**不启用 Row Level Security**：访问控制完全在连接层做（service-role DSN + 不通过 Supabase Data API 把这些表暴露给 anon/authenticated）。早期版本曾把 RLS 在这些表上 ENABLE 但没建任何 policy，那是个"隐式拒绝 + 靠 BYPASSRLS 偷渡"的半成品；当前 `InitDB` 会通过 `disableCoreTableRLS` 主动 DISABLE，新老库行为统一。
 
+## Protobuf 设计边界
+
+类型契约定义在 `backend/proto/emomo/v1/{types,meme,api}.proto`，Go 生成代码在 `backend/gen/emomo/v1/`，前端 TS 生成代码在 `frontend/gen/emomo/v1/`。
+
+本项目使用 protobuf 的目标是减少前后端 API 类型漂移，并为少数结构化 JSON 值提供可生成、可演进的 schema。它不是“所有数据模型的总源头”。关系表结构、索引、迁移和查询语义仍由 GORM domain model 与 `backend/internal/repository/db.go` 管理。
+
+**应该使用 protobuf 的地方：**
+
+- HTTP request / response / SSE event 的消息体，例如 `SearchRequest`、`SearchResponse`、`SearchProgressEvent`。后端 handler 仍是手写 Gin REST endpoint，只是在 body 层用 `protojson` 编/解码。
+- 前后端共享 DTO：Go 代码从 `backend/gen/emomo/v1/` 导入 `pb`，前端 API 层从 `frontend/gen/emomo/v1/` 导入 schema，再投影为 UI 类型。
+- 跨 API 或持久化边界的封闭枚举，例如 `ImageFormat`、`VectorType`、`TextPresence`。已有 enum number 不得重排；新增值只能追加。
+- 明确允许的 DB 列内 JSON 值。目前 allowlist 只有 `memes.image_info` (`ImageInfo`) 和 `meme_annotations.labels` (`MemeAnnotationLabels`)。这些列由 `backend/internal/persistence` 的 `protojson` GORM serializer 持久化，DB JSON 使用 `UseEnumNumbers=true` + `UseProtoNames=true`。
+
+**不应该使用 protobuf 的地方：**
+
+- 关系型表结构本身。`memes` / `meme_annotations` / `meme_vectors` 的列、索引、约束和迁移以 GORM model + `db.go` 为准，`.proto` 顶层 entity message 是 API 投影，不是数据库 DDL。
+- 运行时配置和开放业务集合。`category`、`tags`、`collection`、`embedding_model`、`analyzer_model`、source ID 等是开放字符串，不做 protobuf enum。
+- 需要频繁过滤、JOIN、排序或建索引的数据。如果某个 JSON 子字段成为核心查询条件，应优先提升为关系列，而不是继续塞进 protobuf JSON。
+- repository / service 内部私有结构、临时计算结果、任务状态机内部类型。除非这些值跨 HTTP 边界或进入 allowlisted JSON 列，否则用普通 Go 类型。
+- React 组件状态、组件 props、本地 fallback 数据。前端只在 `src/api/` 的网络边界使用生成类型，解码后应投影到 `src/types/` 中的 UI-owned shape。
+- RPC 层。当前没有 protobuf `service`、gRPC、Connect 或 `google.api.http` annotation；引入这些需要单独设计，不应作为普通 schema 变更顺手加入。
+
+新增 protobuf message / enum 前先回答两个问题：它是否跨 HTTP/API 边界，或是否属于 allowlisted DB JSON 列？如果答案都是否，就不应该放进 `.proto`。新增 DB JSON protobuf 列时，还必须同步更新本节 allowlist，并在 `internal/repository/db_test.go` 覆盖旧数据迁移和 `protojson` 读写行为。
+
 ## Schema-Level Types
 
-类型契约定义在 `backend/proto/emomo/v1/schema.proto`，Go 生成代码在 `backend/internal/idl/emomo/v1/schema.pb.go`。
-
-**protobuf value schema 范围（重要）**：本项目的 protobuf 仅作为"列级结构化值"和"封闭枚举"的 schema 来源——并不是 wire / RPC 协议。HTTP API 直接使用 Go struct + `encoding/json`；schema.proto 里**不包含** `Meme` / `MemeAnnotation` / `MemeVector` 这种顶层表行 message，那些行模型由 GORM 结构体（`backend/internal/domain/`）定义。
-
-重新生成 schema-level type 代码：
+重新生成 protobuf 代码：
 
 ```bash
 cd backend
@@ -48,7 +68,7 @@ GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 
 项目**不使用**独立的 SQL 迁移工具（goose / golang-migrate / atlas 等），也**不存在** `backend/migrations/` 目录。新增 schema 演进时：
 
-1. 修改 `backend/internal/domain/` 的 GORM 模型或 `backend/proto/emomo/v1/schema.proto` 的结构化值/枚举（schema-level type 改动跑 `buf generate`）；
+1. 修改 `backend/internal/domain/` 的 GORM 模型或 `backend/proto/emomo/v1/` 下任意 `.proto`（消息/枚举改动跑 `buf generate`，并同步前端 `npm run gen`）；
 2. 在 `db.go` 里增改对应迁移函数；
 3. 在 `internal/repository/db_test.go` 中加一条 SQLite 集成测试覆盖"老 schema → 新 schema"路径，必要时也在 `db_postgres_integration_test.go` 加 Postgres 集成测试。
 

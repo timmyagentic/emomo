@@ -17,7 +17,7 @@ license: mit
 
 Emomo 是一个基于 Go + Qdrant + 多模态 Embedding 的表情包语义搜索系统，支持本地静态图片目录摄入、图片向量检索、caption/keyword 辅助检索和元数据管理。当前默认链路使用 Qwen3-VL：导入时直接为图片生成 image 向量，搜索时将用户文本嵌入到同一语义空间并与图片向量匹配；VLM 描述和 OCR 仍会生成，但主要作为 caption/BM25 辅助信号和展示元数据。表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
 
-关系库当前收敛为三张核心表：`memes`、`meme_annotations`、`meme_vectors`。schema 级类型使用 protobuf value schema 定义在 `proto/emomo/v1/schema.proto`，生成代码在 `internal/idl/emomo/v1/`；`VectorType`、`ImageFormat` 等有限集合在数据库中存 enum number。这个 schema 只描述"列级结构化值"（`ImageInfo`、`MemeAnnotationLabels`、`TextLabel`）与封闭枚举，并不是 wire / RPC 协议——表行本身是 `internal/domain/` 下的 GORM 结构体。
+关系库当前收敛为三张核心表：`memes`、`meme_annotations`、`meme_vectors`。protobuf message schema 定义在 `proto/emomo/v1/{types,meme,api}.proto`，生成代码在 `gen/emomo/v1/`（导入为 `pb`）。本项目把 protobuf 限定在 API DTO、前后端生成类型、跨边界封闭枚举，以及少量结构化 DB JSON 值（当前仅 `memes.image_info` / `meme_annotations.labels`，通过 `protojson` + `UseEnumNumbers=true` 序列化）。关系表结构、索引、迁移、运行时配置、开放业务集合和 UI 状态不由 protobuf 管。它**不是** RPC 协议——HTTP API 仍是 RESTful（POST `/api/v1/search` 等），handler 直接对 protobuf message 做 `protojson.Marshal/Unmarshal`。
 
 数据库迁移完全由代码托管：`internal/repository/db.go` 中的 GORM AutoMigrate 加上 `prepareLegacy*` / `migrate*` / `dropLegacy*` 这一组迁移函数是唯一的事实来源（single source of truth）；项目**不使用** goose / golang-migrate / atlas 等独立 SQL 迁移工具，也不存在 `backend/migrations/` 目录。新增 schema 演进需要修改 `db.go`，并在 `db_test.go` 里补一条 SQLite 集成测试。
 
@@ -34,7 +34,7 @@ Emomo 是一个基于 Go + Qdrant + 多模态 Embedding 的表情包语义搜索
 ## 技术栈
 
 - **后端**: Go + Gin + GORM
-- **Schema-level types**: protobuf value schema + buf
+- **Protobuf message schema**: protobuf-go + protobuf-es + buf
 - **向量数据库**: Qdrant (gRPC)
 - **元数据存储**: SQLite (本地) / PostgreSQL (生产)
 - **对象存储**: S3 兼容存储（Cloudflare R2、AWS S3 等）
@@ -216,13 +216,13 @@ go test ./...
 go run ./cmd/api
 ```
 
-### 更新 protobuf value schema
+### 更新 protobuf 消息 schema
 
 ```bash
 GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 ```
 
-修改 `proto/emomo/v1/schema.proto` 后需要重新生成 `internal/idl/emomo/v1/schema.pb.go`，再运行 `go test ./...`。
+修改 `proto/emomo/v1/` 下的任意 `.proto` 后需要重新生成 `gen/emomo/v1/*.pb.go`，并同步更新前端 `frontend/gen/`，再运行 `go test ./...`。
 
 ## 项目结构（backend/）
 
@@ -230,7 +230,6 @@ GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 backend/
 ├── cmd/                 # Go 入口（api/ingest）
 ├── internal/            # Go 应用核心逻辑
-│   ├── idl/             # protobuf 生成代码（结构化值 + 枚举）
 │   ├── api/             # API 层
 │   ├── config/          # 配置管理
 │   ├── domain/          # 领域模型（GORM 结构体）
@@ -239,7 +238,8 @@ backend/
 │   ├── source/          # 数据源适配器
 │   └── storage/         # 对象存储
 ├── configs/             # 配置文件
-├── proto/               # protobuf value schema（仅列级结构化值与封闭枚举）
+├── proto/               # 手写 protobuf message schema（types/meme/api 三个 .proto）
+├── gen/                 # buf generate 输出的 Go 代码（不要手改）
 ├── data/                # 本地数据目录（被 gitignore，仅保留 .gitkeep）
 ├── scripts/             # 后端脚本（import-data / setup / check-data-dir）
 └── Dockerfile           # 后端镜像
