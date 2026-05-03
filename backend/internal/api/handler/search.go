@@ -30,6 +30,10 @@ func (h *SearchHandler) TextSearch(c *gin.Context) {
 		return
 	}
 	overrideQueryParams(c, req)
+	if err := validateSearchRequest(req); err != nil {
+		writeError(c, http.StatusBadRequest, err)
+		return
+	}
 
 	resp, err := h.searchService.TextSearch(c.Request.Context(), req)
 	if err != nil {
@@ -73,6 +77,10 @@ func (h *SearchHandler) TextSearchStream(c *gin.Context) {
 		return
 	}
 	overrideQueryParams(c, req)
+	if err := validateSearchRequest(req); err != nil {
+		writeError(c, http.StatusBadRequest, err)
+		return
+	}
 
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
@@ -170,4 +178,13 @@ func overrideQueryParams(c *gin.Context, req *pb.SearchRequest) {
 	if profile := c.Query("profile"); profile != "" && req.GetProfile() == "" {
 		req.Profile = profile
 	}
+}
+
+func validateSearchRequest(req *pb.SearchRequest) error {
+	query := strings.TrimSpace(req.GetQuery())
+	if query == "" {
+		return fmt.Errorf("query is required")
+	}
+	req.Query = query
+	return nil
 }
