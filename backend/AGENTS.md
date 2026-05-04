@@ -4,7 +4,7 @@
 > 所有命令默认在 `backend/` 目录下执行（`cd backend`）。
 
 ## Project Structure & Module Organization
-- `cmd/`: Go entry points (`cmd/api`, `cmd/ingest`).
+- `cmd/`: Go entry points (`cmd/api`; `cmd/ingest` is an internal worker invoked only by `scripts/import-data.sh`).
 - `internal/`: Go application code (API handlers, services, repositories, sources, storage).
 - `proto/emomo/v1/`: hand-written `.proto` source — `types.proto` (closed cross-boundary enums + allowlisted JSON-column messages), `meme.proto` (API entity DTOs), `api.proto` (HTTP request/response + SSE event DTOs).
 - `gen/emomo/v1/`: generated Go code (`*.pb.go`); imported as `pb "github.com/timmy/emomo/gen/emomo/v1"`. Do not hand-edit.
@@ -19,8 +19,7 @@ Sibling directories at repo root: `../frontend/` (React/Vite UI), `../deployment
 ## Build, Test, and Development Commands
 - `cd backend && go run ./cmd/api`: run the API server locally (port 8080 by default).
 - `cd backend && go build ./... && go test ./...`: build and test all Go packages.
-- `cd backend && ./scripts/import-data.sh -p ./data/memes -l 50`: ingest local static image memes (recommended).
-- `cd backend && go run ./cmd/ingest --source=localdir --path=./data/memes --limit=50`: ingest local static image memes (alternative).
+- `cd backend && ./scripts/import-data.sh -p ./data/memes`: ingest all local static image memes. This script is the only supported data ingest entrypoint.
 - `cd backend && GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate`: regenerate Go code under `gen/` after editing any `.proto` (also re-run `cd ../frontend && npm run gen` to refresh TS).
 - `docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d` (from repo root): start API + Grafana Alloy.
 

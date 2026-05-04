@@ -1,6 +1,6 @@
 # 快速部署指南
 
-> **monorepo 提示**：本文档原本针对纯后端仓库编写。后端代码已下沉到 `backend/`，所有形如 `./scripts/...` 或 `go run ./cmd/...` 的命令请先 `cd backend` 再执行（例如 `cd backend && ./scripts/import-data.sh -p ./data/memes -l 100`）。
+> **monorepo 提示**：本文档原本针对纯后端仓库编写。后端代码已下沉到 `backend/`，导入数据时请先 `cd backend`，并且只使用 `./scripts/import-data.sh` 这一种导入入口（例如 `cd backend && ./scripts/import-data.sh -p ./data/memes`）。
 
 ## 前置要求
 
@@ -157,15 +157,9 @@ cd emomo
 mkdir -p backend/data/memes
 # 把 .jpg/.jpeg/.png/.webp 图片放到 backend/data/memes
 
-# 使用导入脚本（推荐，无需预先编译）
+# 使用唯一导入脚本（无需预先编译，默认导入目录中的全部图片）
 cd backend
-./scripts/import-data.sh -p ./data/memes -l 100
-
-# 如果成功，摄入全部
-./scripts/import-data.sh -p ./data/memes -l 10000
-
-# 或使用 go run 直接运行
-go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
+./scripts/import-data.sh -p ./data/memes
 ```
 
 如需补齐已有图片缺失的 image/caption 向量，可在 `backend/` 下执行：
@@ -174,6 +168,8 @@ go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
 ./scripts/import-data.sh -r -l 100
 go run ./cmd/reembed --profile qwen3vl --vector-type all
 ```
+
+`cmd/reembed` 只用于已有数据的向量维护，不是数据导入入口。
 
 ## 配置前端
 

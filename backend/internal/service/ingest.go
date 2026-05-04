@@ -149,7 +149,7 @@ type IngestOptions struct {
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
 //   - src: data source implementation.
-//   - limit: maximum number of items to ingest.
+//   - limit: maximum number of items to ingest; <= 0 means no limit.
 //   - opts: ingestion options (nil uses defaults).
 //
 // Returns:
@@ -207,19 +207,21 @@ func (s *IngestService) IngestFromSource(ctx context.Context, src source.Source,
 	// Fetch items from source
 	cursor := ""
 	totalFetched := 0
+	unlimited := limit <= 0
 	for {
 		if ctx.Err() != nil {
 			break
 		}
 
-		remaining := limit - totalFetched
-		if remaining <= 0 {
-			break
-		}
-
 		batchLimit := s.batchSize
-		if batchLimit > remaining {
-			batchLimit = remaining
+		if !unlimited {
+			remaining := limit - totalFetched
+			if remaining <= 0 {
+				break
+			}
+			if batchLimit > remaining {
+				batchLimit = remaining
+			}
 		}
 
 		items, nextCursor, err := src.FetchBatch(ctx, cursor, batchLimit)
@@ -615,20 +617,17 @@ func (s *IngestService) prepareAnnotationBestEffort(ctx context.Context, memeID,
 		}
 	}
 
-	description, err := s.vlm.DescribeImage(ctx, imageData, format)
+	analysis, err := s.vlm.AnalyzeImage(ctx, imageData, format)
 	if err != nil {
-		logger.CtxWarn(ctx, "Failed to generate VLM description; continuing with image vector only: content_hash=%s, error=%v", contentHash, err)
+		logger.CtxWarn(ctx, "Failed to analyze image with VLM; continuing with image vector only: content_hash=%s, error=%v", contentHash, err)
 		return result
 	}
-	result.Description = description
-
-	ocrText, err := s.extractOCRText(ctx, imageData, format)
-	if err != nil {
-		logger.CtxWarn(ctx, "Failed to extract OCR text: content_hash=%s, error=%v", contentHash, err)
-	} else {
-		result.OCRText = ocrText
-		result.OCRReliable = true
-	}
+	result.Description = analysis.Description
+	result.OCRText = normalizeOCRText(analysis.OCRText)
+	// AnalyzeImage merges the OCR + description prompts into a single call, so a
+	// successful response is authoritative for both fields — we therefore mark
+	// OCR as reliable here, mirroring the old extractOCRText success branch.
+	result.OCRReliable = true
 
 	if s.annotationRepo == nil || analyzerModel == "" {
 		return result

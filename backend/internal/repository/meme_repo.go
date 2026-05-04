@@ -119,11 +119,14 @@ func (r *MemeRepository) ExistsByContentHash(ctx context.Context, contentHash st
 //   - error: non-nil if the query fails.
 func (r *MemeRepository) List(ctx context.Context, limit, offset int) ([]domain.Meme, error) {
 	var memes []domain.Meme
-	if err := r.db.WithContext(ctx).
-		Limit(limit).
-		Offset(offset).
-		Order("created_at DESC").
-		Find(&memes).Error; err != nil {
+	query := r.db.WithContext(ctx).Order("created_at DESC")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	if err := query.Find(&memes).Error; err != nil {
 		return nil, err
 	}
 	return memes, nil

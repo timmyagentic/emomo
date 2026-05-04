@@ -48,7 +48,7 @@ docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d  
 ```bash
 cd backend && go run ./cmd/api
 cd frontend && npm run dev
-cd backend && ./scripts/import-data.sh -p ./data/memes -l 50
+cd backend && ./scripts/import-data.sh -p ./data/memes  # only supported data ingest entrypoint; imports all images by default
 cd backend && GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 ```
 

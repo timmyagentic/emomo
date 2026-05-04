@@ -53,6 +53,47 @@ func TestProcessItemRejectsGIFMagicBytes(t *testing.T) {
 	}
 }
 
+func TestIngestFromSourceTreatsNonPositiveLimitAsUnlimited(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	items := make([]source.MemeItem, 0, 3)
+	for i := 0; i < 3; i++ {
+		imagePath := filepath.Join(tempDir, fmt.Sprintf("skip-%d.gif", i))
+		if err := os.WriteFile(imagePath, []byte("GIF89a-static"), 0o644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+		items = append(items, source.MemeItem{
+			SourceID:  fmt.Sprintf("gif-%d", i),
+			LocalPath: imagePath,
+			Format:    "gif",
+		})
+	}
+
+	ingest := &IngestService{
+		workers:   1,
+		batchSize: 2,
+	}
+
+	stats, err := ingest.IngestFromSource(context.Background(), &staticTestSource{
+		sourceID: "static",
+		items:    items,
+	}, 0, nil)
+	if err != nil {
+		t.Fatalf("IngestFromSource() error = %v", err)
+	}
+
+	if stats.TotalItems != 3 {
+		t.Fatalf("TotalItems = %d, want 3", stats.TotalItems)
+	}
+	if stats.ProcessedItems != 3 {
+		t.Fatalf("ProcessedItems = %d, want 3", stats.ProcessedItems)
+	}
+	if stats.SkippedItems != 3 {
+		t.Fatalf("SkippedItems = %d, want 3", stats.SkippedItems)
+	}
+}
+
 func TestProcessItemRollsBackNewMemeWhenVectorWriteFails(t *testing.T) {
 	t.Parallel()
 
@@ -146,6 +187,47 @@ func TestProcessItemRollsBackNewMemeWhenVectorWriteFails(t *testing.T) {
 	if store.deleteCount != 1 {
 		t.Fatalf("storage delete count = %d, want 1", store.deleteCount)
 	}
+}
+
+type staticTestSource struct {
+	sourceID string
+	items    []source.MemeItem
+}
+
+func (s *staticTestSource) GetSourceID() string {
+	return s.sourceID
+}
+
+func (s *staticTestSource) GetDisplayName() string {
+	return s.sourceID
+}
+
+func (s *staticTestSource) SupportsIncremental() bool {
+	return false
+}
+
+func (s *staticTestSource) FetchBatch(ctx context.Context, cursor string, limit int) ([]source.MemeItem, string, error) {
+	_ = ctx
+	start := 0
+	if cursor != "" {
+		parsed, err := strconv.Atoi(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		start = parsed
+	}
+	if start >= len(s.items) {
+		return []source.MemeItem{}, "", nil
+	}
+	end := len(s.items)
+	if limit > 0 && start+limit < end {
+		end = start + limit
+	}
+	next := ""
+	if end < len(s.items) {
+		next = strconv.Itoa(end)
+	}
+	return s.items[start:end], next, nil
 }
 
 func TestProcessItemWritesImageVectorWhenVLMFails(t *testing.T) {

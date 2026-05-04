@@ -39,8 +39,8 @@ cd frontend && npm run gen
 # Frontend lint / build
 cd frontend && npm install && npm run lint && npm run build
 
-# Ingest local static image data
-cd backend && ./scripts/import-data.sh -p ./data/memes -l 50
+# Ingest all local static image data; import-data.sh is the only supported ingest entrypoint
+cd backend && ./scripts/import-data.sh -p ./data/memes
 
 # Containerized API + Grafana Alloy
 docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d

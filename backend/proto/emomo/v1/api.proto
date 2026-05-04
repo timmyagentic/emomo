@@ -9,7 +9,6 @@ package emomo.v1;
 
 import "emomo/v1/types.proto";
 import "emomo/v1/meme.proto";
-import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/timmy/emomo/gen/emomo/v1;emomov1";
 
@@ -76,38 +75,6 @@ message GetStatsResponse {
   int32 total_categories = 2;
   repeated string available_collections = 3;
   repeated string available_profiles = 4;
-}
-
-// TriggerIngestRequest is the body of POST /api/v1/ingest.
-message TriggerIngestRequest {
-  string source = 1;
-  int32 limit = 2;
-  bool force = 3;
-}
-
-// TriggerIngestResponse is the body returned by POST /api/v1/ingest.
-message TriggerIngestResponse {
-  string message = 1;
-  IngestStats stats = 2;
-}
-
-// GetIngestStatusResponse is the body returned by GET /api/v1/ingest/status.
-message GetIngestStatusResponse {
-  bool is_running = 1;
-  google.protobuf.Timestamp last_run_time = 2;
-  string last_run_status = 3;
-  IngestStats current_stats = 4;
-}
-
-// IngestStats summarizes a single ingest run; embedded in trigger and status
-// responses.
-message IngestStats {
-  int64 total_items = 1;
-  int64 processed_items = 2;
-  int64 skipped_items = 3;
-  int64 failed_items = 4;
-  google.protobuf.Timestamp start_time = 5;
-  google.protobuf.Timestamp end_time = 6;
 }
 
 // SearchStage names each step of the streaming search pipeline. The numeric

@@ -56,13 +56,13 @@ npm run dev
 
 ### Qwen3-VL 多模态向量摄入
 
-默认配置会使用 `qwen3vl` profile 同时写入 image 与 caption 两路向量，其中 image 路直接对图片生成向量：
+数据导入只支持 `backend/scripts/import-data.sh` 这一种入口。默认配置会使用 `qwen3vl` profile 同时写入 image 与 caption 两路向量，其中 image 路直接对图片生成向量：
 
 ```bash
 cd backend
-./scripts/import-data.sh -p ./data/memes -l 50
+./scripts/import-data.sh -p ./data/memes
 # 或显式指定 profile:
-./scripts/import-data.sh -p ./data/memes --profile qwen3vl -l 50
+./scripts/import-data.sh -p ./data/memes --profile qwen3vl
 ```
 
 详见 [docs/MULTI_EMBEDDING.md](docs/MULTI_EMBEDDING.md) 与 [backend/configs/config.yaml](backend/configs/config.yaml)。

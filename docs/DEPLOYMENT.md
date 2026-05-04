@@ -473,27 +473,7 @@ chmod -R 755 /path/to/emomo/backend/data/memes
 
 ## 数据摄入
 
-部署完成后，需要摄入数据：
-
-### 方式一：通过 API 端点摄入（推荐）
-
-```bash
-# 使用 curl 调用 API
-curl -X POST http://localhost:8080/api/v1/ingest \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source": "localdir",
-    "limit": 100,
-    "force": false
-  }'
-
-# 或访问管理界面
-# http://localhost:8080/
-```
-
-**说明**：API 和 CLI 摄入目前仅支持 `localdir`。
-
-### 方式二：使用命令行工具摄入
+部署完成后，需要摄入数据。`backend/scripts/import-data.sh` 是唯一支持的数据导入入口；API 不再提供导入端点，底层 Go worker 也不作为直接入口使用。
 
 ```bash
 # 在服务器上或本地
@@ -502,25 +482,18 @@ cd emomo
 # 确保数据目录存在，并放入 .jpg/.jpeg/.png/.webp 静态图片
 mkdir -p ./backend/data/memes
 
-# 使用导入脚本（推荐，无需预先编译）
+# 使用唯一导入脚本（无需预先编译，默认导入目录中的全部图片）
 cd backend
-./scripts/import-data.sh -p ./data/memes -l 100
-
-# 如果成功，摄入全部
-./scripts/import-data.sh -p ./data/memes -l 10000
-
-# 或使用 go run 直接运行
-go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
+./scripts/import-data.sh -p ./data/memes
 ```
 
-### 方式三：在 Docker 容器内摄入
+### 在 Docker 容器内摄入
 
 ```bash
 # 进入容器
 docker exec -it emomo-api sh
 
-# 在容器内使用 API 端点（推荐）
-# 或使用 ingest 工具（如果已构建）
+# 在容器内仍然使用 backend/scripts/import-data.sh
 ```
 
 ## 成本对比

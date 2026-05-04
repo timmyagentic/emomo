@@ -81,3 +81,42 @@ func TestSelectSourceRejectsChineseBQB(t *testing.T) {
 		t.Fatalf("expected unsupported source error, got %v", err)
 	}
 }
+
+func TestIsScriptEntrypoint(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{
+			name: "script marker present",
+			env: map[string]string{
+				importEntrypointEnv: importEntrypointValue,
+			},
+			want: true,
+		},
+		{
+			name: "script marker missing",
+			env:  map[string]string{},
+			want: false,
+		},
+		{
+			name: "script marker has wrong value",
+			env: map[string]string{
+				importEntrypointEnv: "direct",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isScriptEntrypoint(func(key string) string {
+				return tt.env[key]
+			})
+			if got != tt.want {
+				t.Fatalf("isScriptEntrypoint() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

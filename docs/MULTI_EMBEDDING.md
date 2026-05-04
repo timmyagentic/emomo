@@ -90,29 +90,37 @@ qdrant_point_id
 
 唯一约束按 `meme_id + collection + vector_type` 去重，因此同一张图可以同时拥有 image 向量和 caption 向量。
 
-## Ingest CLI
+## Ingest Script
+
+`backend/scripts/import-data.sh` is the only supported data ingest entrypoint. It accepts a local image directory via `-p` / `--path` and invokes the internal ingest worker for the selected profile.
 
 默认导入当前 search profile：
 
 ```bash
 cd backend
-./scripts/import-data.sh -p ./data/memes -l 100
+./scripts/import-data.sh -p ./data/memes
 ```
 
 显式使用默认 profile：
 
 ```bash
-./scripts/import-data.sh -p ./data/memes --profile qwen3vl -l 100
+./scripts/import-data.sh -p ./data/memes --profile qwen3vl
 ```
 
 只导入单一路 embedding：
 
 ```bash
-./scripts/import-data.sh -p ./data/memes -e qwen3vl_image -l 100
-./scripts/import-data.sh -p ./data/memes -e qwen3vl_caption -l 100
+./scripts/import-data.sh -p ./data/memes -e qwen3vl_image
+./scripts/import-data.sh -p ./data/memes -e qwen3vl_caption
 ```
 
-补齐已有数据的新向量可使用 reembed：
+补齐已有数据的新向量可使用脚本的 retry 模式：
+
+```bash
+./scripts/import-data.sh -r -l 100
+```
+
+`cmd/reembed` 是已有数据的向量维护工具，不是数据导入入口。调整模型、collection 或 caption 构造逻辑后，可用它重建受影响的向量：
 
 ```bash
 go run ./cmd/reembed --profile qwen3vl --vector-type all

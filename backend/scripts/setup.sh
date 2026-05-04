@@ -18,9 +18,6 @@ mkdir -p data
 echo "Building API server..."
 go build -o api ./cmd/api
 
-echo "Building ingest tool..."
-go build -o ingest ./cmd/ingest
-
 echo ""
 echo "=== Setup Complete ==="
 echo ""
@@ -28,5 +25,5 @@ echo "Next steps:"
 echo "1. Edit .env to add your API keys (OPENAI_API_KEY, JINA_API_KEY)"
 echo "2. Start API + logging (Docker Compose): docker compose -f ../deployments/docker-compose.yml up -d"
 echo "   - Logs only: docker compose -f ../deployments/docker-compose.yml up -d alloy"
-echo "3. Put static images under ./data/memes, then run: ./ingest --source=localdir --path=./data/memes --limit=100"
+echo "3. Put static images under ./data/memes, then run: ./scripts/import-data.sh -p ./data/memes"
 echo "4. Start API server (if not using Docker Compose): ./api"

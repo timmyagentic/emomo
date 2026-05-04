@@ -127,12 +127,11 @@ data/memes/
 ### 4) 摄入数据
 
 ```bash
-# 使用导入脚本（推荐，无需预先编译）
-./scripts/import-data.sh -p ./data/memes -l 100
-
-# 或使用 go run 直接运行
-go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
+# 使用唯一导入脚本（无需预先编译，默认导入目录中的全部图片）
+./scripts/import-data.sh -p ./data/memes
 ```
+
+`scripts/import-data.sh` 是唯一支持的数据导入入口；`cmd/ingest` 只作为脚本内部 worker 使用。
 
 ### 5) 启动 API 服务
 
@@ -228,7 +227,7 @@ GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 
 ```
 backend/
-├── cmd/                 # Go 入口（api/ingest）
+├── cmd/                 # Go 入口（api；ingest 为导入脚本内部 worker）
 ├── internal/            # Go 应用核心逻辑
 │   ├── api/             # API 层
 │   ├── config/          # 配置管理

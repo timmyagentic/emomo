@@ -13,15 +13,13 @@ import type { TextPresence } from "./types_pb.js";
 import { file_emomo_v1_types } from "./types_pb.js";
 import type { Meme, SearchResult } from "./meme_pb.js";
 import { file_emomo_v1_meme } from "./meme_pb.js";
-import type { Timestamp } from "@bufbuild/protobuf/wkt";
-import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file emomo/v1/api.proto.
  */
 export const file_emomo_v1_api: GenFile = /*@__PURE__*/
-  fileDesc("ChJlbW9tby92MS9hcGkucHJvdG8SCGVtb21vLnYxIpMBCg1TZWFyY2hSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEg0KBXRvcF9rGAIgASgFEhAKCGNhdGVnb3J5GAMgASgJEi0KDXRleHRfcHJlc2VuY2UYBCABKA4yFi5lbW9tby52MS5UZXh0UHJlc2VuY2USEgoKY29sbGVjdGlvbhgFIAEoCRIPCgdwcm9maWxlGAYgASgJIpQBCg5TZWFyY2hSZXNwb25zZRInCgdyZXN1bHRzGAEgAygLMhYuZW1vbW8udjEuU2VhcmNoUmVzdWx0Eg0KBXRvdGFsGAIgASgFEg0KBXF1ZXJ5GAMgASgJEhYKDmV4cGFuZGVkX3F1ZXJ5GAQgASgJEhIKCmNvbGxlY3Rpb24YBSABKAkSDwoHcHJvZmlsZRgGIAEoCSJDChBMaXN0TWVtZXNSZXF1ZXN0EhAKCGNhdGVnb3J5GAEgASgJEg0KBWxpbWl0GAIgASgFEg4KBm9mZnNldBgDIAEoBSJqChFMaXN0TWVtZXNSZXNwb25zZRInCgdyZXN1bHRzGAEgAygLMhYuZW1vbW8udjEuU2VhcmNoUmVzdWx0Eg0KBXRvdGFsGAIgASgFEg0KBWxpbWl0GAMgASgFEg4KBm9mZnNldBgEIAEoBSIcCg5HZXRNZW1lUmVxdWVzdBIKCgJpZBgBIAEoCSIvCg9HZXRNZW1lUmVzcG9uc2USHAoEbWVtZRgBIAEoCzIOLmVtb21vLnYxLk1lbWUiOgoVR2V0Q2F0ZWdvcmllc1Jlc3BvbnNlEhIKCmNhdGVnb3JpZXMYASADKAkSDQoFdG90YWwYAiABKAUifAoQR2V0U3RhdHNSZXNwb25zZRITCgt0b3RhbF9tZW1lcxgBIAEoAxIYChB0b3RhbF9jYXRlZ29yaWVzGAIgASgFEh0KFWF2YWlsYWJsZV9jb2xsZWN0aW9ucxgDIAMoCRIaChJhdmFpbGFibGVfcHJvZmlsZXMYBCADKAkiRAoUVHJpZ2dlckluZ2VzdFJlcXVlc3QSDgoGc291cmNlGAEgASgJEg0KBWxpbWl0GAIgASgFEg0KBWZvcmNlGAMgASgIIk4KFVRyaWdnZXJJbmdlc3RSZXNwb25zZRIPCgdtZXNzYWdlGAEgASgJEiQKBXN0YXRzGAIgASgLMhUuZW1vbW8udjEuSW5nZXN0U3RhdHMipwEKF0dldEluZ2VzdFN0YXR1c1Jlc3BvbnNlEhIKCmlzX3J1bm5pbmcYASABKAgSMQoNbGFzdF9ydW5fdGltZRgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFwoPbGFzdF9ydW5fc3RhdHVzGAMgASgJEiwKDWN1cnJlbnRfc3RhdHMYBCABKAsyFS5lbW9tby52MS5Jbmdlc3RTdGF0cyLGAQoLSW5nZXN0U3RhdHMSEwoLdG90YWxfaXRlbXMYASABKAMSFwoPcHJvY2Vzc2VkX2l0ZW1zGAIgASgDEhUKDXNraXBwZWRfaXRlbXMYAyABKAMSFAoMZmFpbGVkX2l0ZW1zGAQgASgDEi4KCnN0YXJ0X3RpbWUYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKCGVuZF90aW1lGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKIAgoTU2VhcmNoUHJvZ3Jlc3NFdmVudBIkCgVzdGFnZRgBIAEoDjIVLmVtb21vLnYxLlNlYXJjaFN0YWdlEg8KB21lc3NhZ2UYAiABKAkSKwoIdGhpbmtpbmcYAyABKAsyFy5lbW9tby52MS5UaGlua2luZ0RlbHRhSAASLAoJZXhwYW5zaW9uGAQgASgLMhcuZW1vbW8udjEuRXhwYW5zaW9uRG9uZUgAEiwKCGNvbXBsZXRlGAUgASgLMhguZW1vbW8udjEuU2VhcmNoQ29tcGxldGVIABImCgVlcnJvchgGIAEoCzIVLmVtb21vLnYxLlNlYXJjaEVycm9ySABCCQoHcGF5bG9hZCIvCg1UaGlua2luZ0RlbHRhEgwKBHRleHQYASABKAkSEAoIaXNfZGVsdGEYAiABKAgiJwoNRXhwYW5zaW9uRG9uZRIWCg5leHBhbmRlZF9xdWVyeRgBIAEoCSKUAQoOU2VhcmNoQ29tcGxldGUSJwoHcmVzdWx0cxgBIAMoCzIWLmVtb21vLnYxLlNlYXJjaFJlc3VsdBINCgV0b3RhbBgCIAEoBRINCgVxdWVyeRgDIAEoCRIWCg5leHBhbmRlZF9xdWVyeRgEIAEoCRISCgpjb2xsZWN0aW9uGAUgASgJEg8KB3Byb2ZpbGUYBiABKAkiHAoLU2VhcmNoRXJyb3ISDQoFZXJyb3IYASABKAkqnAIKC1NlYXJjaFN0YWdlEhwKGFNFQVJDSF9TVEFHRV9VTlNQRUNJRklFRBAAEiYKIlNFQVJDSF9TVEFHRV9RVUVSWV9FWFBBTlNJT05fU1RBUlQQARIZChVTRUFSQ0hfU1RBR0VfVEhJTktJTkcQAhIlCiFTRUFSQ0hfU1RBR0VfUVVFUllfRVhQQU5TSU9OX0RPTkUQAxIaChZTRUFSQ0hfU1RBR0VfRU1CRURESU5HEAQSGgoWU0VBUkNIX1NUQUdFX1NFQVJDSElORxAFEhoKFlNFQVJDSF9TVEFHRV9FTlJJQ0hJTkcQBhIZChVTRUFSQ0hfU1RBR0VfQ09NUExFVEUQBxIWChJTRUFSQ0hfU1RBR0VfRVJST1IQCEItWitnaXRodWIuY29tL3RpbW15L2Vtb21vL2dlbi9lbW9tby92MTtlbW9tb3YxYgZwcm90bzM", [file_emomo_v1_types, file_emomo_v1_meme, file_google_protobuf_timestamp]);
+  fileDesc("ChJlbW9tby92MS9hcGkucHJvdG8SCGVtb21vLnYxIpMBCg1TZWFyY2hSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEg0KBXRvcF9rGAIgASgFEhAKCGNhdGVnb3J5GAMgASgJEi0KDXRleHRfcHJlc2VuY2UYBCABKA4yFi5lbW9tby52MS5UZXh0UHJlc2VuY2USEgoKY29sbGVjdGlvbhgFIAEoCRIPCgdwcm9maWxlGAYgASgJIpQBCg5TZWFyY2hSZXNwb25zZRInCgdyZXN1bHRzGAEgAygLMhYuZW1vbW8udjEuU2VhcmNoUmVzdWx0Eg0KBXRvdGFsGAIgASgFEg0KBXF1ZXJ5GAMgASgJEhYKDmV4cGFuZGVkX3F1ZXJ5GAQgASgJEhIKCmNvbGxlY3Rpb24YBSABKAkSDwoHcHJvZmlsZRgGIAEoCSJDChBMaXN0TWVtZXNSZXF1ZXN0EhAKCGNhdGVnb3J5GAEgASgJEg0KBWxpbWl0GAIgASgFEg4KBm9mZnNldBgDIAEoBSJqChFMaXN0TWVtZXNSZXNwb25zZRInCgdyZXN1bHRzGAEgAygLMhYuZW1vbW8udjEuU2VhcmNoUmVzdWx0Eg0KBXRvdGFsGAIgASgFEg0KBWxpbWl0GAMgASgFEg4KBm9mZnNldBgEIAEoBSIcCg5HZXRNZW1lUmVxdWVzdBIKCgJpZBgBIAEoCSIvCg9HZXRNZW1lUmVzcG9uc2USHAoEbWVtZRgBIAEoCzIOLmVtb21vLnYxLk1lbWUiOgoVR2V0Q2F0ZWdvcmllc1Jlc3BvbnNlEhIKCmNhdGVnb3JpZXMYASADKAkSDQoFdG90YWwYAiABKAUifAoQR2V0U3RhdHNSZXNwb25zZRITCgt0b3RhbF9tZW1lcxgBIAEoAxIYChB0b3RhbF9jYXRlZ29yaWVzGAIgASgFEh0KFWF2YWlsYWJsZV9jb2xsZWN0aW9ucxgDIAMoCRIaChJhdmFpbGFibGVfcHJvZmlsZXMYBCADKAkiiAIKE1NlYXJjaFByb2dyZXNzRXZlbnQSJAoFc3RhZ2UYASABKA4yFS5lbW9tby52MS5TZWFyY2hTdGFnZRIPCgdtZXNzYWdlGAIgASgJEisKCHRoaW5raW5nGAMgASgLMhcuZW1vbW8udjEuVGhpbmtpbmdEZWx0YUgAEiwKCWV4cGFuc2lvbhgEIAEoCzIXLmVtb21vLnYxLkV4cGFuc2lvbkRvbmVIABIsCghjb21wbGV0ZRgFIAEoCzIYLmVtb21vLnYxLlNlYXJjaENvbXBsZXRlSAASJgoFZXJyb3IYBiABKAsyFS5lbW9tby52MS5TZWFyY2hFcnJvckgAQgkKB3BheWxvYWQiLwoNVGhpbmtpbmdEZWx0YRIMCgR0ZXh0GAEgASgJEhAKCGlzX2RlbHRhGAIgASgIIicKDUV4cGFuc2lvbkRvbmUSFgoOZXhwYW5kZWRfcXVlcnkYASABKAkilAEKDlNlYXJjaENvbXBsZXRlEicKB3Jlc3VsdHMYASADKAsyFi5lbW9tby52MS5TZWFyY2hSZXN1bHQSDQoFdG90YWwYAiABKAUSDQoFcXVlcnkYAyABKAkSFgoOZXhwYW5kZWRfcXVlcnkYBCABKAkSEgoKY29sbGVjdGlvbhgFIAEoCRIPCgdwcm9maWxlGAYgASgJIhwKC1NlYXJjaEVycm9yEg0KBWVycm9yGAEgASgJKpwCCgtTZWFyY2hTdGFnZRIcChhTRUFSQ0hfU1RBR0VfVU5TUEVDSUZJRUQQABImCiJTRUFSQ0hfU1RBR0VfUVVFUllfRVhQQU5TSU9OX1NUQVJUEAESGQoVU0VBUkNIX1NUQUdFX1RISU5LSU5HEAISJQohU0VBUkNIX1NUQUdFX1FVRVJZX0VYUEFOU0lPTl9ET05FEAMSGgoWU0VBUkNIX1NUQUdFX0VNQkVERElORxAEEhoKFlNFQVJDSF9TVEFHRV9TRUFSQ0hJTkcQBRIaChZTRUFSQ0hfU1RBR0VfRU5SSUNISU5HEAYSGQoVU0VBUkNIX1NUQUdFX0NPTVBMRVRFEAcSFgoSU0VBUkNIX1NUQUdFX0VSUk9SEAhCLVorZ2l0aHViLmNvbS90aW1teS9lbW9tby9nZW4vZW1vbW8vdjE7ZW1vbW92MWIGcHJvdG8z", [file_emomo_v1_types, file_emomo_v1_meme]);
 
 /**
  * SearchRequest is the body of POST /api/v1/search and POST
@@ -280,138 +278,6 @@ export const GetStatsResponseSchema: GenMessage<GetStatsResponse> = /*@__PURE__*
   messageDesc(file_emomo_v1_api, 7);
 
 /**
- * TriggerIngestRequest is the body of POST /api/v1/ingest.
- *
- * @generated from message emomo.v1.TriggerIngestRequest
- */
-export type TriggerIngestRequest = Message<"emomo.v1.TriggerIngestRequest"> & {
-  /**
-   * @generated from field: string source = 1;
-   */
-  source: string;
-
-  /**
-   * @generated from field: int32 limit = 2;
-   */
-  limit: number;
-
-  /**
-   * @generated from field: bool force = 3;
-   */
-  force: boolean;
-};
-
-/**
- * Describes the message emomo.v1.TriggerIngestRequest.
- * Use `create(TriggerIngestRequestSchema)` to create a new message.
- */
-export const TriggerIngestRequestSchema: GenMessage<TriggerIngestRequest> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 8);
-
-/**
- * TriggerIngestResponse is the body returned by POST /api/v1/ingest.
- *
- * @generated from message emomo.v1.TriggerIngestResponse
- */
-export type TriggerIngestResponse = Message<"emomo.v1.TriggerIngestResponse"> & {
-  /**
-   * @generated from field: string message = 1;
-   */
-  message: string;
-
-  /**
-   * @generated from field: emomo.v1.IngestStats stats = 2;
-   */
-  stats?: IngestStats | undefined;
-};
-
-/**
- * Describes the message emomo.v1.TriggerIngestResponse.
- * Use `create(TriggerIngestResponseSchema)` to create a new message.
- */
-export const TriggerIngestResponseSchema: GenMessage<TriggerIngestResponse> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 9);
-
-/**
- * GetIngestStatusResponse is the body returned by GET /api/v1/ingest/status.
- *
- * @generated from message emomo.v1.GetIngestStatusResponse
- */
-export type GetIngestStatusResponse = Message<"emomo.v1.GetIngestStatusResponse"> & {
-  /**
-   * @generated from field: bool is_running = 1;
-   */
-  isRunning: boolean;
-
-  /**
-   * @generated from field: google.protobuf.Timestamp last_run_time = 2;
-   */
-  lastRunTime?: Timestamp | undefined;
-
-  /**
-   * @generated from field: string last_run_status = 3;
-   */
-  lastRunStatus: string;
-
-  /**
-   * @generated from field: emomo.v1.IngestStats current_stats = 4;
-   */
-  currentStats?: IngestStats | undefined;
-};
-
-/**
- * Describes the message emomo.v1.GetIngestStatusResponse.
- * Use `create(GetIngestStatusResponseSchema)` to create a new message.
- */
-export const GetIngestStatusResponseSchema: GenMessage<GetIngestStatusResponse> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 10);
-
-/**
- * IngestStats summarizes a single ingest run; embedded in trigger and status
- * responses.
- *
- * @generated from message emomo.v1.IngestStats
- */
-export type IngestStats = Message<"emomo.v1.IngestStats"> & {
-  /**
-   * @generated from field: int64 total_items = 1;
-   */
-  totalItems: bigint;
-
-  /**
-   * @generated from field: int64 processed_items = 2;
-   */
-  processedItems: bigint;
-
-  /**
-   * @generated from field: int64 skipped_items = 3;
-   */
-  skippedItems: bigint;
-
-  /**
-   * @generated from field: int64 failed_items = 4;
-   */
-  failedItems: bigint;
-
-  /**
-   * @generated from field: google.protobuf.Timestamp start_time = 5;
-   */
-  startTime?: Timestamp | undefined;
-
-  /**
-   * @generated from field: google.protobuf.Timestamp end_time = 6;
-   */
-  endTime?: Timestamp | undefined;
-};
-
-/**
- * Describes the message emomo.v1.IngestStats.
- * Use `create(IngestStatsSchema)` to create a new message.
- */
-export const IngestStatsSchema: GenMessage<IngestStats> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 11);
-
-/**
  * SearchProgressEvent is one SSE event in the stream returned by
  * POST /api/v1/search/stream. Each event is encoded as a single SSE
  * `data: <protojson>` line (the SSE `event: <name>` line carries the lowercase
@@ -470,7 +336,7 @@ export type SearchProgressEvent = Message<"emomo.v1.SearchProgressEvent"> & {
  * Use `create(SearchProgressEventSchema)` to create a new message.
  */
 export const SearchProgressEventSchema: GenMessage<SearchProgressEvent> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 12);
+  messageDesc(file_emomo_v1_api, 8);
 
 /**
  * ThinkingDelta is the payload for SEARCH_STAGE_THINKING events: incremental
@@ -495,7 +361,7 @@ export type ThinkingDelta = Message<"emomo.v1.ThinkingDelta"> & {
  * Use `create(ThinkingDeltaSchema)` to create a new message.
  */
 export const ThinkingDeltaSchema: GenMessage<ThinkingDelta> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 13);
+  messageDesc(file_emomo_v1_api, 9);
 
 /**
  * ExpansionDone is the payload for SEARCH_STAGE_QUERY_EXPANSION_DONE events.
@@ -514,7 +380,7 @@ export type ExpansionDone = Message<"emomo.v1.ExpansionDone"> & {
  * Use `create(ExpansionDoneSchema)` to create a new message.
  */
 export const ExpansionDoneSchema: GenMessage<ExpansionDone> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 14);
+  messageDesc(file_emomo_v1_api, 10);
 
 /**
  * SearchComplete is the payload for SEARCH_STAGE_COMPLETE events. Mirrors
@@ -560,7 +426,7 @@ export type SearchComplete = Message<"emomo.v1.SearchComplete"> & {
  * Use `create(SearchCompleteSchema)` to create a new message.
  */
 export const SearchCompleteSchema: GenMessage<SearchComplete> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 15);
+  messageDesc(file_emomo_v1_api, 11);
 
 /**
  * SearchError is the payload for SEARCH_STAGE_ERROR events.
@@ -579,7 +445,7 @@ export type SearchError = Message<"emomo.v1.SearchError"> & {
  * Use `create(SearchErrorSchema)` to create a new message.
  */
 export const SearchErrorSchema: GenMessage<SearchError> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 16);
+  messageDesc(file_emomo_v1_api, 12);
 
 /**
  * SearchStage names each step of the streaming search pipeline. The numeric

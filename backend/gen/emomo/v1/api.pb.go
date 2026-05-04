@@ -14,7 +14,6 @@ package emomov1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -614,275 +613,6 @@ func (x *GetStatsResponse) GetAvailableProfiles() []string {
 	return nil
 }
 
-// TriggerIngestRequest is the body of POST /api/v1/ingest.
-type TriggerIngestRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
-	Force         bool                   `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TriggerIngestRequest) Reset() {
-	*x = TriggerIngestRequest{}
-	mi := &file_emomo_v1_api_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TriggerIngestRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TriggerIngestRequest) ProtoMessage() {}
-
-func (x *TriggerIngestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TriggerIngestRequest.ProtoReflect.Descriptor instead.
-func (*TriggerIngestRequest) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *TriggerIngestRequest) GetSource() string {
-	if x != nil {
-		return x.Source
-	}
-	return ""
-}
-
-func (x *TriggerIngestRequest) GetLimit() int32 {
-	if x != nil {
-		return x.Limit
-	}
-	return 0
-}
-
-func (x *TriggerIngestRequest) GetForce() bool {
-	if x != nil {
-		return x.Force
-	}
-	return false
-}
-
-// TriggerIngestResponse is the body returned by POST /api/v1/ingest.
-type TriggerIngestResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
-	Stats         *IngestStats           `protobuf:"bytes,2,opt,name=stats,proto3" json:"stats,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TriggerIngestResponse) Reset() {
-	*x = TriggerIngestResponse{}
-	mi := &file_emomo_v1_api_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TriggerIngestResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TriggerIngestResponse) ProtoMessage() {}
-
-func (x *TriggerIngestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TriggerIngestResponse.ProtoReflect.Descriptor instead.
-func (*TriggerIngestResponse) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *TriggerIngestResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-func (x *TriggerIngestResponse) GetStats() *IngestStats {
-	if x != nil {
-		return x.Stats
-	}
-	return nil
-}
-
-// GetIngestStatusResponse is the body returned by GET /api/v1/ingest/status.
-type GetIngestStatusResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	IsRunning     bool                   `protobuf:"varint,1,opt,name=is_running,json=isRunning,proto3" json:"is_running,omitempty"`
-	LastRunTime   *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=last_run_time,json=lastRunTime,proto3" json:"last_run_time,omitempty"`
-	LastRunStatus string                 `protobuf:"bytes,3,opt,name=last_run_status,json=lastRunStatus,proto3" json:"last_run_status,omitempty"`
-	CurrentStats  *IngestStats           `protobuf:"bytes,4,opt,name=current_stats,json=currentStats,proto3" json:"current_stats,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetIngestStatusResponse) Reset() {
-	*x = GetIngestStatusResponse{}
-	mi := &file_emomo_v1_api_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetIngestStatusResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetIngestStatusResponse) ProtoMessage() {}
-
-func (x *GetIngestStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetIngestStatusResponse.ProtoReflect.Descriptor instead.
-func (*GetIngestStatusResponse) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *GetIngestStatusResponse) GetIsRunning() bool {
-	if x != nil {
-		return x.IsRunning
-	}
-	return false
-}
-
-func (x *GetIngestStatusResponse) GetLastRunTime() *timestamppb.Timestamp {
-	if x != nil {
-		return x.LastRunTime
-	}
-	return nil
-}
-
-func (x *GetIngestStatusResponse) GetLastRunStatus() string {
-	if x != nil {
-		return x.LastRunStatus
-	}
-	return ""
-}
-
-func (x *GetIngestStatusResponse) GetCurrentStats() *IngestStats {
-	if x != nil {
-		return x.CurrentStats
-	}
-	return nil
-}
-
-// IngestStats summarizes a single ingest run; embedded in trigger and status
-// responses.
-type IngestStats struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	TotalItems     int64                  `protobuf:"varint,1,opt,name=total_items,json=totalItems,proto3" json:"total_items,omitempty"`
-	ProcessedItems int64                  `protobuf:"varint,2,opt,name=processed_items,json=processedItems,proto3" json:"processed_items,omitempty"`
-	SkippedItems   int64                  `protobuf:"varint,3,opt,name=skipped_items,json=skippedItems,proto3" json:"skipped_items,omitempty"`
-	FailedItems    int64                  `protobuf:"varint,4,opt,name=failed_items,json=failedItems,proto3" json:"failed_items,omitempty"`
-	StartTime      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
-	EndTime        *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *IngestStats) Reset() {
-	*x = IngestStats{}
-	mi := &file_emomo_v1_api_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *IngestStats) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IngestStats) ProtoMessage() {}
-
-func (x *IngestStats) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IngestStats.ProtoReflect.Descriptor instead.
-func (*IngestStats) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *IngestStats) GetTotalItems() int64 {
-	if x != nil {
-		return x.TotalItems
-	}
-	return 0
-}
-
-func (x *IngestStats) GetProcessedItems() int64 {
-	if x != nil {
-		return x.ProcessedItems
-	}
-	return 0
-}
-
-func (x *IngestStats) GetSkippedItems() int64 {
-	if x != nil {
-		return x.SkippedItems
-	}
-	return 0
-}
-
-func (x *IngestStats) GetFailedItems() int64 {
-	if x != nil {
-		return x.FailedItems
-	}
-	return 0
-}
-
-func (x *IngestStats) GetStartTime() *timestamppb.Timestamp {
-	if x != nil {
-		return x.StartTime
-	}
-	return nil
-}
-
-func (x *IngestStats) GetEndTime() *timestamppb.Timestamp {
-	if x != nil {
-		return x.EndTime
-	}
-	return nil
-}
-
 // SearchProgressEvent is one SSE event in the stream returned by
 // POST /api/v1/search/stream. Each event is encoded as a single SSE
 // `data: <protojson>` line (the SSE `event: <name>` line carries the lowercase
@@ -908,7 +638,7 @@ type SearchProgressEvent struct {
 
 func (x *SearchProgressEvent) Reset() {
 	*x = SearchProgressEvent{}
-	mi := &file_emomo_v1_api_proto_msgTypes[12]
+	mi := &file_emomo_v1_api_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -920,7 +650,7 @@ func (x *SearchProgressEvent) String() string {
 func (*SearchProgressEvent) ProtoMessage() {}
 
 func (x *SearchProgressEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[12]
+	mi := &file_emomo_v1_api_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -933,7 +663,7 @@ func (x *SearchProgressEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchProgressEvent.ProtoReflect.Descriptor instead.
 func (*SearchProgressEvent) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{12}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SearchProgressEvent) GetStage() SearchStage {
@@ -1033,7 +763,7 @@ type ThinkingDelta struct {
 
 func (x *ThinkingDelta) Reset() {
 	*x = ThinkingDelta{}
-	mi := &file_emomo_v1_api_proto_msgTypes[13]
+	mi := &file_emomo_v1_api_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1045,7 +775,7 @@ func (x *ThinkingDelta) String() string {
 func (*ThinkingDelta) ProtoMessage() {}
 
 func (x *ThinkingDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[13]
+	mi := &file_emomo_v1_api_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1058,7 +788,7 @@ func (x *ThinkingDelta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ThinkingDelta.ProtoReflect.Descriptor instead.
 func (*ThinkingDelta) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{13}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ThinkingDelta) GetText() string {
@@ -1085,7 +815,7 @@ type ExpansionDone struct {
 
 func (x *ExpansionDone) Reset() {
 	*x = ExpansionDone{}
-	mi := &file_emomo_v1_api_proto_msgTypes[14]
+	mi := &file_emomo_v1_api_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1097,7 +827,7 @@ func (x *ExpansionDone) String() string {
 func (*ExpansionDone) ProtoMessage() {}
 
 func (x *ExpansionDone) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[14]
+	mi := &file_emomo_v1_api_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1110,7 +840,7 @@ func (x *ExpansionDone) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExpansionDone.ProtoReflect.Descriptor instead.
 func (*ExpansionDone) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{14}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ExpansionDone) GetExpandedQuery() string {
@@ -1137,7 +867,7 @@ type SearchComplete struct {
 
 func (x *SearchComplete) Reset() {
 	*x = SearchComplete{}
-	mi := &file_emomo_v1_api_proto_msgTypes[15]
+	mi := &file_emomo_v1_api_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1149,7 +879,7 @@ func (x *SearchComplete) String() string {
 func (*SearchComplete) ProtoMessage() {}
 
 func (x *SearchComplete) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[15]
+	mi := &file_emomo_v1_api_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1162,7 +892,7 @@ func (x *SearchComplete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchComplete.ProtoReflect.Descriptor instead.
 func (*SearchComplete) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{15}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SearchComplete) GetResults() []*SearchResult {
@@ -1217,7 +947,7 @@ type SearchError struct {
 
 func (x *SearchError) Reset() {
 	*x = SearchError{}
-	mi := &file_emomo_v1_api_proto_msgTypes[16]
+	mi := &file_emomo_v1_api_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1229,7 +959,7 @@ func (x *SearchError) String() string {
 func (*SearchError) ProtoMessage() {}
 
 func (x *SearchError) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[16]
+	mi := &file_emomo_v1_api_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1242,7 +972,7 @@ func (x *SearchError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchError.ProtoReflect.Descriptor instead.
 func (*SearchError) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{16}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SearchError) GetError() string {
@@ -1256,7 +986,7 @@ var File_emomo_v1_api_proto protoreflect.FileDescriptor
 
 const file_emomo_v1_api_proto_rawDesc = "" +
 	"\n" +
-	"\x12emomo/v1/api.proto\x12\bemomo.v1\x1a\x14emomo/v1/types.proto\x1a\x13emomo/v1/meme.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcd\x01\n" +
+	"\x12emomo/v1/api.proto\x12\bemomo.v1\x1a\x14emomo/v1/types.proto\x1a\x13emomo/v1/meme.proto\"\xcd\x01\n" +
 	"\rSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x13\n" +
 	"\x05top_k\x18\x02 \x01(\x05R\x04topK\x12\x1a\n" +
@@ -1298,29 +1028,7 @@ const file_emomo_v1_api_proto_rawDesc = "" +
 	"totalMemes\x12)\n" +
 	"\x10total_categories\x18\x02 \x01(\x05R\x0ftotalCategories\x123\n" +
 	"\x15available_collections\x18\x03 \x03(\tR\x14availableCollections\x12-\n" +
-	"\x12available_profiles\x18\x04 \x03(\tR\x11availableProfiles\"Z\n" +
-	"\x14TriggerIngestRequest\x12\x16\n" +
-	"\x06source\x18\x01 \x01(\tR\x06source\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x14\n" +
-	"\x05force\x18\x03 \x01(\bR\x05force\"^\n" +
-	"\x15TriggerIngestResponse\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage\x12+\n" +
-	"\x05stats\x18\x02 \x01(\v2\x15.emomo.v1.IngestStatsR\x05stats\"\xdc\x01\n" +
-	"\x17GetIngestStatusResponse\x12\x1d\n" +
-	"\n" +
-	"is_running\x18\x01 \x01(\bR\tisRunning\x12>\n" +
-	"\rlast_run_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\vlastRunTime\x12&\n" +
-	"\x0flast_run_status\x18\x03 \x01(\tR\rlastRunStatus\x12:\n" +
-	"\rcurrent_stats\x18\x04 \x01(\v2\x15.emomo.v1.IngestStatsR\fcurrentStats\"\x91\x02\n" +
-	"\vIngestStats\x12\x1f\n" +
-	"\vtotal_items\x18\x01 \x01(\x03R\n" +
-	"totalItems\x12'\n" +
-	"\x0fprocessed_items\x18\x02 \x01(\x03R\x0eprocessedItems\x12#\n" +
-	"\rskipped_items\x18\x03 \x01(\x03R\fskippedItems\x12!\n" +
-	"\ffailed_items\x18\x04 \x01(\x03R\vfailedItems\x129\n" +
-	"\n" +
-	"start_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartTime\x125\n" +
-	"\bend_time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\aendTime\"\xbe\x02\n" +
+	"\x12available_profiles\x18\x04 \x03(\tR\x11availableProfiles\"\xbe\x02\n" +
 	"\x13SearchProgressEvent\x12+\n" +
 	"\x05stage\x18\x01 \x01(\x0e2\x15.emomo.v1.SearchStageR\x05stage\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x125\n" +
@@ -1369,52 +1077,42 @@ func file_emomo_v1_api_proto_rawDescGZIP() []byte {
 }
 
 var file_emomo_v1_api_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_emomo_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_emomo_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_emomo_v1_api_proto_goTypes = []any{
-	(SearchStage)(0),                // 0: emomo.v1.SearchStage
-	(*SearchRequest)(nil),           // 1: emomo.v1.SearchRequest
-	(*SearchResponse)(nil),          // 2: emomo.v1.SearchResponse
-	(*ListMemesRequest)(nil),        // 3: emomo.v1.ListMemesRequest
-	(*ListMemesResponse)(nil),       // 4: emomo.v1.ListMemesResponse
-	(*GetMemeRequest)(nil),          // 5: emomo.v1.GetMemeRequest
-	(*GetMemeResponse)(nil),         // 6: emomo.v1.GetMemeResponse
-	(*GetCategoriesResponse)(nil),   // 7: emomo.v1.GetCategoriesResponse
-	(*GetStatsResponse)(nil),        // 8: emomo.v1.GetStatsResponse
-	(*TriggerIngestRequest)(nil),    // 9: emomo.v1.TriggerIngestRequest
-	(*TriggerIngestResponse)(nil),   // 10: emomo.v1.TriggerIngestResponse
-	(*GetIngestStatusResponse)(nil), // 11: emomo.v1.GetIngestStatusResponse
-	(*IngestStats)(nil),             // 12: emomo.v1.IngestStats
-	(*SearchProgressEvent)(nil),     // 13: emomo.v1.SearchProgressEvent
-	(*ThinkingDelta)(nil),           // 14: emomo.v1.ThinkingDelta
-	(*ExpansionDone)(nil),           // 15: emomo.v1.ExpansionDone
-	(*SearchComplete)(nil),          // 16: emomo.v1.SearchComplete
-	(*SearchError)(nil),             // 17: emomo.v1.SearchError
-	(TextPresence)(0),               // 18: emomo.v1.TextPresence
-	(*SearchResult)(nil),            // 19: emomo.v1.SearchResult
-	(*Meme)(nil),                    // 20: emomo.v1.Meme
-	(*timestamppb.Timestamp)(nil),   // 21: google.protobuf.Timestamp
+	(SearchStage)(0),              // 0: emomo.v1.SearchStage
+	(*SearchRequest)(nil),         // 1: emomo.v1.SearchRequest
+	(*SearchResponse)(nil),        // 2: emomo.v1.SearchResponse
+	(*ListMemesRequest)(nil),      // 3: emomo.v1.ListMemesRequest
+	(*ListMemesResponse)(nil),     // 4: emomo.v1.ListMemesResponse
+	(*GetMemeRequest)(nil),        // 5: emomo.v1.GetMemeRequest
+	(*GetMemeResponse)(nil),       // 6: emomo.v1.GetMemeResponse
+	(*GetCategoriesResponse)(nil), // 7: emomo.v1.GetCategoriesResponse
+	(*GetStatsResponse)(nil),      // 8: emomo.v1.GetStatsResponse
+	(*SearchProgressEvent)(nil),   // 9: emomo.v1.SearchProgressEvent
+	(*ThinkingDelta)(nil),         // 10: emomo.v1.ThinkingDelta
+	(*ExpansionDone)(nil),         // 11: emomo.v1.ExpansionDone
+	(*SearchComplete)(nil),        // 12: emomo.v1.SearchComplete
+	(*SearchError)(nil),           // 13: emomo.v1.SearchError
+	(TextPresence)(0),             // 14: emomo.v1.TextPresence
+	(*SearchResult)(nil),          // 15: emomo.v1.SearchResult
+	(*Meme)(nil),                  // 16: emomo.v1.Meme
 }
 var file_emomo_v1_api_proto_depIdxs = []int32{
-	18, // 0: emomo.v1.SearchRequest.text_presence:type_name -> emomo.v1.TextPresence
-	19, // 1: emomo.v1.SearchResponse.results:type_name -> emomo.v1.SearchResult
-	19, // 2: emomo.v1.ListMemesResponse.results:type_name -> emomo.v1.SearchResult
-	20, // 3: emomo.v1.GetMemeResponse.meme:type_name -> emomo.v1.Meme
-	12, // 4: emomo.v1.TriggerIngestResponse.stats:type_name -> emomo.v1.IngestStats
-	21, // 5: emomo.v1.GetIngestStatusResponse.last_run_time:type_name -> google.protobuf.Timestamp
-	12, // 6: emomo.v1.GetIngestStatusResponse.current_stats:type_name -> emomo.v1.IngestStats
-	21, // 7: emomo.v1.IngestStats.start_time:type_name -> google.protobuf.Timestamp
-	21, // 8: emomo.v1.IngestStats.end_time:type_name -> google.protobuf.Timestamp
-	0,  // 9: emomo.v1.SearchProgressEvent.stage:type_name -> emomo.v1.SearchStage
-	14, // 10: emomo.v1.SearchProgressEvent.thinking:type_name -> emomo.v1.ThinkingDelta
-	15, // 11: emomo.v1.SearchProgressEvent.expansion:type_name -> emomo.v1.ExpansionDone
-	16, // 12: emomo.v1.SearchProgressEvent.complete:type_name -> emomo.v1.SearchComplete
-	17, // 13: emomo.v1.SearchProgressEvent.error:type_name -> emomo.v1.SearchError
-	19, // 14: emomo.v1.SearchComplete.results:type_name -> emomo.v1.SearchResult
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	14, // 0: emomo.v1.SearchRequest.text_presence:type_name -> emomo.v1.TextPresence
+	15, // 1: emomo.v1.SearchResponse.results:type_name -> emomo.v1.SearchResult
+	15, // 2: emomo.v1.ListMemesResponse.results:type_name -> emomo.v1.SearchResult
+	16, // 3: emomo.v1.GetMemeResponse.meme:type_name -> emomo.v1.Meme
+	0,  // 4: emomo.v1.SearchProgressEvent.stage:type_name -> emomo.v1.SearchStage
+	10, // 5: emomo.v1.SearchProgressEvent.thinking:type_name -> emomo.v1.ThinkingDelta
+	11, // 6: emomo.v1.SearchProgressEvent.expansion:type_name -> emomo.v1.ExpansionDone
+	12, // 7: emomo.v1.SearchProgressEvent.complete:type_name -> emomo.v1.SearchComplete
+	13, // 8: emomo.v1.SearchProgressEvent.error:type_name -> emomo.v1.SearchError
+	15, // 9: emomo.v1.SearchComplete.results:type_name -> emomo.v1.SearchResult
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_emomo_v1_api_proto_init() }
@@ -1424,7 +1122,7 @@ func file_emomo_v1_api_proto_init() {
 	}
 	file_emomo_v1_types_proto_init()
 	file_emomo_v1_meme_proto_init()
-	file_emomo_v1_api_proto_msgTypes[12].OneofWrappers = []any{
+	file_emomo_v1_api_proto_msgTypes[8].OneofWrappers = []any{
 		(*SearchProgressEvent_Thinking)(nil),
 		(*SearchProgressEvent_Expansion)(nil),
 		(*SearchProgressEvent_Complete)(nil),
@@ -1436,7 +1134,7 @@ func file_emomo_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emomo_v1_api_proto_rawDesc), len(file_emomo_v1_api_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -41,32 +41,26 @@ sources:
     source_id: localdir
 ```
 
-You can also override the path with `LOCAL_MEMES_DIR` or the CLI `--path` flag. `source_id` is a runtime adapter identifier used by the source configuration; it is not persisted as a top-level column in `memes`.
+`backend/scripts/import-data.sh` is the only supported data ingest entrypoint. Pass the local image directory with `-p` / `--path`; the lower-level Go worker is internal to the script and should not be invoked directly. `source_id` is a runtime adapter identifier used by the source configuration; it is not persisted as a top-level column in `memes`.
 
 ## Run Ingest
 
 ```bash
 cd backend
-./scripts/import-data.sh -p ./data/memes -l 100
-```
-
-Equivalent direct command:
-
-```bash
-go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
+./scripts/import-data.sh -p ./data/memes
 ```
 
 Use `--embedding` to select a non-default embedding configuration:
 
 ```bash
-./scripts/import-data.sh -p ./data/memes -e qwen3vl_image -l 100
-./scripts/import-data.sh -p ./data/memes -e qwen3vl_caption -l 100
+./scripts/import-data.sh -p ./data/memes -e qwen3vl_image
+./scripts/import-data.sh -p ./data/memes -e qwen3vl_caption
 ```
 
 Use `--profile` to explicitly ingest all routes in a search profile:
 
 ```bash
-./scripts/import-data.sh -p ./data/memes --profile qwen3vl -l 100
+./scripts/import-data.sh -p ./data/memes --profile qwen3vl
 ```
 
 Use `--force` to reprocess existing vectors, or `--retry` to backfill missing vector records for existing memes:

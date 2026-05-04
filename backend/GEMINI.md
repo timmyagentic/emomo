@@ -9,7 +9,7 @@ All commands below assume `cd backend` unless noted.
 **Emomo** is a meme search engine that ingests memes from a local static image directory, indexes images with multimodal embeddings, and provides a semantic search API. VLM/OCR output is stored as auxiliary annotation data, not as the primary retrieval representation.
 
 ### Core Components
-*   **Ingestion (Go, `cmd/ingest`):** consumes local static image directory data, validates/normalizes images, uploads images to object storage (S3/R2), writes `memes`, embeds image/caption routes, indexes vectors in Qdrant, and stores Qdrant point records in `meme_vectors`.
+*   **Ingestion (`scripts/import-data.sh`):** the only supported data ingest entrypoint. It consumes a local static image directory, invokes the internal `cmd/ingest` worker, validates/normalizes images, uploads images to object storage (S3/R2), writes `memes`, embeds image/caption routes, indexes vectors in Qdrant, and stores Qdrant point records in `meme_vectors`.
 *   **Annotations:** VLM description, OCR text, and structured labels live in `meme_annotations`. The "has visible text" tag is `labels.text.present`.
 *   **API (Go, `cmd/api`):** REST API (Gin) for searching memes; uses optional query expansion, direct image-vector search, caption dense search, and BM25 sparse search.
 
@@ -44,7 +44,7 @@ graph LR
 ## 4. Key Directories (within backend/)
 
 *   `cmd/api/`: REST API server entry (`main.go`).
-*   `cmd/ingest/`: Ingestion CLI (`main.go`).
+*   `cmd/ingest/`: Internal ingestion worker used only by `scripts/import-data.sh`.
 *   `internal/api/`: HTTP handlers and routers.
 *   `proto/emomo/v1/`: hand-written `.proto` source (`types.proto` / `meme.proto` / `api.proto`).
 *   `gen/emomo/v1/`: generated Go protobuf code; do not hand-edit.
@@ -66,14 +66,14 @@ graph LR
     ```bash
     mkdir -p ./data/memes
     ```
-4.  Ingest: `./scripts/import-data.sh -p ./data/memes -l 50`.
+4.  Ingest all local images: `./scripts/import-data.sh -p ./data/memes`.
 5.  API server: `go run ./cmd/api`. Defaults to `http://localhost:8080`.
 
 ### Common Tasks
 
 *   **Add new ingestion source:**
     1.  Implement `internal/source/Source` interface.
-    2.  Register in `cmd/ingest/main.go` and `cmd/api/main.go`.
+    2.  Register in `cmd/ingest/main.go`; API routes must not become data ingest entrypoints.
 *   **Add new embedding model:**
     1.  Add an entry under `embeddings:` in `configs/config.yaml` (provider, dimensions, collection, api_key_env).
     2.  Verify it loads via `internal/service/embedding_registry.go`.

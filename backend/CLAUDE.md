@@ -24,14 +24,13 @@ docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d
 # Logs only (Grafana Alloy)
 docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d alloy
 
-# Data ingestion using script (recommended, no build required)
+# Data ingestion using the only supported entrypoint
 cd backend
-./scripts/import-data.sh -p ./data/memes -l 100     # Ingest memes
+./scripts/import-data.sh -p ./data/memes            # Ingest all memes
 ./scripts/import-data.sh -r -l 100                  # Backfill missing vectors for existing memes
 ./scripts/import-data.sh -p ./data/memes -f         # Force re-process
 
-# Or use go run directly
-go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
+# cmd/ingest is internal and must not be invoked directly
 
 # Run API server (port 8080)
 go run ./cmd/api

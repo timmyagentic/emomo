@@ -18,6 +18,23 @@ import (
 	"github.com/timmy/emomo/internal/storage"
 )
 
+const (
+	importEntrypointEnv   = "EMOMO_IMPORT_DATA_ENTRYPOINT"
+	importEntrypointValue = "script"
+)
+
+func isScriptEntrypoint(getenv func(string) string) bool {
+	return getenv(importEntrypointEnv) == importEntrypointValue
+}
+
+func requireScriptEntrypoint() {
+	if isScriptEntrypoint(os.Getenv) {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "cmd/ingest is internal. Use ./scripts/import-data.sh -p <local-image-dir> to import data.\n")
+	os.Exit(2)
+}
+
 func selectSource(cfg *config.Config, sourceType string, pathOverride string) (source.Source, error) {
 	if sourceType != "localdir" {
 		return nil, fmt.Errorf("unsupported source type %q; supported source: localdir", sourceType)
@@ -39,6 +56,8 @@ func selectSource(cfg *config.Config, sourceType string, pathOverride string) (s
 }
 
 func main() {
+	requireScriptEntrypoint()
+
 	// Initialize logger first (with defaults)
 	appLogger := logger.New(&logger.Config{
 		Level:       "info",
@@ -51,7 +70,7 @@ func main() {
 	// Parse command line flags
 	sourceType := flag.String("source", "localdir", "Data source to ingest from")
 	sourcePath := flag.String("path", "", "Local static image directory path; overrides sources.localdir.root_path")
-	limit := flag.Int("limit", 100, "Maximum number of items to ingest")
+	limit := flag.Int("limit", 0, "Maximum number of items to ingest; 0 means no limit")
 	retryPending := flag.Bool("retry", false, "Retry pending items instead of ingesting new ones")
 	force := flag.Bool("force", false, "Force re-process items, skip duplicate checks")
 	autoMigrate := flag.Bool("auto-migrate", false, "Run database auto-migrations before ingest")

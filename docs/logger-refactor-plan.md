@@ -713,7 +713,7 @@ func main() {
 | 优先级 | 模块 | 原因 | 迁移工作量 |
 |-------|------|------|-----------|
 | **P0** | `cmd/api/main.go` | 入口点，影响全局日志器 | 小 |
-| **P0** | `cmd/ingest/main.go` | 入口点，影响全局日志器 | 小 |
+| **P0** | `cmd/ingest/main.go` | 导入脚本内部 worker，影响全局日志器 | 小 |
 | **P1** | `internal/api/middleware/logger.go` | 请求追踪，高价值 | 中 |
 | **P1** | `internal/service/ingest.go` | 核心业务，日志最多（23 处） | 大 |
 | **P2** | `internal/service/search.go` | 核心业务 | 中 |

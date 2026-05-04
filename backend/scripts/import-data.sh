@@ -1,7 +1,7 @@
 #!/bin/sh
-# 数据导入脚本
+# 数据导入脚本（唯一支持的数据导入入口）
 # 用于从本地静态图片目录导入数据到数据库和向量库
-# 使用 go run 直接运行，无需预先编译
+# 内部使用 go run，无需预先编译
 
 set -e
 
@@ -17,7 +17,7 @@ fi
 
 # 默认配置
 DEFAULT_CONFIG="${CONFIG_PATH:-./configs/config.yaml}"
-DEFAULT_LIMIT=100
+DEFAULT_LIMIT=0
 DEFAULT_SOURCE=localdir
 
 # 颜色输出
@@ -44,16 +44,27 @@ error() {
     echo "${RED}[ERROR]${NC} $1"
 }
 
+limit_label() {
+    if [ "$1" -le 0 ] 2>/dev/null; then
+        echo "全部"
+    else
+        echo "$1"
+    fi
+}
+
 # 显示使用说明
 usage() {
     cat << EOF
 用法: $0 [选项]
 
+说明:
+    本脚本是唯一支持的数据导入入口；请通过 -p/--path 指定本地静态图片目录。
+
 选项:
     -s, --source SOURCE         数据源类型（默认: ${DEFAULT_SOURCE}）
                                 - localdir: 从本地静态图片目录导入
     -p, --path PATH             本地静态图片目录，覆盖配置中的 sources.localdir.root_path
-    -l, --limit LIMIT           导入数量限制（默认: ${DEFAULT_LIMIT}）
+    -l, --limit LIMIT           导入数量限制（默认: 0，表示导入目录中的全部图片）
     -e, --embedding NAME        使用单一路 embedding 配置名称（如 qwen3vl_caption）
                                 留空则使用默认配置
     --profile NAME              使用多路检索 profile 导入（默认: 配置中的 search.default_profile）
@@ -64,11 +75,14 @@ usage() {
     -h, --help                  显示此帮助信息
 
 示例:
-    # 从本地目录导入 50 条数据
+    # 从本地目录导入全部图片
+    $0 -p ./data/memes
+
+    # 只抽样导入 50 条数据
     $0 -p ./data/memes -l 50
 
     # 使用 qwen3vl profile 导入 image + caption 两路向量
-    $0 -p ./data/memes --profile qwen3vl -l 100
+    $0 -p ./data/memes --profile qwen3vl
 
     # 强制重新处理（跳过重复检查）
     $0 -p ./data/memes -f
@@ -88,9 +102,9 @@ check_go() {
     fi
 }
 
-# 运行 ingest 命令（使用 go run）
+# 运行内部 ingest worker（不作为用户入口直接暴露）
 run_ingest() {
-    go run ./cmd/ingest "$@"
+    EMOMO_IMPORT_DATA_ENTRYPOINT=script go run ./cmd/ingest "$@"
 }
 
 # 主函数
@@ -169,9 +183,9 @@ main() {
     if [ "$retry" = true ]; then
         info "重试 pending 状态的数据..."
         info "配置文件: $config_path"
-        info "限制数量: $limit"
+        info "限制数量: $(limit_label "$limit")"
 
-        local cmd="go run ./cmd/ingest --retry --limit=$limit --config=$config_path"
+        local cmd="internal ingest worker --retry --limit=$limit --config=$config_path"
         if [ -n "$embedding" ]; then
             cmd="$cmd --embedding=$embedding"
         fi
@@ -205,7 +219,7 @@ main() {
     if [ -n "$source_path" ]; then
         info "本地目录: $source_path"
     fi
-    info "限制数量: $limit"
+    info "限制数量: $(limit_label "$limit")"
     info "配置文件: $config_path"
     if [ -n "$embedding" ]; then
         info "Embedding 配置: $embedding"
@@ -243,7 +257,7 @@ main() {
         args="$args --force"
     fi
 
-    info "执行命令: go run ./cmd/ingest $args"
+    info "执行内部导入 worker: $args"
     echo ""
 
     # 执行导入
