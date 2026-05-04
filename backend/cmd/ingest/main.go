@@ -82,6 +82,7 @@ func main() {
 	memeRepo := repository.NewMemeRepository(db)
 	vectorRepo := repository.NewMemeVectorRepository(db)
 	annotationRepo := repository.NewMemeAnnotationRepository(db)
+	metadataRepo := repository.NewMemeMetadataRepository(db)
 
 	embeddingRegistry, err := service.NewEmbeddingRegistry(&service.EmbeddingRegistryConfig{
 		Embeddings:        cfg.Embeddings,
@@ -198,6 +199,7 @@ func main() {
 		memeRepo,
 		vectorRepo,
 		annotationRepo,
+		metadataRepo,
 		qdrantRepo,
 		objectStorage,
 		vlmService,

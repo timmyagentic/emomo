@@ -1,16 +1,17 @@
 # Emomo 数据库结构
 
-当前项目把关系型数据库收敛为 3 张核心表：
+当前项目把关系型数据库收敛为 4 张核心表：
 
 1. `memes`：表情包图片本体
 2. `meme_annotations`：VLM/OCR 生成的语义补充和结构化标签
 3. `meme_vectors`：关系库中的 Qdrant point 索引记录
+4. `meme_metadata`：来源/出处元数据（爬虫平台、原标题、note id 等），仅用于追溯，不进检索索引
 
-检索主链路不是“图片 -> VLM 描述 -> 文本向量”。当前默认链路是：导入时直接生成图片向量并写入 Qdrant；搜索时把用户文本编码到同一个多模态向量空间，直接和图片向量做相似度匹配。`meme_annotations` 只用于展示、OCR、标签筛选和 caption/BM25 辅助信号。
+检索主链路不是“图片 -> VLM 描述 -> 文本向量”。当前默认链路是：导入时直接生成图片向量并写入 Qdrant；搜索时把用户文本编码到同一个多模态向量空间，直接和图片向量做相似度匹配。`meme_annotations` 只用于展示、OCR、标签筛选和 caption/BM25 辅助信号。`meme_metadata` 仅用于"这张图从哪来"的追溯，永远不参与 caption embedding、BM25、Qdrant payload 或前端 facet。
 
 生产环境使用 Supabase/PostgreSQL 时，三张核心表位于 `public` schema，但浏览器端不直接访问这些表。前端只调用 Go API；Go 后端使用服务端（service-role）数据库连接访问 Postgres。
 
-三张核心表**不启用 Row Level Security**：访问控制完全在连接层做（service-role DSN + 不通过 Supabase Data API 把这些表暴露给 anon/authenticated）。早期版本曾把 RLS 在这些表上 ENABLE 但没建任何 policy，那是个"隐式拒绝 + 靠 BYPASSRLS 偷渡"的半成品；当前 `InitDB` 会通过 `disableCoreTableRLS` 主动 DISABLE，新老库行为统一。
+四张核心表**不启用 Row Level Security**：访问控制完全在连接层做（service-role DSN + 不通过 Supabase Data API 把这些表暴露给 anon/authenticated）。早期版本曾把 RLS 在这些表上 ENABLE 但没建任何 policy，那是个"隐式拒绝 + 靠 BYPASSRLS 偷渡"的半成品；当前 `InitDB` 会通过 `disableCoreTableRLS` 主动 DISABLE，新老库行为统一。
 
 ## Protobuf 设计边界
 
@@ -60,7 +61,7 @@ GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 
 数据库迁移**完全由 Go 代码托管**，single source of truth 是 `backend/internal/repository/db.go`：
 
-- GORM `AutoMigrate(&domain.Meme{}, &domain.MemeAnnotation{}, &domain.MemeVector{})` 负责"按当前模型创建/扩展"的部分；
+- GORM `AutoMigrate(&domain.Meme{}, &domain.MemeAnnotation{}, &domain.MemeMetadata{}, &domain.MemeVector{})` 负责"按当前模型创建/扩展"的部分；
 - `prepareLegacyMemesForAutoMigrate` / `prepareLegacyMemeVectorsForAutoMigrate` 处理老 schema 在 SQLite/Postgres 上的预处理（含 SQLite 整表重建）；
 - `migrateMemes` / `migrateMemeAnnotations` / `migrateMemeVectorIndexes` 做数据回填与索引重建；
 - `dropLegacyArtifacts`（含 `dropLegacyMemesColumns` / `dropLegacyMemeVectorsColumns` / `finalizeMemesConstraints` / `dropLegacyIndexes` / `dropLegacyTables`）清理废弃列、表、索引并补上 NOT NULL/DEFAULT 约束（仅 Postgres 需要）；
@@ -95,8 +96,8 @@ CREATE TABLE memes (
 | `storage_key` | 对象存储里的图片 key |
 | `content_hash` | 处理后图片内容 hash，用于去重 |
 | `image_info` | 图片固有信息，protobuf `ImageInfo` 的 JSON 表示 |
-| `tags` | 导入时得到的普通标签数组 JSON |
-| `category` | 导入时得到的大类 |
+| `tags` | 语义标签数组（JSON）。当前导入流水线**保持为空** —— 来自 `localdir` 等数据源的搜索词、note id、目录名都属于"出处元数据"，统一存到 `meme_metadata`，不再塞进这里。未来若 VLM 输出离散标签或人工打标，会重新启用本字段。 |
+| `category` | 类别字符串。同样**当前保持为空**；爬虫的搜索关键词不是语义类别，故不在此处沉淀。后续若有真正的人工/VLM 分类，会重新启用。 |
 | `created_at` / `updated_at` | 记录时间 |
 
 `image_info` 示例：
@@ -193,6 +194,52 @@ CREATE UNIQUE INDEX idx_meme_vectors_meme_collection_type
 
 不再保留 `md5_hash`、`embedding_provider`、`embedding_mode`、`dimension`、`status`。这些信息要么已经由 `memes.content_hash`、配置或 Qdrant collection 表达，要么当前没有可执行的生命周期管理逻辑。
 
+## meme_metadata
+
+```sql
+CREATE TABLE meme_metadata (
+    id TEXT PRIMARY KEY,
+    meme_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_item_id TEXT,
+    source_url TEXT,
+    title TEXT,
+    author TEXT,
+    published_at TEXT,
+    search_keywords TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_meme_metadata_source_item_meme
+    ON meme_metadata(source, source_item_id, meme_id);
+CREATE INDEX idx_meme_metadata_meme_id ON meme_metadata(meme_id);
+CREATE INDEX idx_meme_metadata_source  ON meme_metadata(source);
+```
+
+字段说明：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | metadata row ID（surrogate） |
+| `meme_id` | 关联 `memes.id`。同一张图（按 content hash 去重，meme_id 唯一）可以由不同 source 各贡献一行 metadata |
+| `source` | 来源平台标识，例如 `xiaohongshu`、`chinesebqb`、`fabiaoqing`、`localdir`（手工目录）。adapter 自己定义命名。 |
+| `source_item_id` | 在 `source` 命名空间下的资源 ID（小红书 = `note_id`；手工目录 = 相对路径）。可为空 |
+| `source_url` | 可选，回链原始资源页 |
+| `title` | 来源平台的标题。小红书 = 笔记 title；手工目录 = 文件名（不含扩展） |
+| `author` | 上传者/作者，可为空，不解析 |
+| `published_at` | 原始发布时间字符串（来源格式各异，不做规范化） |
+| `search_keywords` | JSON 数组，记录爬虫所有命中此条的搜索词；用于追溯"为什么这张图进了语料"，不进检索索引 |
+| `created_at` / `updated_at` | 记录时间 |
+
+唯一键 `(source, source_item_id, meme_id)` 的语义：
+
+- 同图被多个平台收录 → 多条 metadata 共享 `meme_id`。
+- 同源同 item 重复导入 → ON CONFLICT UPDATE，不会产生重复行。
+- ingest 服务通过 `MemeMetadataRepository.Upsert` 写入；surrogate `id` 在冲突时保留旧值。
+
+**为什么单独一张表，而不是塞进 memes**：搜索链路只关心 `memes` / `meme_annotations` / `meme_vectors`。爬虫元数据如果塞进 `memes.tags` 或 `memes.category`，就会被 caption embedding / BM25 sparse / Qdrant payload 间接吃进去，污染语义检索。把它隔离到独立表里，并在 ingest pipeline 中**只写不读**（`upsertMetadata` 调用一次后就再不被任何检索代码触碰），可以保证检索质量与导入历史完全解耦。
+
 ## 数据流
 
 ```text
@@ -200,7 +247,8 @@ CREATE UNIQUE INDEX idx_meme_vectors_meme_collection_type
   -> 读取并标准化静态图片
   -> 计算 content_hash
   -> 上传对象存储
-  -> 写 memes
+  -> 写 memes（category/tags 当前留空）
+  -> 写 meme_metadata（来源/标题/note_id/搜索词等出处信息）
   -> 直接生成 image embedding
   -> 写 Qdrant
   -> 写 meme_vectors

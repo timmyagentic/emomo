@@ -34,6 +34,7 @@ type IngestService struct {
 	memeRepo       *repository.MemeRepository
 	vectorRepo     *repository.MemeVectorRepository
 	annotationRepo *repository.MemeAnnotationRepository
+	metadataRepo   *repository.MemeMetadataRepository
 	qdrantRepo     *repository.QdrantRepository
 	storage        storage.ObjectStorage
 	vlm            *VLMService
@@ -68,6 +69,7 @@ type IngestVectorIndex struct {
 //   - memeRepo: repository for meme records.
 //   - vectorRepo: repository for meme vectors.
 //   - annotationRepo: repository for meme annotations.
+//   - metadataRepo: repository for crawler/source provenance metadata; may be nil to skip metadata persistence.
 //   - qdrantRepo: Qdrant repository for vector storage.
 //   - objectStorage: object storage client for image files.
 //   - vlm: vision-language model service for descriptions.
@@ -81,6 +83,7 @@ func NewIngestService(
 	memeRepo *repository.MemeRepository,
 	vectorRepo *repository.MemeVectorRepository,
 	annotationRepo *repository.MemeAnnotationRepository,
+	metadataRepo *repository.MemeMetadataRepository,
 	qdrantRepo *repository.QdrantRepository,
 	objectStorage storage.ObjectStorage,
 	vlm *VLMService,
@@ -106,6 +109,7 @@ func NewIngestService(
 		memeRepo:       memeRepo,
 		vectorRepo:     vectorRepo,
 		annotationRepo: annotationRepo,
+		metadataRepo:   metadataRepo,
 		qdrantRepo:     qdrantRepo,
 		storage:        objectStorage,
 		vlm:            vlm,
@@ -465,6 +469,13 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		createdNewMeme = true // Mark that we created a new meme record
 	}
 
+	// Persist provenance metadata (best-effort: a failure here logs and
+	// continues, since metadata is not on the search hot path).
+	if err := s.upsertMetadata(ctx, memeID, item); err != nil {
+		logger.CtxWarn(ctx, "Failed to upsert meme metadata; continuing without it: meme_id=%s, error=%v",
+			memeID, err)
+	}
+
 	annotation := s.prepareAnnotationBestEffort(ctx, memeID, contentHash, imageData, processedFormat)
 	vlmDescription = annotation.Description
 	ocrText = annotation.OCRText
@@ -516,6 +527,34 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		memeID, len(targetIndexes), hasExistingMeme)
 
 	return nil
+}
+
+// upsertMetadata persists item.Metadata to meme_metadata. Returns nil when
+// there is nothing to persist (no metadata on the source item or no metadata
+// repository wired up); errors only on real storage failures.
+func (s *IngestService) upsertMetadata(ctx context.Context, memeID string, item *source.MemeItem) error {
+	if s.metadataRepo == nil || item == nil || item.Metadata == nil {
+		return nil
+	}
+	md := item.Metadata
+	if md.Source == "" {
+		return nil
+	}
+	now := time.Now()
+	row := &domain.MemeMetadata{
+		ID:             uuid.New().String(),
+		MemeID:         memeID,
+		Source:         md.Source,
+		SourceItemID:   md.SourceItemID,
+		SourceURL:      md.SourceURL,
+		Title:          md.Title,
+		Author:         md.Author,
+		PublishedAt:    md.PublishedAt,
+		SearchKeywords: domain.StringArray(md.SearchKeywords),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	return s.metadataRepo.Upsert(ctx, row)
 }
 
 func (s *IngestService) extractOCRText(ctx context.Context, imageData []byte, format string) (string, error) {

@@ -17,7 +17,6 @@ import (
 
 const (
 	defaultSourceID = "localdir"
-	defaultCategory = "未分类"
 )
 
 // Options configures the local directory source adapter.
@@ -183,20 +182,19 @@ func (a *Adapter) loadItems() error {
 		}
 		queueMeta := queue[name]
 
-		category := categoryFromRelPath(relPath)
-		if meta.Keyword != "" {
-			category = meta.Keyword
-		} else if queueMeta.Keyword != "" {
-			category = queueMeta.Keyword
-		}
-
+		// memes.category and memes.tags are intentionally left empty for
+		// every localdir-sourced item: stage1/stage2 keywords and folder
+		// names are crawler/operator metadata about *how* an image was
+		// collected, not semantic descriptions of *what* the image depicts.
+		// All such provenance is persisted under meme_metadata via
+		// MemeItem.Metadata; semantic tagging is left to VLM/OCR
+		// downstream in the ingest pipeline.
 		item := source.MemeItem{
 			SourceID:  sourceIDForItem(relPath, name, meta, queueMeta),
 			URL:       path,
 			LocalPath: path,
-			Category:  category,
 			Format:    format,
-			Tags:      tagsForItem(a.sourceID, relPath, meta, queueMeta, category),
+			Metadata:  buildMetadata(a.sourceID, relPath, name, meta, queueMeta),
 		}
 		items = append(items, item)
 		return nil
@@ -225,14 +223,6 @@ func formatFromFilename(name string) (string, bool) {
 	}
 }
 
-func categoryFromRelPath(relPath string) string {
-	parts := strings.Split(relPath, "/")
-	if len(parts) <= 1 || strings.TrimSpace(parts[0]) == "" {
-		return defaultCategory
-	}
-	return parts[0]
-}
-
 func sourceIDForItem(relPath string, filename string, meta stage2Record, queueMeta queueRecord) string {
 	noteID := firstNonEmpty(meta.NoteID, queueMeta.NoteID)
 	if noteID != "" {
@@ -241,63 +231,62 @@ func sourceIDForItem(relPath string, filename string, meta stage2Record, queueMe
 	return relPath
 }
 
-func tagsForItem(sourceID string, relPath string, meta stage2Record, queueMeta queueRecord, category string) []string {
-	tags := make([]string, 0, 6)
-	tags = appendUnique(tags, category)
-	for _, tag := range tagsFromRelPath(relPath) {
-		tags = appendUnique(tags, tag)
+// buildMetadata returns a *source.Metadata populated from whatever provenance
+// signals are available for an item. The shape differs by sourceID:
+//
+//   - sourceID == "xiaohongshu" (or any source that supplies stage1/stage2
+//     manifest entries): SourceItemID = note_id, SourceURL points to the
+//     xiaohongshu note page, Title/Author/PublishedAt come from stage1,
+//     SearchKeywords merges stage1.keyword + stage1.keywords + stage2.keyword.
+//
+//   - sourceID == "localdir" (hand-curated directory layout, no manifest):
+//     SourceItemID = relPath (stable per file), Title = filename stem,
+//     no URL/Author/PublishedAt/SearchKeywords. This still gives downstream
+//     consumers a way to trace a meme back to its on-disk origin without
+//     polluting memes.category / memes.tags.
+//
+// Returns a non-nil pointer in both cases (a caller may always call .Source).
+func buildMetadata(sourceID, relPath, filename string, meta stage2Record, queueMeta queueRecord) *source.Metadata {
+	noteID := firstNonEmpty(meta.NoteID, queueMeta.NoteID)
+	hasManifest := noteID != "" || queueMeta.Filename != "" || meta.Filename != ""
+
+	md := &source.Metadata{Source: sourceID}
+
+	if hasManifest {
+		md.SourceItemID = noteID
+		md.Title = firstNonEmpty(meta.Title, queueMeta.Title)
+		md.Author = strings.TrimSpace(queueMeta.Author)
+		md.PublishedAt = strings.TrimSpace(queueMeta.PublishedAt)
+		md.SearchKeywords = collectSearchKeywords(meta, queueMeta)
+		if sourceID == "xiaohongshu" && noteID != "" {
+			md.SourceURL = "https://www.xiaohongshu.com/explore/" + noteID
+		}
+		return md
 	}
-	tags = appendUnique(tags, meta.Keyword)
-	tags = appendUnique(tags, queueMeta.Keyword)
-	for _, keyword := range queueMeta.Keywords {
-		tags = appendUnique(tags, keyword)
+
+	md.SourceItemID = relPath
+	if stem := strings.TrimSuffix(filename, filepath.Ext(filename)); stem != "" {
+		md.Title = stem
 	}
-	if sourceID == "xiaohongshu" {
-		tags = appendUnique(tags, "小红书")
-	}
-	return tags
+	return md
 }
 
-func tagsFromRelPath(relPath string) []string {
-	parts := strings.Split(filepath.ToSlash(relPath), "/")
-	tags := make([]string, 0, len(parts)+2)
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			part = strings.TrimSuffix(part, filepath.Ext(part))
-		}
-		for _, token := range splitTagTokens(part) {
-			tags = appendUnique(tags, token)
-		}
+func collectSearchKeywords(meta stage2Record, queueMeta queueRecord) []string {
+	keywords := make([]string, 0, len(queueMeta.Keywords)+2)
+	keywords = appendUnique(keywords, queueMeta.Keyword)
+	for _, kw := range queueMeta.Keywords {
+		keywords = appendUnique(keywords, kw)
 	}
-	return tags
-}
-
-func splitTagTokens(value string) []string {
-	fields := strings.FieldsFunc(value, func(r rune) bool {
-		return r == '_' || r == '-' || r == ' ' || r == '\t'
-	})
-	tokens := make([]string, 0, len(fields))
-	for _, field := range fields {
-		field = strings.TrimSpace(field)
-		if len([]rune(field)) > 1 && !isNumeric(field) {
-			tokens = append(tokens, field)
-		}
+	keywords = appendUnique(keywords, meta.Keyword)
+	if len(keywords) == 0 {
+		return nil
 	}
-	return tokens
-}
-
-func isNumeric(value string) bool {
-	for _, r := range value {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return value != ""
+	return keywords
 }
 
 func appendUnique(items []string, item string) []string {
 	item = strings.TrimSpace(item)
-	if item == "" || item == defaultCategory {
+	if item == "" {
 		return items
 	}
 	for _, existing := range items {

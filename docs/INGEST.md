@@ -11,9 +11,10 @@ VLM description and OCR are still generated and stored in `meme_annotations`, bu
 
 The relational schema is intentionally small:
 
-- `memes`: image identity, storage key, content hash, `image_info`, category, tags.
+- `memes`: image identity, storage key, content hash, `image_info`. `category` and `tags` are present on the table but the current ingest pipeline writes them as empty — see "Metadata Rules" below.
 - `meme_annotations`: VLM/OCR description, OCR text, and structured labels such as `labels.text.present`.
 - `meme_vectors`: Qdrant point index records keyed by `meme_id + collection + vector_type`.
+- `meme_metadata`: provenance for each ingested item (source platform, original title, note id, search keywords). **Never read by the search pipeline**; pure traceability.
 
 Protobuf message schema lives in `backend/proto/emomo/v1/` (`types.proto` for closed cross-boundary enums and allowlisted JSON-column messages, `meme.proto` for API entity DTOs, `api.proto` for HTTP request/response/SSE messages); the generated Go code lives in `backend/gen/emomo/v1/`. `image_info` and `labels` are the only DB JSON columns currently allowed to use protobuf-backed `protojson` serialization via `backend/internal/persistence`; `vector_type` is a protobuf enum stored as an integer. Migrations and relational table shape remain owned by `backend/internal/repository/db.go` (GORM AutoMigrate + explicit helpers) — no separate SQL migration runner.
 
@@ -80,10 +81,29 @@ Use `--force` to reprocess existing vectors, or `--retry` to backfill missing ve
 - `content_hash`: computed from the processed image bytes and used for deduplication.
 - `storage_key`: object-storage key for the image.
 - `image_info`: protobuf-defined structured value containing width, height, and image format.
-- `category`: first-level directory name; files directly under the root use `未分类`.
-- `tags`: generated from category, path/filename tokens, and optional manifest/queue keywords.
+- `memes.category`: present on the schema but **left empty** by the current ingest pipeline. Folder names and crawler keywords are not semantic categories — they describe how an image was *collected*, not what it *depicts*. See `meme_metadata` below for where that information actually goes.
+- `memes.tags`: present on the schema but **left empty** by the current ingest pipeline, for the same reason. The field is reserved for genuine semantic tags (e.g. future VLM-extracted tags or manual labels).
 - `labels.text.present`: stored in `meme_annotations.labels` when OCR analysis can determine whether the image has visible text.
 - `format`: detected by magic bytes during ingestion and stored inside `image_info.format` as protobuf `ImageFormat`; WebP is converted to JPEG before storage/model calls.
 - unsupported formats, including GIF, are skipped or rejected before persistence.
 
 Fields deliberately not stored on `memes`: `source_type`, `source_id`, `local_path`, `is_animated`, `file_size`, `md5_hash`, `perceptual_hash`, and lifecycle `status`.
+
+### Provenance via `meme_metadata`
+
+Every ingested item produces (at most) one row in `meme_metadata`, keyed by `(source, source_item_id, meme_id)`. The shape varies by source adapter:
+
+- **`source_id = "xiaohongshu"`** (or any source whose `localdir` adapter is fed `stage1_queue.jsonl` + `stage2_results.jsonl`):
+  - `source = "xiaohongshu"`, `source_item_id = note_id`
+  - `source_url = https://www.xiaohongshu.com/explore/<note_id>`
+  - `title` from stage2/stage1, `author` and `published_at` from stage1
+  - `search_keywords` is the union of `stage1.keyword + stage1.keywords + stage2.keyword`
+
+- **`source_id = "localdir"`** (hand-curated `data/memes/猫/无语.jpg` style, no manifest):
+  - `source = "localdir"`, `source_item_id = relative path`
+  - `title = filename stem`
+  - `source_url`, `author`, `published_at`, `search_keywords` all empty
+
+The ingest service writes `meme_metadata` immediately after the `memes` row succeeds. Failure to upsert metadata is logged and **does not** abort the item — metadata is not on the search hot path.
+
+Crucially, no part of the search pipeline (caption embedding, BM25 sparse, Qdrant payload) reads `meme_metadata`. If you ever want to surface the original source link in the UI, fetch it explicitly from this table by `meme_id`.

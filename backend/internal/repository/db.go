@@ -76,6 +76,7 @@ func InitDB(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 		models := []interface{}{
 			&domain.Meme{},
 			&domain.MemeAnnotation{},
+			&domain.MemeMetadata{},
 		}
 		if !preparedMemeVectors {
 			models = append(models, &domain.MemeVector{})
@@ -585,7 +586,7 @@ func disableCoreTableRLS(db *gorm.DB) error {
 	if db.Dialector.Name() != "postgres" {
 		return nil
 	}
-	for _, table := range []string{"memes", "meme_annotations", "meme_vectors"} {
+	for _, table := range []string{"memes", "meme_annotations", "meme_vectors", "meme_metadata"} {
 		if !db.Migrator().HasTable(table) {
 			continue
 		}

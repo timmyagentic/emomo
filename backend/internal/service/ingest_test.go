@@ -94,6 +94,7 @@ func TestProcessItemRollsBackNewMemeWhenVectorWriteFails(t *testing.T) {
 		repository.NewMemeVectorRepository(db),
 		repository.NewMemeAnnotationRepository(db),
 		nil,
+		nil,
 		store,
 		vlm,
 		nil,
@@ -178,6 +179,7 @@ func TestProcessItemWritesImageVectorWhenVLMFails(t *testing.T) {
 		repository.NewMemeRepository(db),
 		repository.NewMemeVectorRepository(db),
 		repository.NewMemeAnnotationRepository(db),
+		repository.NewMemeMetadataRepository(db),
 		qdrantRepo,
 		store,
 		vlm,
@@ -313,6 +315,7 @@ func TestProcessItemForceKeepsOldVectorWhenReplacementFails(t *testing.T) {
 		vectorRepo,
 		repository.NewMemeAnnotationRepository(db),
 		nil,
+		nil,
 		store,
 		vlm,
 		fixedEmbeddingProvider{},
@@ -351,6 +354,7 @@ func TestNewIngestServiceFallbackIndexUsesConfiguredVectorType(t *testing.T) {
 	t.Parallel()
 
 	ingest := NewIngestService(
+		nil,
 		nil,
 		nil,
 		nil,

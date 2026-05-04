@@ -31,7 +31,7 @@ func TestInitDBAutoMigrateCreatesCleanCoreTables(t *testing.T) {
 	}
 	defer closeGormDB(t, db)
 
-	for _, table := range []string{"memes", "meme_annotations", "meme_vectors"} {
+	for _, table := range []string{"memes", "meme_annotations", "meme_vectors", "meme_metadata"} {
 		if !db.Migrator().HasTable(table) {
 			t.Fatalf("expected table %s", table)
 		}
