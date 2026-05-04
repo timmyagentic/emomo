@@ -469,13 +469,6 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		createdNewMeme = true // Mark that we created a new meme record
 	}
 
-	// Persist provenance metadata (best-effort: a failure here logs and
-	// continues, since metadata is not on the search hot path).
-	if err := s.upsertMetadata(ctx, memeID, item); err != nil {
-		logger.CtxWarn(ctx, "Failed to upsert meme metadata; continuing without it: meme_id=%s, error=%v",
-			memeID, err)
-	}
-
 	annotation := s.prepareAnnotationBestEffort(ctx, memeID, contentHash, imageData, processedFormat)
 	vlmDescription = annotation.Description
 	ocrText = annotation.OCRText
@@ -521,6 +514,18 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		rollbackMeme()
 		rollbackStorage()
 		return err
+	}
+
+	// Persist provenance metadata only after every step that participates
+	// in the rollback chain has succeeded. This keeps meme_metadata in
+	// strict referential agreement with memes: an entry exists only for a
+	// meme that landed completely. Failure here is best-effort (logged,
+	// not propagated) because Qdrant + Postgres meme/annotation/vector
+	// rows have already been committed and there is no clean way to
+	// unwind those side effects.
+	if err := s.upsertMetadata(ctx, memeID, item); err != nil {
+		logger.CtxWarn(ctx, "Failed to upsert meme metadata; meme is fully ingested but provenance row is missing: meme_id=%s, error=%v",
+			memeID, err)
 	}
 
 	logger.CtxDebug(ctx, "Successfully processed item: meme_id=%s, vectors=%d, reused=%v",
