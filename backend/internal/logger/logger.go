@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -185,6 +186,35 @@ func NewFromEnv(envCfg *EnvConfig) *Logger {
 // This is the recommended way to create a logger in main().
 func NewDefault() *Logger {
 	return NewFromEnv(nil)
+}
+
+// OpenRotatingFile opens (creating any missing parent directories) a
+// lumberjack-backed rotating log file at path and returns it as an
+// io.WriteCloser. It is intended for CLI entry points (e.g. cmd/ingest) that
+// want a persistent log file alongside stdout without going through the
+// env-driven NewFromEnv path.
+//
+// The default rotation policy mirrors NewFromEnv: 100MB per file, up to 7
+// gzipped backups, keeping at most 30 days of history.
+//
+// Callers MUST Close() the returned writer before the process exits so the
+// final log batch is flushed to disk; logger.Sync() does not own this writer.
+func OpenRotatingFile(path string) (io.WriteCloser, error) {
+	if path == "" {
+		return nil, fmt.Errorf("logger: rotating file path is empty")
+	}
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("logger: failed to create log directory %s: %w", dir, err)
+		}
+	}
+	return &lumberjack.Logger{
+		Filename:   path,
+		MaxSize:    100,
+		MaxBackups: 7,
+		MaxAge:     30,
+		Compress:   true,
+	}, nil
 }
 
 // Sync flushes all pending logs and closes file handles.
