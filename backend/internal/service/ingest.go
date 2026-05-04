@@ -564,17 +564,6 @@ func (s *IngestService) upsertMetadata(ctx context.Context, memeID string, item 
 	return s.metadataRepo.Upsert(ctx, row)
 }
 
-func (s *IngestService) extractOCRText(ctx context.Context, imageData []byte, format string) (string, error) {
-	if s.vlm == nil {
-		return "", nil
-	}
-	text, err := s.vlm.ExtractOCRText(ctx, imageData, format)
-	if err != nil {
-		return "", err
-	}
-	return normalizeOCRText(text), nil
-}
-
 type annotationResult struct {
 	ID          string
 	Description string
@@ -597,18 +586,6 @@ func (s *IngestService) prepareAnnotationBestEffort(ctx context.Context, memeID,
 			result.Description = existingAnnotation.Description
 			result.OCRText = normalizeOCRText(existingAnnotation.OCRText)
 			result.OCRReliable = hasReliableTextPresence(existingAnnotation, result.OCRText)
-			if shouldExtractOCRForAnnotation(existingAnnotation, result.OCRText) {
-				ocrText, err := s.extractOCRText(ctx, imageData, format)
-				if err != nil {
-					logger.CtxWarn(ctx, "Failed to extract OCR text: content_hash=%s, error=%v", contentHash, err)
-				} else {
-					result.OCRText = ocrText
-					result.OCRReliable = true
-					if updateErr := s.annotationRepo.UpdateOCRText(ctx, existingAnnotation.ID, ocrText); updateErr != nil {
-						logger.CtxWarn(ctx, "Failed to update OCR text: annotation_id=%s, error=%v", existingAnnotation.ID, updateErr)
-					}
-				}
-			}
 			logger.CtxDebug(ctx, "Reusing existing annotation: content_hash=%s, analyzer_model=%s", contentHash, analyzerModel)
 			return result
 		}
@@ -624,9 +601,9 @@ func (s *IngestService) prepareAnnotationBestEffort(ctx context.Context, memeID,
 	}
 	result.Description = analysis.Description
 	result.OCRText = normalizeOCRText(analysis.OCRText)
-	// AnalyzeImage merges the OCR + description prompts into a single call, so a
-	// successful response is authoritative for both fields — we therefore mark
-	// OCR as reliable here, mirroring the old extractOCRText success branch.
+	// AnalyzeImage produces OCR + description in one shot and the call only
+	// returns success when the JSON is parseable, so the OCR string is
+	// authoritative — mark it reliable for downstream text-presence labeling.
 	result.OCRReliable = true
 
 	if s.annotationRepo == nil || analyzerModel == "" {
@@ -684,13 +661,6 @@ func hasReliableTextPresence(annotation *domain.MemeAnnotation, ocrText string) 
 		return true
 	}
 	return ocrText != ""
-}
-
-func shouldExtractOCRForAnnotation(annotation *domain.MemeAnnotation, ocrText string) bool {
-	if ocrText != "" {
-		return false
-	}
-	return annotation == nil || annotation.Labels.GetText() == nil
 }
 
 type vectorUpsertInput struct {

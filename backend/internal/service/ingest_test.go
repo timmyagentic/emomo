@@ -459,24 +459,6 @@ func TestNewIngestServiceFallbackIndexUsesConfiguredVectorType(t *testing.T) {
 	}
 }
 
-func TestShouldExtractOCRForAnnotationSkipsKnownWithoutText(t *testing.T) {
-	t.Parallel()
-
-	annotation := &domain.MemeAnnotation{
-		Labels: &pb.MemeAnnotationLabels{
-			Text: &pb.TextLabel{Present: false},
-		},
-	}
-	if shouldExtractOCRForAnnotation(annotation, "") {
-		t.Fatal("should not extract OCR for annotation already marked without_text")
-	}
-
-	unknown := &domain.MemeAnnotation{}
-	if !shouldExtractOCRForAnnotation(unknown, "") {
-		t.Fatal("should extract OCR for annotation with unknown text presence")
-	}
-}
-
 func TestMissingVectorIndexesForceKeepsExistingVectorRecords(t *testing.T) {
 	t.Parallel()
 
