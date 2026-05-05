@@ -219,7 +219,7 @@ export async function getStats(): Promise<StatsView> {
 /** POST /api/v1/search/stream — SSE streaming search. */
 export async function searchMemesStream(
   query: string,
-  topK: number = 20,
+  topK: number = 100,
   onProgress: (event: SearchProgressView) => void,
   signal?: AbortSignal,
   profile?: string,

@@ -209,7 +209,6 @@ export default function MemeGrid({
         {searchQuery && (
           <div className={styles.resultsInfo}>
             <span className={styles.resultsQuery}>「{searchQuery}」</span>
-            <span className={styles.resultsCount}>找到 {memes.length} 个表情包</span>
           </div>
         )}
 

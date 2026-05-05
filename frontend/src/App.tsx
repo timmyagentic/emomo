@@ -23,6 +23,8 @@ interface SearchState {
 }
 
 const FEED_PAGE_SIZE = 12;
+const SEARCH_TOP_K = 100;
+const SEARCH_PAGE_SIZE = 30;
 
 function App() {
   const [memes, setMemes] = useState<DisplayMeme[]>([]);
@@ -38,6 +40,7 @@ function App() {
   const [memeCount, setMemeCount] = useState(5791);
   const [selectedMeme, setSelectedMeme] = useState<DisplayMeme | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_PAGE_SIZE);
   const [searchState, setSearchState] = useState<SearchState | null>(null);
   const hasFetchedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -140,6 +143,7 @@ function App() {
     setIsLoading(true);
     setHasSearched(true);
     setMemes([]); // Clear previous results
+    setSearchVisibleCount(SEARCH_PAGE_SIZE);
 
     // Initialize search state
     setSearchState({
@@ -155,7 +159,7 @@ function App() {
     try {
       await searchMemesStream(
         query,
-        20,
+        SEARCH_TOP_K,
         (event: SearchProgressView) => {
           if (abortController.signal.aborted) {
             return;
@@ -244,6 +248,7 @@ function App() {
     setInputQuery('');
     setSearchQuery('');
     setHasSearched(false);
+    setSearchVisibleCount(SEARCH_PAGE_SIZE);
     setSelectedMeme(null);
     setSearchState(null);
     setIsLoading(false);
@@ -267,6 +272,14 @@ function App() {
 
     loadFeedPage(feedOffsetRef.current);
   }, [feedTotal, hasFeedMore, hasSearched, loadFeedPage]);
+
+  // 搜索结果一次召回后，用本地 slice 渐进展示，模拟无限滚动。
+  const handleLoadMoreSearch = useCallback(() => {
+    setSearchVisibleCount((current) => Math.min(current + SEARCH_PAGE_SIZE, memes.length));
+  }, [memes.length]);
+
+  const visibleSearchMemes = memes.slice(0, searchVisibleCount);
+  const hasMoreSearchResults = searchVisibleCount < memes.length;
 
   // Handle meme click
   const handleMemeClick = useCallback((meme: DisplayMeme) => {
@@ -306,11 +319,14 @@ function App() {
 
         {hasSearched ? (
           <MemeGrid
-            memes={memes}
+            memes={visibleSearchMemes}
             isLoading={isLoading || !!searchState?.isStreaming}
             onMemeClick={handleMemeClick}
             searchQuery={searchQuery}
             emptyMessage="没有找到相关表情包"
+            hasMore={hasMoreSearchResults}
+            onLoadMore={handleLoadMoreSearch}
+            endMessage="已展示全部相关结果"
           />
         ) : (
           <MemeGrid
