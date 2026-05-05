@@ -371,10 +371,15 @@ func buildAnalyzeRetryUserPrompt(prevRaw string) string {
 // treat `false` as a hard failure that warrants either retrying the call or
 // abandoning the annotation rather than persisting a fallback description.
 //
-// The function stays tolerant about how the JSON is wrapped:
-//   - leading/trailing markdown code fences are stripped (`stripJSONCodeFence`);
-//   - if the model prefixes its reply with chatter like "好的，下面是 JSON：",
-//     we fall back to slicing between the outermost `{` and `}`.
+// The function applies three escalating layers of tolerance:
+//  1. strip markdown code fences (`stripJSONCodeFence`) and try strict
+//     `json.Unmarshal`;
+//  2. if the model prefixes its reply with chatter like "好的，下面是 JSON：",
+//     slice between the outermost `{` and `}` and try again;
+//  3. if standard parsing still fails, run `sanitizeInvalidJSONEscapes` over
+//     the candidate to drop illegal `\X` escape sequences (commonly produced
+//     by GLM-4.6V when serializing OCR text that contains incidental
+//     backslashes such as `\ ` before a `|` separator) and retry.
 //
 // When everything fails we still return a non-nil analysis whose Description
 // is the raw response so the failure surface is debuggable, but the second
@@ -386,30 +391,123 @@ func parseVLMAnalysis(raw string) (*VLMAnalysis, bool) {
 
 	cleaned := stripJSONCodeFence(raw)
 
-	var payload vlmAnalyzePayload
-	if err := json.Unmarshal([]byte(cleaned), &payload); err == nil {
-		analysis := &VLMAnalysis{
-			Description: strings.TrimSpace(payload.Description),
-			OCRText:     strings.TrimSpace(payload.OCRText),
-		}
-		return analysis, analysis.Description != "" || analysis.OCRText != ""
+	if analysis, ok := tryUnmarshalAnalyzePayload(cleaned); ok {
+		return analysis, true
 	}
 
-	// As a last-ditch attempt, locate the outermost {...} block and try once
-	// more — this rescues replies prefixed with "好的，下面是 JSON：".
+	// Slice the outermost {...} block — rescues replies prefixed with
+	// "好的，下面是 JSON：".
+	bracedSlice := ""
 	if start := strings.Index(cleaned, "{"); start >= 0 {
 		if end := strings.LastIndex(cleaned, "}"); end > start {
-			if err := json.Unmarshal([]byte(cleaned[start:end+1]), &payload); err == nil {
-				analysis := &VLMAnalysis{
-					Description: strings.TrimSpace(payload.Description),
-					OCRText:     strings.TrimSpace(payload.OCRText),
-				}
-				return analysis, analysis.Description != "" || analysis.OCRText != ""
+			bracedSlice = cleaned[start : end+1]
+			if analysis, ok := tryUnmarshalAnalyzePayload(bracedSlice); ok {
+				return analysis, true
 			}
 		}
 	}
 
+	// Last layer: drop illegal backslash escapes and try one more time. We
+	// run sanitize on both the cleaned full response and the {...} slice
+	// because GLM occasionally emits chatter outside the JSON object plus
+	// illegal escapes inside it, and either of the two slicing strategies
+	// from above can produce a valid input once sanitized.
+	for _, candidate := range []string{cleaned, bracedSlice} {
+		if candidate == "" {
+			continue
+		}
+		sanitized := sanitizeInvalidJSONEscapes(candidate)
+		if sanitized == candidate {
+			continue
+		}
+		if analysis, ok := tryUnmarshalAnalyzePayload(sanitized); ok {
+			return analysis, true
+		}
+	}
+
 	return &VLMAnalysis{Description: raw}, false
+}
+
+// tryUnmarshalAnalyzePayload runs json.Unmarshal against the given input and
+// projects it into a VLMAnalysis. Returns ok=true only when at least one of
+// description / ocr_text ended up populated, mirroring parseVLMAnalysis's
+// "produced a real object" contract.
+func tryUnmarshalAnalyzePayload(s string) (*VLMAnalysis, bool) {
+	var payload vlmAnalyzePayload
+	if err := json.Unmarshal([]byte(s), &payload); err != nil {
+		return nil, false
+	}
+	analysis := &VLMAnalysis{
+		Description: strings.TrimSpace(payload.Description),
+		OCRText:     strings.TrimSpace(payload.OCRText),
+	}
+	return analysis, analysis.Description != "" || analysis.OCRText != ""
+}
+
+// sanitizeInvalidJSONEscapes removes illegal backslash escape sequences from
+// a JSON-shaped string so a downstream `json.Unmarshal` can succeed.
+//
+// Background: GLM-4.6V occasionally produces strings like `"...学位\ |
+// ...学校\ | ..."` — a literal backslash followed by a space — when
+// serializing OCR text that visually contains line/run separators in the
+// source image. This trips json.Unmarshal because `\ ` is not a valid JSON
+// escape (the spec only accepts `\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`,
+// `\t`, or `\u`+4hex). We strip these orphan backslashes byte-by-byte:
+//   - `\` followed by one of the eight legal escape characters is kept;
+//   - `\u` followed by exactly four hex digits is kept;
+//   - everything else has the backslash removed and the trailing byte
+//     preserved (`\ ` → ` `, `\|` → `|`, `\中` → `中`).
+//
+// The transform is deliberately content-preserving: we only ever drop the
+// orphan backslash, never the OCR character that followed it. The output is
+// still UTF-8 valid because we only touch ASCII bytes, and continuation
+// bytes of multi-byte runes never look like a backslash so they cannot be
+// misinterpreted as the start of an escape.
+//
+// Callers should treat this as a recovery path of last resort — it makes
+// strict JSON producers slightly less strict, which is acceptable for a
+// best-effort VLM reply parser but not for general-purpose JSON ingest.
+func sanitizeInvalidJSONEscapes(s string) string {
+	if !strings.ContainsRune(s, '\\') {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); {
+		c := s[i]
+		if c != '\\' {
+			b.WriteByte(c)
+			i++
+			continue
+		}
+		if i+1 >= len(s) {
+			i++
+			continue
+		}
+		next := s[i+1]
+		switch next {
+		case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+			b.WriteByte(c)
+			b.WriteByte(next)
+			i += 2
+		case 'u':
+			if i+5 < len(s) && isHexByte(s[i+2]) && isHexByte(s[i+3]) && isHexByte(s[i+4]) && isHexByte(s[i+5]) {
+				b.WriteString(s[i : i+6])
+				i += 6
+			} else {
+				b.WriteByte(next)
+				i += 2
+			}
+		default:
+			b.WriteByte(next)
+			i += 2
+		}
+	}
+	return b.String()
+}
+
+func isHexByte(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
 }
 
 // truncateForLog clips s to at most max runes (not bytes), appending an
