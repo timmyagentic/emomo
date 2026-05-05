@@ -103,8 +103,11 @@ func NewVLMService(cfg *VLMConfig) *VLMService {
 	client := resty.New()
 	client.SetHeader("Authorization", "Bearer "+cfg.APIKey)
 	client.SetHeader("Content-Type", "application/json")
-	// Set timeout to prevent hanging requests
-	client.SetTimeout(60 * time.Second)
+	// Set timeout to prevent hanging requests. 120s is chosen to absorb GLM-4.6V's
+	// hybrid-thinking latency on complex meme images: production p95 lands in the
+	// 30–50s range but a small minority (1–2 per 2666 in the last full ingest)
+	// stalled past the previous 60s cap and produced unrecoverable timeouts.
+	client.SetTimeout(120 * time.Second)
 
 	// Default to OpenAI compatible endpoint if not specified
 	baseURL := cfg.BaseURL
