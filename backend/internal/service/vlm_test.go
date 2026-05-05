@@ -2,7 +2,7 @@ package service
 
 import "testing"
 
-func TestSanitizeInvalidJSONEscapesPreservesLegalEscapes(t *testing.T) {
+func TestSanitizeMalformedJSONStringPreservesLegalEscapes(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -38,15 +38,59 @@ func TestSanitizeInvalidJSONEscapesPreservesLegalEscapes(t *testing.T) {
 		{"keep \\\\ as literal escaped backslash",
 			`{"a":"foo\\bar"}`,
 			`{"a":"foo\\bar"}`},
+		// In-string control character rewrites — the dominant GLM bug.
+		{"escape unescaped LF inside string",
+			"{\"ocr_text\":\"你可以的\n你是棒棒的小汪汪\"}",
+			`{"ocr_text":"你可以的\n你是棒棒的小汪汪"}`},
+		{"escape unescaped CR inside string",
+			"{\"a\":\"foo\rbar\"}",
+			`{"a":"foo\rbar"}`},
+		{"escape unescaped Tab inside string",
+			"{\"a\":\"foo\tbar\"}",
+			`{"a":"foo\tbar"}`},
+		{"escape unescaped low control character inside string",
+			"{\"a\":\"foo\x01bar\"}",
+			`{"a":"foo\u0001bar"}`},
+		// LF outside any string — JSON whitespace, must NOT be rewritten.
+		{"preserve LF between tokens (out of string)",
+			"{\n\"a\":\"x\"\n}",
+			"{\n\"a\":\"x\"\n}"},
+		// Mixed: in-string LF + orphan backslash, plus a legal `\"` that
+		// should still toggle out of string at the value's closing quote.
+		{"combined LF + orphan backslash + legal \\\"",
+			"{\"ocr_text\":\"a\nb\\ |c\",\"description\":\"\\\"hi\\\"\"}",
+			`{"ocr_text":"a\nb |c","description":"\"hi\""}`},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := sanitizeInvalidJSONEscapes(tc.in)
+			got := sanitizeMalformedJSONString(tc.in)
 			if got != tc.want {
-				t.Fatalf("sanitizeInvalidJSONEscapes(%q)\n  got  %q\n  want %q", tc.in, got, tc.want)
+				t.Fatalf("sanitizeMalformedJSONString(%q)\n  got  %q\n  want %q", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestParseVLMAnalysisRecoversFromUnescapedNewline(t *testing.T) {
+	t.Parallel()
+
+	// Production failure mode: GLM-4.6V emits a literal LF (U+000A) between
+	// two OCR lines without escaping it as \n, which json.Unmarshal rejects
+	// per RFC 8259 §7. The state-machine sanitizer should rewrite the LF
+	// inside the string to `\n`, leaving JSON whitespace alone, so that
+	// downstream parsing succeeds.
+	raw := "{\"ocr_text\":\"你可以的\n你是棒棒的小汪汪\",\"description\":\"金毛小狗作为主体，正对着镜子，眼神坚定。\"}"
+
+	got, ok := parseVLMAnalysis(raw)
+	if !ok {
+		t.Fatalf("parseVLMAnalysis() ok = false, want true")
+	}
+	if got.OCRText == "" || got.Description == "" {
+		t.Fatalf("parseVLMAnalysis() empty fields: %+v", got)
+	}
+	if want := "你可以的\n你是棒棒的小汪汪"; got.OCRText != want {
+		t.Fatalf("OCRText\n  got  %q\n  want %q", got.OCRText, want)
 	}
 }
 

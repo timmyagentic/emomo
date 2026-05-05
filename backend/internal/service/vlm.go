@@ -384,10 +384,11 @@ func buildAnalyzeRetryUserPrompt(prevRaw string) string {
 //     `json.Unmarshal`;
 //  2. if the model prefixes its reply with chatter like "好的，下面是 JSON：",
 //     slice between the outermost `{` and `}` and try again;
-//  3. if standard parsing still fails, run `sanitizeInvalidJSONEscapes` over
-//     the candidate to drop illegal `\X` escape sequences (commonly produced
-//     by GLM-4.6V when serializing OCR text that contains incidental
-//     backslashes such as `\ ` before a `|` separator) and retry.
+//  3. if standard parsing still fails, run `sanitizeMalformedJSONString` over
+//     the candidate to repair common GLM-4.6V malformations: unescaped
+//     control characters inside string values (most often a literal LF
+//     between two OCR lines, e.g. `"ocr_text":"你可以的<LF>你是棒棒的小汪汪"`)
+//     and orphan backslash escapes such as `\ ` before a `|` separator.
 //
 // When everything fails we still return a non-nil analysis whose Description
 // is the raw response so the failure surface is debuggable, but the second
@@ -415,16 +416,17 @@ func parseVLMAnalysis(raw string) (*VLMAnalysis, bool) {
 		}
 	}
 
-	// Last layer: drop illegal backslash escapes and try one more time. We
-	// run sanitize on both the cleaned full response and the {...} slice
-	// because GLM occasionally emits chatter outside the JSON object plus
-	// illegal escapes inside it, and either of the two slicing strategies
-	// from above can produce a valid input once sanitized.
+	// Last layer: repair in-string control chars and illegal backslash
+	// escapes, then try one more time. We run sanitize on both the
+	// cleaned full response and the {...} slice because GLM occasionally
+	// emits chatter outside the JSON object plus malformations inside it,
+	// and either of the two slicing strategies from above can produce a
+	// valid input once sanitized.
 	for _, candidate := range []string{cleaned, bracedSlice} {
 		if candidate == "" {
 			continue
 		}
-		sanitized := sanitizeInvalidJSONEscapes(candidate)
+		sanitized := sanitizeMalformedJSONString(candidate)
 		if sanitized == candidate {
 			continue
 		}
@@ -452,63 +454,102 @@ func tryUnmarshalAnalyzePayload(s string) (*VLMAnalysis, bool) {
 	return analysis, analysis.Description != "" || analysis.OCRText != ""
 }
 
-// sanitizeInvalidJSONEscapes removes illegal backslash escape sequences from
-// a JSON-shaped string so a downstream `json.Unmarshal` can succeed.
+// sanitizeMalformedJSONString repairs two common GLM-4.6V JSON
+// malformations so a downstream `json.Unmarshal` can succeed. It tracks
+// whether the cursor is currently inside a JSON string literal and only
+// rewrites bytes when in-string; bytes between tokens (where raw control
+// characters and orphan backslashes do not occur in well-formed VLM
+// output anyway) are passed through unchanged.
 //
-// Background: GLM-4.6V occasionally produces strings like `"...学位\ |
-// ...学校\ | ..."` — a literal backslash followed by a space — when
-// serializing OCR text that visually contains line/run separators in the
-// source image. This trips json.Unmarshal because `\ ` is not a valid JSON
-// escape (the spec only accepts `\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`,
-// `\t`, or `\u`+4hex). We strip these orphan backslashes byte-by-byte:
-//   - `\` followed by one of the eight legal escape characters is kept;
-//   - `\u` followed by exactly four hex digits is kept;
-//   - everything else has the backslash removed and the trailing byte
-//     preserved (`\ ` → ` `, `\|` → `|`, `\中` → `中`).
+// Two repair rules apply inside string literals:
 //
-// The transform is deliberately content-preserving: we only ever drop the
-// orphan backslash, never the OCR character that followed it. The output is
-// still UTF-8 valid because we only touch ASCII bytes, and continuation
-// bytes of multi-byte runes never look like a backslash so they cannot be
-// misinterpreted as the start of an escape.
+//  1. Unescaped control characters (LF / CR / Tab / U+0000-001F) — by far
+//     the most common failure for our pipeline. The spec requires every
+//     character below 0x20 inside a string to be escaped, but GLM
+//     routinely emits raw newlines between OCR lines, e.g.
+//     `"ocr_text":"你可以的<LF>你是棒棒的小汪汪"`. We rewrite LF→`\n`,
+//     CR→`\r`, Tab→`\t`, others→`\u00XX`.
 //
-// Callers should treat this as a recovery path of last resort — it makes
-// strict JSON producers slightly less strict, which is acceptable for a
-// best-effort VLM reply parser but not for general-purpose JSON ingest.
-func sanitizeInvalidJSONEscapes(s string) string {
-	if !strings.ContainsRune(s, '\\') {
-		return s
-	}
+//  2. Orphan backslash escapes — GLM occasionally produces strings like
+//     `"...学位\ | ...学校\ | ..."` (a literal backslash followed by a
+//     space) when serializing OCR text that visually contains run
+//     separators. We keep the eight legal escapes (`\"`, `\\`, `\/`,
+//     `\b`, `\f`, `\n`, `\r`, `\t`) plus `\u`+4hex, and for every other
+//     `\X` we drop the backslash and preserve `X` (`\ ` → ` `, `\|` →
+//     `|`, `\中` → `中`).
+//
+// The transform is deliberately content-preserving: we only ever escape
+// or drop the offending byte, never the surrounding OCR characters. The
+// state machine treats `"` as a string boundary (toggling in/out)
+// unless it follows an unescaped `\`, mirroring the JSON grammar; this
+// means an *unescaped* literal `"` inside a string value (a different
+// GLM bug we observed once in 2666) will misalign the toggle and leak
+// into out-of-string mode — that case is rare and not handled here.
+//
+// Output remains valid UTF-8 because we only ever inspect ASCII bytes
+// (`<0x80`); UTF-8 continuation bytes (0x80–0xBF) cannot match `\` or
+// any control character so they pass through untouched.
+//
+// Callers should treat this as a recovery path of last resort — strict
+// JSON producers should not need it, but it is acceptable for a
+// best-effort VLM reply parser.
+func sanitizeMalformedJSONString(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
+	inString := false
 	for i := 0; i < len(s); {
 		c := s[i]
-		if c != '\\' {
+		if !inString {
 			b.WriteByte(c)
+			if c == '"' {
+				inString = true
+			}
 			i++
 			continue
 		}
-		if i+1 >= len(s) {
-			i++
-			continue
-		}
-		next := s[i+1]
-		switch next {
-		case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
-			b.WriteByte(c)
-			b.WriteByte(next)
-			i += 2
-		case 'u':
-			if i+5 < len(s) && isHexByte(s[i+2]) && isHexByte(s[i+3]) && isHexByte(s[i+4]) && isHexByte(s[i+5]) {
-				b.WriteString(s[i : i+6])
-				i += 6
-			} else {
+		switch {
+		case c == '\\':
+			if i+1 >= len(s) {
+				i++
+				continue
+			}
+			next := s[i+1]
+			switch next {
+			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+				b.WriteByte(c)
+				b.WriteByte(next)
+				i += 2
+			case 'u':
+				if i+5 < len(s) && isHexByte(s[i+2]) && isHexByte(s[i+3]) && isHexByte(s[i+4]) && isHexByte(s[i+5]) {
+					b.WriteString(s[i : i+6])
+					i += 6
+				} else {
+					b.WriteByte(next)
+					i += 2
+				}
+			default:
 				b.WriteByte(next)
 				i += 2
 			}
+		case c == '"':
+			b.WriteByte(c)
+			inString = false
+			i++
+		case c == '\n':
+			b.WriteString(`\n`)
+			i++
+		case c == '\r':
+			b.WriteString(`\r`)
+			i++
+		case c == '\t':
+			b.WriteString(`\t`)
+			i++
+		case c < 0x20:
+			fmt.Fprintf(&b, `\u%04x`, c)
+			i++
 		default:
-			b.WriteByte(next)
-			i += 2
+			b.WriteByte(c)
+			i++
 		}
 	}
 	return b.String()
