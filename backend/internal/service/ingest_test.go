@@ -514,6 +514,141 @@ func TestMissingVectorIndexesForceKeepsExistingVectorRecords(t *testing.T) {
 	}
 }
 
+func TestProcessItemReturnsNoOpWhenOnlyMissingCaptionVectorAndVLMFails(t *testing.T) {
+	t.Parallel()
+
+	// Regression test for a retry-path semantic bug:
+	// when a meme is hash-hit (full re-import path), the only missing route
+	// is caption, AND VLM analysis fails (so caption text is empty), the
+	// caption route is correctly `errSkipOptionalVectorIndex`-skipped. The
+	// previous implementation then returned `no vector indexes were written`
+	// as an error, polluting the failure metric for items that were already
+	// in a stable state with no useful retry work to do.
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&domain.Meme{}, &domain.MemeVector{}, &domain.MemeAnnotation{}); err != nil {
+		t.Fatalf("failed to migrate test database: %v", err)
+	}
+
+	imagePath := filepath.Join(t.TempDir(), "meme.png")
+	if err := os.WriteFile(imagePath, testPNG1x1, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	contentHash := calculateMD5(testPNG1x1)
+	memeID := "meme-hashhit"
+	storageKey := contentHash[:2] + "/" + contentHash + ".png"
+
+	memeRepo := repository.NewMemeRepository(db)
+	if err := memeRepo.Create(context.Background(), &domain.Meme{
+		ID:          memeID,
+		StorageKey:  storageKey,
+		ContentHash: contentHash,
+		ImageInfo: &pb.ImageInfo{
+			Width:  1,
+			Height: 1,
+			Format: pb.ImageFormat_IMAGE_FORMAT_PNG,
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to seed meme: %v", err)
+	}
+
+	vectorRepo := repository.NewMemeVectorRepository(db)
+	if err := vectorRepo.Create(context.Background(), &domain.MemeVector{
+		ID:             "vector-image-existing",
+		MemeID:         memeID,
+		Collection:     "image_collection",
+		VectorType:     pb.VectorType_VECTOR_TYPE_IMAGE,
+		EmbeddingModel: "fixed-test-embedding",
+		InputHash:      contentHash,
+		QdrantPointID:  "00000000-0000-0000-0000-000000000001",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to seed image vector: %v", err)
+	}
+
+	qdrantRepo, fakeQdrant := newTestQdrantRepository(t)
+	store := newMemoryObjectStorage()
+	store.objects[storageKey] = testPNG1x1
+
+	vlm := NewVLMService(&VLMConfig{
+		Model:   "test-vlm",
+		APIKey:  "test-key",
+		BaseURL: "https://vlm.test/v1",
+	})
+	vlm.client.SetTransport(roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(t, http.StatusInternalServerError, openAIResponse{}), nil
+	}))
+
+	ingest := NewIngestService(
+		memeRepo,
+		vectorRepo,
+		repository.NewMemeAnnotationRepository(db),
+		nil,
+		qdrantRepo,
+		store,
+		vlm,
+		fixedEmbeddingProvider{},
+		nil,
+		&IngestConfig{
+			Workers:   1,
+			BatchSize: 1,
+			VectorIndexes: []IngestVectorIndex{
+				{
+					VectorType: pb.VectorType_VECTOR_TYPE_IMAGE,
+					Collection: "image_collection",
+					Embedding:  fixedEmbeddingProvider{},
+					QdrantRepo: qdrantRepo,
+				},
+				{
+					VectorType: pb.VectorType_VECTOR_TYPE_CAPTION,
+					Collection: "caption_collection",
+					Embedding:  fixedEmbeddingProvider{},
+					QdrantRepo: qdrantRepo,
+				},
+			},
+		},
+	)
+
+	err = ingest.processItem(context.Background(), "test", &source.MemeItem{
+		SourceID:  "different-source-same-image",
+		LocalPath: imagePath,
+		Format:    "png",
+	}, &IngestOptions{})
+	if err != nil {
+		t.Fatalf("processItem() error = %v, want nil (no-op skip)", err)
+	}
+
+	var vectors []domain.MemeVector
+	if err := db.Find(&vectors).Error; err != nil {
+		t.Fatalf("failed to load vectors: %v", err)
+	}
+	if len(vectors) != 1 {
+		t.Fatalf("vector count = %d, want 1 (only the seeded image vector should remain)", len(vectors))
+	}
+	if vectors[0].VectorType != pb.VectorType_VECTOR_TYPE_IMAGE {
+		t.Fatalf("vector type = %q, want VECTOR_TYPE_IMAGE", vectors[0].VectorType)
+	}
+
+	if fakeQdrant.upserts != 0 {
+		t.Fatalf("qdrant upserts = %d, want 0 (caption route should be skipped, image already exists)", fakeQdrant.upserts)
+	}
+
+	var memeCount int64
+	if err := db.Model(&domain.Meme{}).Count(&memeCount).Error; err != nil {
+		t.Fatalf("count memes: %v", err)
+	}
+	if memeCount != 1 {
+		t.Fatalf("meme count = %d, want 1 (existing meme must remain, no new meme created)", memeCount)
+	}
+}
+
 var testPNG1x1 = []byte{
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,

@@ -723,7 +723,16 @@ func (s *IngestService) upsertVectorIndexes(ctx context.Context, indexes []Inges
 		return errors.Join(errs...)
 	}
 	if written == 0 && skipped > 0 {
-		return fmt.Errorf("no vector indexes were written")
+		// All target routes were optionally skipped (currently the only
+		// trigger is `errSkipOptionalVectorIndex` from a caption route with
+		// empty caption text). This typically happens on a re-import where
+		// the only missing route is caption and VLM analysis produced no
+		// usable signal — the persisted state has not regressed and there
+		// is no useful work this attempt can do without new VLM signal.
+		// Treat as a successful no-op rather than a failure so the caller's
+		// failure metric is not polluted by genuinely-stable items.
+		logger.CtxInfo(ctx, "All target vector indexes optionally skipped (no-op): meme_id=%s, skipped=%d",
+			input.MemeID, skipped)
 	}
 	return nil
 }
