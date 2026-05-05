@@ -25,8 +25,25 @@ import (
 // the JSON form used by the relational columns. Register name: "protojson".
 type ProtojsonSerializer struct{}
 
+// marshalProtojson is the column-side serialization config. EmitUnpopulated is
+// on so every persisted JSON value carries an explicit value for every
+// declared field, including proto3 zero values. Without it, a "false" /
+// 0 / "" field is dropped from the wire and reads back identical to a field
+// that was never set, which (a) makes manual DB inspection ambiguous and
+// (b) hides regressions when a producer forgets to populate a field.
+//
+// Stability note: enabling EmitUnpopulated changes the on-disk byte form for
+// rows whose proto messages have any zero-valued fields. The Unmarshal path
+// is invariant to this (a missing key and a key with the zero value decode
+// to the same Go zero), so existing rows continue to read correctly. Newly
+// written rows use the more verbose form. A one-shot SQL backfill rewrites
+// pre-existing rows so the entire table observes the same JSON shape.
 var (
-	marshalProtojson   = protojson.MarshalOptions{UseEnumNumbers: true, UseProtoNames: true}
+	marshalProtojson = protojson.MarshalOptions{
+		UseEnumNumbers:  true,
+		UseProtoNames:   true,
+		EmitUnpopulated: true,
+	}
 	unmarshalProtojson = protojson.UnmarshalOptions{DiscardUnknown: true}
 )
 

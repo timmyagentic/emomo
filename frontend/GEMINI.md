@@ -8,7 +8,7 @@
 
 **Key Features:**
 - **Semantic Search:** Users can search for memes using natural language queries.
-- **Backend Filters:** Search can pass category/profile filters; "has visible text" is represented backend-side as a derived `text_presence` filter from `meme_annotations.labels.text.present`.
+- **Backend Filters:** Search can pass category/profile filters; "has visible text" is represented backend-side as a derived `text_presence` filter from `meme_annotations.labels.has_text`.
 - **Meme Discovery:** A homepage displaying recommended memes.
 - **Detailed View:** Modal view for individual memes with high-resolution images and metadata.
 - **Resilience:** Includes a "Demo Mode" with hardcoded data that activates automatically if the backend API is unreachable.

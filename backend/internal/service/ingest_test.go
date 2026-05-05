@@ -376,7 +376,7 @@ func TestProcessItemForceKeepsOldVectorWhenReplacementFails(t *testing.T) {
 		Description:   "开心表情",
 		OCRText:       "你好",
 		Labels: &pb.MemeAnnotationLabels{
-			Text: &pb.TextLabel{Present: true},
+			HasText: true,
 		},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),

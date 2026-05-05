@@ -154,7 +154,7 @@ CREATE UNIQUE INDEX idx_meme_annotations_meme_model
 }
 ```
 
-“图片有没有文字”不作为一级字段，而是 `labels.text.present`。Qdrant payload 里的 `text_presence` 可以由这个结构化标签派生，用于检索过滤。
+“图片有没有文字”不作为一级字段，而是 `labels.has_text`（扁平 bool）。Qdrant payload 里的 `text_presence` 由这个结构化标签派生，用于检索过滤。
 
 不再保留 `prompt_version`、`text_presence`、`text_char_count`、`text_language`、`facets`、`caption_text`、`bm25_text`、`status`、`error_message`。这些字段要么可推导，要么是索引构建过程数据，要么属于未落地的任务管理需求。
 
@@ -261,6 +261,6 @@ CREATE INDEX idx_meme_metadata_source  ON meme_metadata(source);
 用户文本
   -> query embedding
   -> Qdrant image 向量相似度检索
-  -> 可选按 category / labels.text.present 派生的 text_presence 过滤
+  -> 可选按 category / labels.has_text 派生的 text_presence 过滤
   -> 用 memes 补充 storage/image_info/category/tags
 ```

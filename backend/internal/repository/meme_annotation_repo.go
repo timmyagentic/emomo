@@ -28,7 +28,7 @@ func (r *MemeAnnotationRepository) Create(ctx context.Context, annotation *domai
 func (r *MemeAnnotationRepository) UpdateOCRText(ctx context.Context, id, ocrText string) error {
 	presence, _ := domain.TextPresenceFromOCRText(ocrText)
 	labels := &pb.MemeAnnotationLabels{
-		Text: &pb.TextLabel{Present: presence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT},
+		HasText: presence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT,
 	}
 	labelsJSON, err := persistence.MarshalProtoColumn(labels)
 	if err != nil {

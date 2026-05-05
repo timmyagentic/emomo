@@ -27,13 +27,15 @@ func (MemeAnnotation) TableName() string {
 	return "meme_annotations"
 }
 
-// HasText reports whether the annotation's structured labels reliably mark
-// visible text as present. Used by ingest / search filters.
+// HasText reports whether the annotation's structured labels mark visible
+// text as present. Used by ingest / search filters. With the flat
+// labels.has_text schema this collapses to a single bool getter, but the
+// helper is kept so callers don't reach into pb types directly.
 func (m *MemeAnnotation) HasText() bool {
-	if m == nil || m.Labels == nil {
+	if m == nil {
 		return false
 	}
-	return m.Labels.GetText().GetPresent()
+	return m.Labels.GetHasText()
 }
 
 // TextPresenceFromOCRText classifies normalized OCR text into the protobuf
@@ -55,13 +57,22 @@ func TextPresenceFromOCRText(text string) (pb.TextPresence, int) {
 }
 
 // TextPresenceFromLabels reads structured analyzer labels and returns the
-// search-facing TextPresence enum. Absence of labels is treated as
-// TEXT_PRESENCE_UNKNOWN (the analyzer hasn't classified yet).
+// search-facing TextPresence enum.
+//
+// Note: the flat labels schema (labels.has_text bool) cannot distinguish
+// "analyzer hasn't classified yet" from "analyzer judged no text" — both
+// surface as has_text=false. In practice annotation rows are only persisted
+// after a successful VLM analyze pass (failures skip the write), so the
+// caller observes TEXT_PRESENCE_UNKNOWN by virtue of the annotation row
+// being absent rather than by inspecting a label field. UNKNOWN is therefore
+// returned only for a nil labels pointer, which is the GORM-zero state
+// before Scan; reachable annotation rows always yield WITH_TEXT or
+// WITHOUT_TEXT.
 func TextPresenceFromLabels(labels *pb.MemeAnnotationLabels) pb.TextPresence {
-	if labels == nil || labels.GetText() == nil {
+	if labels == nil {
 		return pb.TextPresence_TEXT_PRESENCE_UNKNOWN
 	}
-	if labels.GetText().GetPresent() {
+	if labels.GetHasText() {
 		return pb.TextPresence_TEXT_PRESENCE_WITH_TEXT
 	}
 	return pb.TextPresence_TEXT_PRESENCE_WITHOUT_TEXT

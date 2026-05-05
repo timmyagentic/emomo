@@ -240,7 +240,7 @@ CREATE INDEX idx_memes_category ON memes(category);
 | analyzer_model | TEXT | 分析模型 |
 | description | TEXT | VLM 描述，作为 caption/BM25 辅助信号 |
 | ocr_text | TEXT | OCR 文字 |
-| labels | TEXT | protobuf `MemeAnnotationLabels` JSON，`labels.text.present` 表示是否有文字 |
+| labels | TEXT | protobuf `MemeAnnotationLabels` JSON，`labels.has_text` 表示是否有文字 |
 | created_at | TEXT | 创建时间 |
 | updated_at | TEXT | 更新时间 |
 
@@ -280,7 +280,7 @@ CREATE INDEX idx_memes_category ON memes(category);
 | ocr_text | string | OCR 文本 |
 | storage_url | string | 图片 URL（直接返回，减少查库） |
 
-**Payload 用于过滤**：搜索时可以附加条件，如「只搜索某分类」或「只搜索带文字/不带文字的表情包」。文字筛选的关系库来源是 `meme_annotations.labels.text.present`，Qdrant 中的 `text_presence` 是派生 payload。
+**Payload 用于过滤**：搜索时可以附加条件，如「只搜索某分类」或「只搜索带文字/不带文字的表情包」。文字筛选的关系库来源是 `meme_annotations.labels.has_text`，Qdrant 中的 `text_presence` 是派生 payload。
 
 **示例向量点结构**：
 ```json

@@ -627,8 +627,13 @@ func buildMemeAnnotation(id, memeID, analyzerModel, description, ocrText string,
 	labels := &pb.MemeAnnotationLabels{}
 	if ocrReliable {
 		textPresence, _ := domain.TextPresenceFromOCRText(ocrText)
-		labels.Text = &pb.TextLabel{Present: textPresence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT}
+		labels.HasText = textPresence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT
 	}
+	// When ocrReliable is false labels.HasText stays at its proto3 zero value
+	// (false). In production this branch is unreachable — buildMemeAnnotation
+	// is only called once VLM AnalyzeImage has succeeded, which sets
+	// OCRReliable=true. The defensive default is kept to avoid a misleading
+	// "true" if a future code path ever invokes this with reliable=false.
 	return &domain.MemeAnnotation{
 		ID:            id,
 		MemeID:        memeID,
@@ -653,14 +658,20 @@ func classifyTextPresenceWithCount(ocrText string, ocrReliable bool) (pb.TextPre
 	return domain.TextPresenceFromOCRText(ocrText)
 }
 
+// hasReliableTextPresence reports whether a previously-persisted annotation
+// row carries an authoritative text-presence label. With the flat
+// labels.has_text schema there is no longer a "label set vs not set"
+// distinction at the wire level (false and unset both decode to false).
+// In production the existence of an annotation row is itself the signal —
+// rows are only persisted after a successful VLM analyze pass — so any
+// non-nil annotation is treated as reliable. The ocrText fallback is kept
+// for edge cases where domain.MemeAnnotation is constructed without going
+// through the production write path (e.g. tests).
 func hasReliableTextPresence(annotation *domain.MemeAnnotation, ocrText string) bool {
 	if annotation == nil {
 		return ocrText != ""
 	}
-	if annotation.Labels.GetText() != nil {
-		return true
-	}
-	return ocrText != ""
+	return true
 }
 
 type vectorUpsertInput struct {

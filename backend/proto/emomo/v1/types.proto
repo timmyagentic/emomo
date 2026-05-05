@@ -71,16 +71,20 @@ message ImageInfo {
   ImageFormat format = 3;
 }
 
-// TextLabel describes a single structured analyzer label about visible text
-// presence inside a meme. Nested inside MemeAnnotationLabels.
-message TextLabel {
-  bool present = 1;
-}
-
 // MemeAnnotationLabels is the JSON value stored inside the
-// meme_annotations.labels column. Its top-level shape is intentionally a
-// container so future label categories (e.g. nsfw, has_face) can be added
-// without altering existing rows.
+// meme_annotations.labels column. Wire form is protojson with
+// EmitUnpopulated=true so every persisted row carries an explicit value for
+// every declared field (no "missing key implies false" ambiguity at rest).
+//
+// `has_text` records whether the analyzer judged the image to contain visible,
+// human-readable text. The truth value comes from the OCR step inside the VLM
+// pipeline (see service.TextPresenceFromOCRText) and excludes incidental
+// punctuation / emoji that would otherwise inflate "with text" counts.
+//
+// Future label facets (nsfw, has_face, language, ...) belong as siblings
+// directly under this message; do not reintroduce a wrapper sub-message just
+// to group them. The flat shape is intentional: `labels.has_text` reads like
+// what it means, and protojson does the rest.
 message MemeAnnotationLabels {
-  TextLabel text = 1;
+  bool has_text = 1;
 }

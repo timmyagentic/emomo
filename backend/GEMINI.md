@@ -10,7 +10,7 @@ All commands below assume `cd backend` unless noted.
 
 ### Core Components
 *   **Ingestion (`scripts/import-data.sh`):** the only supported data ingest entrypoint. It consumes a local static image directory, invokes the internal `cmd/ingest` worker, validates/normalizes images, uploads images to object storage (S3/R2), writes `memes`, embeds image/caption routes, indexes vectors in Qdrant, and stores Qdrant point records in `meme_vectors`.
-*   **Annotations:** VLM description, OCR text, and structured labels live in `meme_annotations`. The "has visible text" tag is `labels.text.present`.
+*   **Annotations:** VLM description, OCR text, and structured labels live in `meme_annotations`. The "has visible text" tag is `labels.has_text`.
 *   **API (Go, `cmd/api`):** REST API (Gin) for searching memes; uses optional query expansion, direct image-vector search, caption dense search, and BM25 sparse search.
 
 ## 2. Technology Stack

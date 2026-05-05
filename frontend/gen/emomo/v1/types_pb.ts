@@ -35,7 +35,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file emomo/v1/types.proto.
  */
 export const file_emomo_v1_types: GenFile = /*@__PURE__*/
-  fileDesc("ChRlbW9tby92MS90eXBlcy5wcm90bxIIZW1vbW8udjEiUQoJSW1hZ2VJbmZvEg0KBXdpZHRoGAEgASgFEg4KBmhlaWdodBgCIAEoBRIlCgZmb3JtYXQYAyABKA4yFS5lbW9tby52MS5JbWFnZUZvcm1hdCIcCglUZXh0TGFiZWwSDwoHcHJlc2VudBgBIAEoCCI5ChRNZW1lQW5ub3RhdGlvbkxhYmVscxIhCgR0ZXh0GAEgASgLMhMuZW1vbW8udjEuVGV4dExhYmVsKm8KC0ltYWdlRm9ybWF0EhwKGElNQUdFX0ZPUk1BVF9VTlNQRUNJRklFRBAAEhUKEUlNQUdFX0ZPUk1BVF9KUEVHEAESFAoQSU1BR0VfRk9STUFUX1BORxACEhUKEUlNQUdFX0ZPUk1BVF9XRUJQEAMqWQoKVmVjdG9yVHlwZRIbChdWRUNUT1JfVFlQRV9VTlNQRUNJRklFRBAAEhUKEVZFQ1RPUl9UWVBFX0lNQUdFEAESFwoTVkVDVE9SX1RZUEVfQ0FQVElPThACKoUBCgxUZXh0UHJlc2VuY2USHQoZVEVYVF9QUkVTRU5DRV9VTlNQRUNJRklFRBAAEhkKFVRFWFRfUFJFU0VOQ0VfVU5LTk9XThABEhsKF1RFWFRfUFJFU0VOQ0VfV0lUSF9URVhUEAISHgoaVEVYVF9QUkVTRU5DRV9XSVRIT1VUX1RFWFQQA0ItWitnaXRodWIuY29tL3RpbW15L2Vtb21vL2dlbi9lbW9tby92MTtlbW9tb3YxYgZwcm90bzM");
+  fileDesc("ChRlbW9tby92MS90eXBlcy5wcm90bxIIZW1vbW8udjEiUQoJSW1hZ2VJbmZvEg0KBXdpZHRoGAEgASgFEg4KBmhlaWdodBgCIAEoBRIlCgZmb3JtYXQYAyABKA4yFS5lbW9tby52MS5JbWFnZUZvcm1hdCIoChRNZW1lQW5ub3RhdGlvbkxhYmVscxIQCghoYXNfdGV4dBgBIAEoCCpvCgtJbWFnZUZvcm1hdBIcChhJTUFHRV9GT1JNQVRfVU5TUEVDSUZJRUQQABIVChFJTUFHRV9GT1JNQVRfSlBFRxABEhQKEElNQUdFX0ZPUk1BVF9QTkcQAhIVChFJTUFHRV9GT1JNQVRfV0VCUBADKlkKClZlY3RvclR5cGUSGwoXVkVDVE9SX1RZUEVfVU5TUEVDSUZJRUQQABIVChFWRUNUT1JfVFlQRV9JTUFHRRABEhcKE1ZFQ1RPUl9UWVBFX0NBUFRJT04QAiqFAQoMVGV4dFByZXNlbmNlEh0KGVRFWFRfUFJFU0VOQ0VfVU5TUEVDSUZJRUQQABIZChVURVhUX1BSRVNFTkNFX1VOS05PV04QARIbChdURVhUX1BSRVNFTkNFX1dJVEhfVEVYVBACEh4KGlRFWFRfUFJFU0VOQ0VfV0lUSE9VVF9URVhUEANCLVorZ2l0aHViLmNvbS90aW1teS9lbW9tby9nZW4vZW1vbW8vdjE7ZW1vbW92MWIGcHJvdG8z");
 
 /**
  * ImageInfo stores intrinsic image properties as a single JSON value inside
@@ -69,38 +69,28 @@ export const ImageInfoSchema: GenMessage<ImageInfo> = /*@__PURE__*/
   messageDesc(file_emomo_v1_types, 0);
 
 /**
- * TextLabel describes a single structured analyzer label about visible text
- * presence inside a meme. Nested inside MemeAnnotationLabels.
- *
- * @generated from message emomo.v1.TextLabel
- */
-export type TextLabel = Message<"emomo.v1.TextLabel"> & {
-  /**
-   * @generated from field: bool present = 1;
-   */
-  present: boolean;
-};
-
-/**
- * Describes the message emomo.v1.TextLabel.
- * Use `create(TextLabelSchema)` to create a new message.
- */
-export const TextLabelSchema: GenMessage<TextLabel> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_types, 1);
-
-/**
  * MemeAnnotationLabels is the JSON value stored inside the
- * meme_annotations.labels column. Its top-level shape is intentionally a
- * container so future label categories (e.g. nsfw, has_face) can be added
- * without altering existing rows.
+ * meme_annotations.labels column. Wire form is protojson with
+ * EmitUnpopulated=true so every persisted row carries an explicit value for
+ * every declared field (no "missing key implies false" ambiguity at rest).
+ *
+ * `has_text` records whether the analyzer judged the image to contain visible,
+ * human-readable text. The truth value comes from the OCR step inside the VLM
+ * pipeline (see service.TextPresenceFromOCRText) and excludes incidental
+ * punctuation / emoji that would otherwise inflate "with text" counts.
+ *
+ * Future label facets (nsfw, has_face, language, ...) belong as siblings
+ * directly under this message; do not reintroduce a wrapper sub-message just
+ * to group them. The flat shape is intentional: `labels.has_text` reads like
+ * what it means, and protojson does the rest.
  *
  * @generated from message emomo.v1.MemeAnnotationLabels
  */
 export type MemeAnnotationLabels = Message<"emomo.v1.MemeAnnotationLabels"> & {
   /**
-   * @generated from field: emomo.v1.TextLabel text = 1;
+   * @generated from field: bool has_text = 1;
    */
-  text?: TextLabel | undefined;
+  hasText: boolean;
 };
 
 /**
@@ -108,7 +98,7 @@ export type MemeAnnotationLabels = Message<"emomo.v1.MemeAnnotationLabels"> & {
  * Use `create(MemeAnnotationLabelsSchema)` to create a new message.
  */
 export const MemeAnnotationLabelsSchema: GenMessage<MemeAnnotationLabels> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_types, 2);
+  messageDesc(file_emomo_v1_types, 1);
 
 /**
  * ImageFormat enumerates the image container types emomo persists for memes.
@@ -213,3 +203,4 @@ export enum TextPresence {
  */
 export const TextPresenceSchema: GenEnum<TextPresence> = /*@__PURE__*/
   enumDesc(file_emomo_v1_types, 2);
+

@@ -107,16 +107,16 @@ func TestInitDBAutoMigrateMigratesLegacyDescriptionsToAnnotations(t *testing.T) 
 	if annotation.AnalyzerModel != "legacy-vlm" {
 		t.Fatalf("AnalyzerModel = %q, want legacy-vlm", annotation.AnalyzerModel)
 	}
-	if annotation.Labels == nil || annotation.Labels.GetText() == nil || !annotation.Labels.GetText().GetPresent() {
-		t.Fatalf("Labels.Text = %+v, want present=true", annotation.Labels.GetText())
+	if annotation.Labels == nil || !annotation.Labels.GetHasText() {
+		t.Fatalf("Labels = %+v, want has_text=true", annotation.Labels)
 	}
 
 	var unknownAnnotation domain.MemeAnnotation
 	if err := db.First(&unknownAnnotation, "id = ?", "desc-2").Error; err != nil {
 		t.Fatalf("failed to load migrated unknown annotation: %v", err)
 	}
-	if unknownAnnotation.Labels != nil && unknownAnnotation.Labels.GetText() != nil {
-		t.Fatalf("blank legacy OCR Labels.Text = %+v, want nil", unknownAnnotation.Labels.GetText())
+	if unknownAnnotation.Labels == nil || unknownAnnotation.Labels.GetHasText() {
+		t.Fatalf("blank legacy OCR Labels = %+v, want has_text=false", unknownAnnotation.Labels)
 	}
 
 	var vector domain.MemeVector

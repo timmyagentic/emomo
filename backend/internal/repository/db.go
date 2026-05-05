@@ -784,7 +784,7 @@ func copyLegacyDescriptionsToAnnotations(db *gorm.DB) error {
 		labels := &pb.MemeAnnotationLabels{}
 		if row.OCRText != "" {
 			presence, _ := domain.TextPresenceFromOCRText(row.OCRText)
-			labels.Text = &pb.TextLabel{Present: presence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT}
+			labels.HasText = presence == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT
 		}
 		annotation := domain.MemeAnnotation{
 			ID:            row.ID,

@@ -275,66 +275,30 @@ func (x *ImageInfo) GetFormat() ImageFormat {
 	return ImageFormat_IMAGE_FORMAT_UNSPECIFIED
 }
 
-// TextLabel describes a single structured analyzer label about visible text
-// presence inside a meme. Nested inside MemeAnnotationLabels.
-type TextLabel struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Present       bool                   `protobuf:"varint,1,opt,name=present,proto3" json:"present,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TextLabel) Reset() {
-	*x = TextLabel{}
-	mi := &file_emomo_v1_types_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TextLabel) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TextLabel) ProtoMessage() {}
-
-func (x *TextLabel) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_types_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TextLabel.ProtoReflect.Descriptor instead.
-func (*TextLabel) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_types_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *TextLabel) GetPresent() bool {
-	if x != nil {
-		return x.Present
-	}
-	return false
-}
-
 // MemeAnnotationLabels is the JSON value stored inside the
-// meme_annotations.labels column. Its top-level shape is intentionally a
-// container so future label categories (e.g. nsfw, has_face) can be added
-// without altering existing rows.
+// meme_annotations.labels column. Wire form is protojson with
+// EmitUnpopulated=true so every persisted row carries an explicit value for
+// every declared field (no "missing key implies false" ambiguity at rest).
+//
+// `has_text` records whether the analyzer judged the image to contain visible,
+// human-readable text. The truth value comes from the OCR step inside the VLM
+// pipeline (see service.TextPresenceFromOCRText) and excludes incidental
+// punctuation / emoji that would otherwise inflate "with text" counts.
+//
+// Future label facets (nsfw, has_face, language, ...) belong as siblings
+// directly under this message; do not reintroduce a wrapper sub-message just
+// to group them. The flat shape is intentional: `labels.has_text` reads like
+// what it means, and protojson does the rest.
 type MemeAnnotationLabels struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Text          *TextLabel             `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	HasText       bool                   `protobuf:"varint,1,opt,name=has_text,json=hasText,proto3" json:"has_text,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MemeAnnotationLabels) Reset() {
 	*x = MemeAnnotationLabels{}
-	mi := &file_emomo_v1_types_proto_msgTypes[2]
+	mi := &file_emomo_v1_types_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -346,7 +310,7 @@ func (x *MemeAnnotationLabels) String() string {
 func (*MemeAnnotationLabels) ProtoMessage() {}
 
 func (x *MemeAnnotationLabels) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_types_proto_msgTypes[2]
+	mi := &file_emomo_v1_types_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -359,14 +323,14 @@ func (x *MemeAnnotationLabels) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemeAnnotationLabels.ProtoReflect.Descriptor instead.
 func (*MemeAnnotationLabels) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_types_proto_rawDescGZIP(), []int{2}
+	return file_emomo_v1_types_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *MemeAnnotationLabels) GetText() *TextLabel {
+func (x *MemeAnnotationLabels) GetHasText() bool {
 	if x != nil {
-		return x.Text
+		return x.HasText
 	}
-	return nil
+	return false
 }
 
 var File_emomo_v1_types_proto protoreflect.FileDescriptor
@@ -377,11 +341,9 @@ const file_emomo_v1_types_proto_rawDesc = "" +
 	"\tImageInfo\x12\x14\n" +
 	"\x05width\x18\x01 \x01(\x05R\x05width\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x05R\x06height\x12-\n" +
-	"\x06format\x18\x03 \x01(\x0e2\x15.emomo.v1.ImageFormatR\x06format\"%\n" +
-	"\tTextLabel\x12\x18\n" +
-	"\apresent\x18\x01 \x01(\bR\apresent\"?\n" +
-	"\x14MemeAnnotationLabels\x12'\n" +
-	"\x04text\x18\x01 \x01(\v2\x13.emomo.v1.TextLabelR\x04text*o\n" +
+	"\x06format\x18\x03 \x01(\x0e2\x15.emomo.v1.ImageFormatR\x06format\"1\n" +
+	"\x14MemeAnnotationLabels\x12\x19\n" +
+	"\bhas_text\x18\x01 \x01(\bR\ahasText*o\n" +
 	"\vImageFormat\x12\x1c\n" +
 	"\x18IMAGE_FORMAT_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11IMAGE_FORMAT_JPEG\x10\x01\x12\x14\n" +
@@ -411,23 +373,21 @@ func file_emomo_v1_types_proto_rawDescGZIP() []byte {
 }
 
 var file_emomo_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_emomo_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_emomo_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_emomo_v1_types_proto_goTypes = []any{
 	(ImageFormat)(0),             // 0: emomo.v1.ImageFormat
 	(VectorType)(0),              // 1: emomo.v1.VectorType
 	(TextPresence)(0),            // 2: emomo.v1.TextPresence
 	(*ImageInfo)(nil),            // 3: emomo.v1.ImageInfo
-	(*TextLabel)(nil),            // 4: emomo.v1.TextLabel
-	(*MemeAnnotationLabels)(nil), // 5: emomo.v1.MemeAnnotationLabels
+	(*MemeAnnotationLabels)(nil), // 4: emomo.v1.MemeAnnotationLabels
 }
 var file_emomo_v1_types_proto_depIdxs = []int32{
 	0, // 0: emomo.v1.ImageInfo.format:type_name -> emomo.v1.ImageFormat
-	4, // 1: emomo.v1.MemeAnnotationLabels.text:type_name -> emomo.v1.TextLabel
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_emomo_v1_types_proto_init() }
@@ -441,7 +401,7 @@ func file_emomo_v1_types_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emomo_v1_types_proto_rawDesc), len(file_emomo_v1_types_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   3,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

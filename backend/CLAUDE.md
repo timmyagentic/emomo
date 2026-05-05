@@ -112,7 +112,7 @@ Config file: `backend/configs/config.yaml`.
 - **Worker Pool**: Ingest service uses goroutine workers with configurable concurrency.
 - **Layered Architecture**: Handler → Service → Repository → Storage.
 - **Clean schema**: Do not reintroduce top-level `source_type`, `source_id`, `local_path`, `is_animated`, `md5_hash`, `status`, or per-vector provider/mode/dimension columns unless there is an implemented runtime need.
-- **Structured labels**: "has visible text" lives at `meme_annotations.labels.text.present`, and Qdrant `text_presence` is a derived payload/filter value.
+- **Structured labels**: "has visible text" lives at `meme_annotations.labels.has_text` (flat bool, EmitUnpopulated so every row stores an explicit value), and Qdrant `text_presence` is a derived payload/filter value.
 - **Multi-embedding**: each embedding route is registered in `internal/service/embedding_registry.go` and stored as a separate `meme_vectors` row keyed by `meme_id + collection + vector_type`.
 - **Protobuf code generation**: after changing any `.proto` under `proto/emomo/v1/`, run `GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate` (Go output to `gen/`) and `cd ../frontend && npm run gen` (TS output to `frontend/gen/`). Both `gen/` directories are committed to git so deploy targets that don't have buf installed (Render / Railway / HuggingFace Space) can still build.
 - **Migrations**: extend `internal/repository/db.go` (specifically `dropLegacyArtifacts`, `migrateMemes`, `prepareLegacy*` helpers). Add a regression test in `db_test.go` (SQLite) and, if it touches Postgres-specific behaviour, in `db_postgres_integration_test.go`.

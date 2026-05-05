@@ -72,7 +72,7 @@ localdir 扫描静态图片
 
 ### `meme_annotations`
 
-保存 VLM/OCR 分析结果和结构化标签：`meme_id`、`analyzer_model`、`description`、`ocr_text`、`labels`。`labels` 是 protobuf `MemeAnnotationLabels` 的 JSON 表示；“有没有文字”存为 `labels.text.present`，不是一级列。
+保存 VLM/OCR 分析结果和结构化标签：`meme_id`、`analyzer_model`、`description`、`ocr_text`、`labels`。`labels` 是 protobuf `MemeAnnotationLabels` 的 JSON 表示；“有没有文字”存为 `labels.has_text`（扁平 bool），不是一级列。
 
 ### `meme_vectors`
 
@@ -205,4 +205,4 @@ STORAGE_PUBLIC_URL=...
 - 只验证图片向量质量时，可以单独导入或回填 `qwen3vl_image`。
 - 调整模型、prompt 或 caption 构造逻辑后，应使用 `cmd/reembed` 回填受影响的 vector type。
 - 不要把 `meme_annotations.description` 当成唯一检索语料；它只是辅助 caption/keyword 的一部分。
-- “有没有文字”在关系库中来自 `meme_annotations.labels.text.present`。Qdrant payload 可派生 `text_presence=with_text/without_text/unknown` 作为过滤字段。
+- “有没有文字”在关系库中来自 `meme_annotations.labels.has_text`。Qdrant payload 可派生 `text_presence=with_text/without_text/unknown` 作为过滤字段。

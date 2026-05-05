@@ -12,7 +12,7 @@ VLM description and OCR are still generated and stored in `meme_annotations`, bu
 The relational schema is intentionally small:
 
 - `memes`: image identity, storage key, content hash, `image_info`. `category` and `tags` are present on the table but the current ingest pipeline writes them as empty — see "Metadata Rules" below.
-- `meme_annotations`: VLM/OCR description, OCR text, and structured labels such as `labels.text.present`.
+- `meme_annotations`: VLM/OCR description, OCR text, and structured labels such as `labels.has_text`.
 - `meme_vectors`: Qdrant point index records keyed by `meme_id + collection + vector_type`.
 - `meme_metadata`: provenance for each ingested item (source platform, original title, note id, search keywords). **Never read by the search pipeline**; pure traceability.
 
@@ -77,7 +77,7 @@ Use `--force` to reprocess existing vectors, or `--retry` to backfill missing ve
 - `image_info`: protobuf-defined structured value containing width, height, and image format.
 - `memes.category`: present on the schema but **left empty** by the current ingest pipeline. Folder names and crawler keywords are not semantic categories — they describe how an image was *collected*, not what it *depicts*. See `meme_metadata` below for where that information actually goes.
 - `memes.tags`: present on the schema but **left empty** by the current ingest pipeline, for the same reason. The field is reserved for genuine semantic tags (e.g. future VLM-extracted tags or manual labels).
-- `labels.text.present`: stored in `meme_annotations.labels` when OCR analysis can determine whether the image has visible text.
+- `labels.has_text`: stored in `meme_annotations.labels` as a single bool. The OCR analyzer always populates this; the protojson serializer is configured with `EmitUnpopulated=true` so every row carries an explicit `true`/`false` value at rest (no missing-key ambiguity).
 - `format`: detected by magic bytes during ingestion and stored inside `image_info.format` as protobuf `ImageFormat`; WebP is converted to JPEG before storage/model calls.
 - unsupported formats, including GIF, are skipped or rejected before persistence.
 
