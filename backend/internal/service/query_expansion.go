@@ -67,6 +67,7 @@ type QueryExpansionConfig struct {
 // NewQueryExpansionService creates a new query expansion service.
 // Parameters:
 //   - cfg: query expansion configuration (nil disables expansion).
+//
 // Returns:
 //   - *QueryExpansionService: initialized service instance.
 func NewQueryExpansionService(cfg *QueryExpansionConfig) *QueryExpansionService {
@@ -104,10 +105,10 @@ func (s *QueryExpansionService) IsEnabled() bool {
 
 // queryExpansionRequest represents the request to the LLM API
 type queryExpansionRequest struct {
-	Model     string                      `json:"model"`
-	Messages  []queryExpansionMessage     `json:"messages"`
-	MaxTokens int                         `json:"max_tokens"`
-	Temperature float32                   `json:"temperature"`
+	Model       string                  `json:"model"`
+	Messages    []queryExpansionMessage `json:"messages"`
+	MaxTokens   int                     `json:"max_tokens"`
+	Temperature float32                 `json:"temperature"`
 }
 
 type queryExpansionMessage struct {
@@ -149,6 +150,7 @@ type streamDelta struct {
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
 //   - query: original query string.
+//
 // Returns:
 //   - string: expanded query text (or original on fallback).
 //   - error: non-nil if the expansion request fails.
@@ -215,6 +217,7 @@ func (s *QueryExpansionService) Expand(ctx context.Context, query string) (strin
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
 //   - query: original query string.
+//
 // Returns:
 //   - string: expanded query or original when expansion fails.
 func (s *QueryExpansionService) ExpandWithFallback(ctx context.Context, query string) string {
@@ -230,6 +233,7 @@ func (s *QueryExpansionService) ExpandWithFallback(ctx context.Context, query st
 //   - ctx: context for cancellation and deadlines.
 //   - query: original query string.
 //   - tokenCh: channel to receive individual tokens.
+//
 // Returns:
 //   - string: complete expanded query.
 //   - error: non-nil if the expansion request fails.

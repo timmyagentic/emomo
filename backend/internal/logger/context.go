@@ -42,6 +42,7 @@ func getDefaultLogger() *Logger {
 // SetDefaultLogger sets the default logger used when no logger is found in context.
 // Parameters:
 //   - l: logger to set as default.
+//
 // Returns: none.
 func SetDefaultLogger(l *Logger) {
 	if l != nil {
@@ -58,6 +59,7 @@ func SetDefaultLogger(l *Logger) {
 // WithContext returns a new context with the logger attached.
 // Parameters:
 //   - ctx: existing context to wrap.
+//
 // Returns:
 //   - context.Context: context containing the logger.
 func (l *Logger) WithContext(ctx context.Context) context.Context {
@@ -67,6 +69,7 @@ func (l *Logger) WithContext(ctx context.Context) context.Context {
 // FromContext extracts the logger from context.
 // Parameters:
 //   - ctx: context to inspect.
+//
 // Returns:
 //   - *Logger: logger with injected fields or the default logger.
 func FromContext(ctx context.Context) *Logger {
@@ -103,6 +106,7 @@ func WithFields(ctx context.Context, fields Fields) context.Context {
 // Parameters:
 //   - ctx: base context.
 //   - fields: structured fields to add.
+//
 // Returns:
 //   - context.Context: context containing the enriched logger.
 func ContextWithFields(ctx context.Context, fields Fields) context.Context {
@@ -114,6 +118,7 @@ func ContextWithFields(ctx context.Context, fields Fields) context.Context {
 //   - ctx: base context.
 //   - key: field key.
 //   - value: field value.
+//
 // Returns:
 //   - context.Context: context containing the enriched logger.
 func ContextWithField(ctx context.Context, key string, value interface{}) context.Context {

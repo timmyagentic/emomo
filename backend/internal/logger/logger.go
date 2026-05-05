@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,6 +49,7 @@ func DefaultConfig() *Config {
 // New creates a new Logger with the given configuration.
 // Parameters:
 //   - cfg: logger configuration; nil uses DefaultConfig.
+//
 // Returns:
 //   - *Logger: initialized logger instance.
 func New(cfg *Config) *Logger {
@@ -77,8 +79,8 @@ func New(cfg *Config) *Logger {
 	// Set formatter - JSON format as default
 	if cfg.Format == "text" {
 		log.SetFormatter(&logrus.TextFormatter{
-			FullTimestamp:   true,
-			TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
+			FullTimestamp:    true,
+			TimestampFormat:  "2006-01-02T15:04:05.000Z07:00",
 			CallerPrettyfier: callerPrettyfier,
 		})
 	} else {
@@ -154,9 +156,9 @@ func NewFromEnv(envCfg *EnvConfig) *Logger {
 		if envCfg.Environment != "local" && envCfg.LogFile != "" {
 			fileWriter := &lumberjack.Logger{
 				Filename:   envCfg.LogFile,
-				MaxSize:    envCfg.MaxSize,    // MB
+				MaxSize:    envCfg.MaxSize, // MB
 				MaxBackups: envCfg.MaxBackups,
-				MaxAge:     envCfg.MaxAge,     // days
+				MaxAge:     envCfg.MaxAge, // days
 				Compress:   envCfg.Compress,
 			}
 			writers = append(writers, fileWriter)
@@ -186,6 +188,35 @@ func NewDefault() *Logger {
 	return NewFromEnv(nil)
 }
 
+// OpenRotatingFile opens (creating any missing parent directories) a
+// lumberjack-backed rotating log file at path and returns it as an
+// io.WriteCloser. It is intended for CLI entry points (e.g. cmd/ingest) that
+// want a persistent log file alongside stdout without going through the
+// env-driven NewFromEnv path.
+//
+// The default rotation policy mirrors NewFromEnv: 100MB per file, up to 7
+// gzipped backups, keeping at most 30 days of history.
+//
+// Callers MUST Close() the returned writer before the process exits so the
+// final log batch is flushed to disk; logger.Sync() does not own this writer.
+func OpenRotatingFile(path string) (io.WriteCloser, error) {
+	if path == "" {
+		return nil, fmt.Errorf("logger: rotating file path is empty")
+	}
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("logger: failed to create log directory %s: %w", dir, err)
+		}
+	}
+	return &lumberjack.Logger{
+		Filename:   path,
+		MaxSize:    100,
+		MaxBackups: 7,
+		MaxAge:     30,
+		Compress:   true,
+	}, nil
+}
+
 // Sync flushes all pending logs and closes file handles.
 // Should be called before program exit to ensure no logs are lost.
 //
@@ -209,6 +240,7 @@ func Sync() error {
 // WithFields returns a new Logger with additional fields.
 // Parameters:
 //   - fields: structured fields to add.
+//
 // Returns:
 //   - *Logger: derived logger with fields applied.
 func (l *Logger) WithFields(fields Fields) *Logger {
@@ -219,6 +251,7 @@ func (l *Logger) WithFields(fields Fields) *Logger {
 // Parameters:
 //   - key: field key.
 //   - value: field value.
+//
 // Returns:
 //   - *Logger: derived logger with field applied.
 func (l *Logger) WithField(key string, value interface{}) *Logger {
@@ -228,6 +261,7 @@ func (l *Logger) WithField(key string, value interface{}) *Logger {
 // WithError returns a new Logger with an error field.
 // Parameters:
 //   - err: error to attach.
+//
 // Returns:
 //   - *Logger: derived logger with error field.
 func (l *Logger) WithError(err error) *Logger {

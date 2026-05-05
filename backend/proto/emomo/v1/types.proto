@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+// Package emomo.v1 defines emomo's protobuf API and structured-value schema.
+//
+// SCOPE
+//   Protobuf is used for:
+//     1. HTTP request / response / SSE message bodies.
+//     2. Frontend and backend generated DTOs.
+//     3. Closed cross-boundary enums.
+//     4. Explicitly allowlisted SQL column-level structured values
+//        (currently image_info and labels JSON columns).
+//
+//   It is NOT a transport-level RPC contract: emomo's HTTP API stays RESTful
+//   (POST /api/v1/search, GET /api/v1/memes/:id, ...). Endpoint-to-message
+//   binding is documented as a comment on each Request message and is
+//   enforced by the hand-written Gin handlers — there is intentionally no
+//   `service` definition, no google.api.http annotation, and no connect / gRPC
+//   layer. It also does not own relational table shape, migrations, runtime
+//   config, open business strings, repository internals, or frontend UI state.
+//   Wire format is protojson with UseEnumNumbers=true.
+//
+// LAYOUT
+//   - types.proto  : closed enums + column-level structured values.
+//   - meme.proto   : API entity DTOs (Meme / MemeAnnotation / MemeVector /
+//                    SearchResult).
+//   - api.proto    : HTTP request / response messages and SSE events.
+
+package emomo.v1;
+
+option go_package = "github.com/timmy/emomo/gen/emomo/v1;emomov1";
+
+// ImageFormat enumerates the image container types emomo persists for memes.
+// The numeric value is stored inside memes.image_info.format JSON column,
+// so it MUST remain wire-stable (do not renumber existing entries).
+enum ImageFormat {
+  IMAGE_FORMAT_UNSPECIFIED = 0;
+  IMAGE_FORMAT_JPEG = 1;
+  IMAGE_FORMAT_PNG = 2;
+  IMAGE_FORMAT_WEBP = 3;
+}
+
+// VectorType enumerates the embedding routes emomo stores per meme. The
+// numeric value is persisted in meme_vectors.vector_type INTEGER column.
+enum VectorType {
+  VECTOR_TYPE_UNSPECIFIED = 0;
+  VECTOR_TYPE_IMAGE = 1;
+  VECTOR_TYPE_CAPTION = 2;
+}
+
+// TextPresence classifies whether OCR found visible text inside a meme image.
+// Used both as a search-time filter (denormalized to qdrant payload) and as a
+// derived attribute on SearchResult.
+//
+// Wire form is the enum number (UseEnumNumbers=true). When projected into the
+// qdrant payload, the value is mapped to a stable lowercase string
+// ("with_text", "without_text", "unknown") via a backend helper — qdrant uses
+// keyword filtering and that mapping must remain stable.
+enum TextPresence {
+  TEXT_PRESENCE_UNSPECIFIED = 0;
+  TEXT_PRESENCE_UNKNOWN = 1;
+  TEXT_PRESENCE_WITH_TEXT = 2;
+  TEXT_PRESENCE_WITHOUT_TEXT = 3;
+}
+
+// ImageInfo stores intrinsic image properties as a single JSON value inside
+// the memes.image_info column. The encoding is protojson + UseEnumNumbers=true
+// + UseProtoNames=true; legacy rows already follow this shape.
+message ImageInfo {
+  int32 width = 1;
+  int32 height = 2;
+  ImageFormat format = 3;
+}
+
+// MemeAnnotationLabels is the JSON value stored inside the
+// meme_annotations.labels column. Wire form is protojson with
+// EmitUnpopulated=true so every persisted row carries an explicit value for
+// every declared field (no "missing key implies false" ambiguity at rest).
+//
+// `has_text` records whether the analyzer judged the image to contain visible,
+// human-readable text. The truth value comes from the OCR step inside the VLM
+// pipeline (see service.TextPresenceFromOCRText) and excludes incidental
+// punctuation / emoji that would otherwise inflate "with text" counts.
+//
+// Future label facets (nsfw, has_face, language, ...) belong as siblings
+// directly under this message; do not reintroduce a wrapper sub-message just
+// to group them. The flat shape is intentional: `labels.has_text` reads like
+// what it means, and protojson does the rest.
+message MemeAnnotationLabels {
+  bool has_text = 1;
+}

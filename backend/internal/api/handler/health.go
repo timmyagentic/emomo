@@ -20,6 +20,7 @@ func NewHealthHandler() *HealthHandler {
 // Health returns the health status of the service.
 // Parameters:
 //   - c: Gin request context.
+//
 // Returns: none (writes JSON response).
 func (h *HealthHandler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{

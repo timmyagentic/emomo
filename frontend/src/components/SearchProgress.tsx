@@ -1,23 +1,23 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import type { SearchStage } from '../api';
+import type { SearchStageSlug } from '../api';
 import styles from './SearchProgress.module.css';
 
 interface SearchProgressProps {
-  stage: SearchStage;
+  stage: SearchStageSlug;
   message: string;
   thinkingText: string;
   expandedQuery?: string;
   onCancel?: () => void;
 }
 
-const STAGES: { key: SearchStage; label: string }[] = [
+const STAGES: { key: SearchStageSlug; label: string }[] = [
   { key: 'query_expansion_start', label: '理解意图' },
   { key: 'embedding', label: '生成向量' },
   { key: 'searching', label: '搜索' },
   { key: 'enriching', label: '加载' },
 ];
 
-function getStageIndex(stage: SearchStage): number {
+function getStageIndex(stage: SearchStageSlug): number {
   if (stage === 'thinking' || stage === 'query_expansion_done') {
     return 0; // Still in query expansion phase
   }

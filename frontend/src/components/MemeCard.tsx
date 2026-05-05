@@ -1,6 +1,6 @@
 import { type CSSProperties, useState } from 'react';
 import { motion } from 'framer-motion';
-import type { Meme } from '../types';
+import type { DisplayMeme } from '../types';
 import styles from './MemeCard.module.css';
 
 /**
@@ -8,7 +8,7 @@ import styles from './MemeCard.module.css';
  */
 interface MemeCardProps {
   /** The meme data to display. */
-  meme: Meme;
+  meme: DisplayMeme;
   /**
    * The index of the card in the list, used for staggered animation delays.
    * @default 0
@@ -18,7 +18,7 @@ interface MemeCardProps {
    * Callback function triggered when the card is clicked.
    * @param meme - The meme data associated with the card.
    */
-  onClick?: (meme: Meme) => void;
+  onClick?: (meme: DisplayMeme) => void;
 }
 
 /**
@@ -35,7 +35,7 @@ export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
   const animationDelay = (index % 12) * 0.025;
-  const description = meme.vlm_description || meme.description || '';
+  const description = meme.description || '';
   const detailLabel = description
     ? `查看表情详情：${description.slice(0, 80)}`
     : '查看表情详情';
@@ -93,7 +93,7 @@ export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
           {/* Meme image */}
           {!imageError && (
             <motion.img
-              src={meme.url || meme.original_url}
+              src={meme.url}
               alt={description || 'Meme'}
               className={styles.image}
               loading="lazy"

@@ -14,23 +14,8 @@ import (
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/service"
-	"github.com/timmy/emomo/internal/source"
-	"github.com/timmy/emomo/internal/source/localdir"
 	"github.com/timmy/emomo/internal/storage"
 )
-
-func buildSources(cfg *config.Config) map[string]source.Source {
-	sources := make(map[string]source.Source)
-	if cfg.Sources.LocalDir.Enabled {
-		sources["localdir"] = localdir.NewAdapter(localdir.Options{
-			RootPath:     cfg.Sources.LocalDir.RootPath,
-			SourceID:     cfg.Sources.LocalDir.SourceID,
-			ManifestPath: cfg.Sources.LocalDir.ManifestPath,
-			QueuePath:    cfg.Sources.LocalDir.QueuePath,
-		})
-	}
-	return sources
-}
 
 func serviceRetrievalConfig(cfg config.RetrievalConfig) service.RetrievalConfig {
 	return service.RetrievalConfig{
@@ -84,8 +69,7 @@ func main() {
 
 	// Initialize repositories
 	memeRepo := repository.NewMemeRepository(db)
-	vectorRepo := repository.NewMemeVectorRepository(db)
-	descRepo := repository.NewMemeDescriptionRepository(db)
+	annotationRepo := repository.NewMemeAnnotationRepository(db)
 
 	ctx := context.Background()
 
@@ -133,11 +117,6 @@ func main() {
 	defaultProvider, defaultQdrantRepo := embeddingRegistry.Default()
 	defaultEmbeddingName := embeddingRegistry.DefaultName()
 	defaultQdrantCollection := defaultQdrantRepo.GetCollectionName()
-	defaultVectorType := ""
-	if defaultEmbeddingCfg := cfg.GetDefaultEmbedding(); defaultEmbeddingCfg != nil {
-		defaultVectorType = service.IngestVectorTypeForDocumentMode(defaultEmbeddingCfg.GetDocumentMode())
-	}
-
 	// Initialize query expansion service
 	// Use Query Expansion's own APIKey/BaseURL if configured, otherwise fall back to VLM's
 	qeAPIKey := cfg.Search.QueryExpansion.APIKey
@@ -164,7 +143,7 @@ func main() {
 	// Create search service
 	searchService := service.NewSearchService(
 		memeRepo,
-		descRepo,
+		annotationRepo,
 		defaultQdrantRepo,
 		defaultProvider,
 		queryExpansionService,
@@ -193,46 +172,8 @@ func main() {
 		"default_qdrant":        defaultQdrantCollection,
 	}).Info("Embedding collections registered")
 
-	// Initialize VLM service
-	vlmService := service.NewVLMService(&service.VLMConfig{
-		Provider: cfg.VLM.Provider,
-		Model:    cfg.VLM.Model,
-		APIKey:   cfg.VLM.APIKey,
-		BaseURL:  cfg.VLM.BaseURL,
-	})
-
-	var ingestIndexes []service.IngestVectorIndex
-	if defaultProfile := cfg.GetDefaultSearchProfile(); defaultProfile != nil {
-		ingestIndexes, err = embeddingRegistry.BuildProfileIngestIndexes(defaultProfile)
-		if err != nil {
-			appLogger.WithError(err).Fatal("Failed to build ingest vector indexes")
-		}
-	}
-
-	// Initialize ingest service (uses default search profile when configured)
-	ingestService := service.NewIngestService(
-		memeRepo,
-		vectorRepo,
-		descRepo,
-		defaultQdrantRepo,
-		objectStorage,
-		vlmService,
-		defaultProvider,
-		appLogger,
-		&service.IngestConfig{
-			Workers:       cfg.Ingest.Workers,
-			BatchSize:     cfg.Ingest.BatchSize,
-			Collection:    defaultQdrantCollection,
-			VectorType:    defaultVectorType,
-			VectorIndexes: ingestIndexes,
-		},
-	)
-
-	// Initialize data sources
-	sources := buildSources(cfg)
-
 	// Setup router
-	router := api.SetupRouter(searchService, ingestService, sources, cfg, appLogger)
+	router := api.SetupRouter(searchService, cfg, appLogger)
 
 	// Create HTTP server
 	srv := &http.Server{

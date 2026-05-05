@@ -1,14 +1,16 @@
 # 快速部署指南
 
-> **monorepo 提示**：本文档原本针对纯后端仓库编写。后端代码已下沉到 `backend/`，所有形如 `./scripts/...` 或 `go run ./cmd/...` 的命令请先 `cd backend` 再执行（例如 `cd backend && ./scripts/import-data.sh -p ./data/memes -l 100`）。
+> **monorepo 提示**：本文档原本针对纯后端仓库编写。后端代码已下沉到 `backend/`，导入数据时请先 `cd backend`，并且只使用 `./scripts/import-data.sh` 这一种导入入口（例如 `cd backend && ./scripts/import-data.sh -p ./data/memes`）。
 
 ## 前置要求
 
-- OpenAI Compatible API Key（用于 VLM/查询扩展，支持 OpenAI, OpenRouter 等）
-- Jina API Key（用于 Embedding）
+- SiliconFlow API Key（用于默认 Qwen3-VL 多模态 Embedding）
+- OpenAI Compatible API Key（用于 VLM/OCR/查询扩展，支持 OpenAI, OpenRouter 等）
 - Qdrant 服务（本地或云端，使用 gRPC 端口）
 - S3 兼容对象存储（Cloudflare R2 / AWS S3 / MinIO 等）
 - 前端部署（可选，如 Vercel）
+
+当前默认检索链路是“导入时直接生成图片向量，搜索时文本 query 直接匹配图片向量”。VLM/OCR 只作为 annotation、caption/BM25 和展示元数据，不是主检索前置步骤。关系库核心表为 `memes`、`meme_annotations`、`meme_vectors`，protobuf 消息 schema 定义在 `backend/proto/emomo/v1/{types,meme,api}.proto`。
 
 ## 方案选择
 
@@ -37,8 +39,8 @@ newgrp docker
 git clone <your-repo-url> emomo
 cd emomo
 
-# 4. 创建 .env 文件
-cat > .env << EOF
+# 4. 创建后端 .env 文件
+cat > backend/.env << EOF
 # 对象存储配置（推荐使用 Cloudflare R2）
 STORAGE_TYPE=r2
 STORAGE_ENDPOINT=<account-id>.r2.cloudflarestorage.com
@@ -63,12 +65,13 @@ QDRANT_API_KEY=your-qdrant-api-key
 QDRANT_USE_TLS=true
 
 OPENAI_API_KEY=your-openai-key
-JINA_API_KEY=your-jina-key
+SILICONFLOW_API_KEY=your-siliconflow-key
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 EOF
 
 # 5. 启动服务（API + 日志采集，依赖外部 Qdrant/存储）
 cd deployments
-docker-compose -f docker-compose.yml up -d
+docker compose --env-file ../backend/.env -f docker-compose.yml up -d
 
 # 6. 检查服务状态
 docker ps
@@ -100,7 +103,8 @@ STORAGE_USE_SSL=true
 STORAGE_BUCKET=memes
 STORAGE_PUBLIC_URL=https://pub-xxx.r2.dev
 OPENAI_API_KEY=your-openai-key
-JINA_API_KEY=your-jina-key
+SILICONFLOW_API_KEY=your-siliconflow-key
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 QDRANT_HOST=your-qdrant-host
 QDRANT_PORT=6334
 QDRANT_API_KEY=your-qdrant-api-key
@@ -135,7 +139,8 @@ STORAGE_USE_SSL=true
 STORAGE_BUCKET=memes
 STORAGE_PUBLIC_URL=https://pub-xxx.r2.dev
 OPENAI_API_KEY=your-openai-key
-JINA_API_KEY=your-jina-key
+SILICONFLOW_API_KEY=your-siliconflow-key
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 ```
 
 **注意**：当前代码已支持 Qdrant Cloud API Key（gRPC + TLS）。
@@ -152,16 +157,19 @@ cd emomo
 mkdir -p backend/data/memes
 # 把 .jpg/.jpeg/.png/.webp 图片放到 backend/data/memes
 
-# 使用导入脚本（推荐，无需预先编译）
+# 使用唯一导入脚本（无需预先编译，默认导入目录中的全部图片）
 cd backend
-./scripts/import-data.sh -p ./data/memes -l 100
-
-# 如果成功，摄入全部
-./scripts/import-data.sh -p ./data/memes -l 10000
-
-# 或使用 go run 直接运行
-go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
+./scripts/import-data.sh -p ./data/memes
 ```
+
+如需补齐已有图片缺失的 image/caption 向量，可在 `backend/` 下执行：
+
+```bash
+./scripts/import-data.sh -r -l 100
+go run ./cmd/reembed --profile qwen3vl --vector-type all
+```
+
+`cmd/reembed` 只用于已有数据的向量维护，不是数据导入入口。
 
 ## 配置前端
 

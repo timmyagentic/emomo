@@ -1,3 +1,16 @@
+// Package domain hosts emomo's GORM-backed application data model.
+//
+// The structured-value columns (memes.image_info, meme_annotations.labels)
+// are typed directly as generated protobuf message pointers — *pb.ImageInfo,
+// *pb.MemeAnnotationLabels — and serialized via the protojson GORM
+// serializer registered in backend/internal/persistence. This is intentionally
+// limited to the allowlisted structured JSON columns; relational table shape,
+// indexes, and migrations remain owned by the GORM models and repository/db.go.
+//
+// Pointer types are used (rather than value types) because every protobuf
+// message embeds a protoimpl.MessageState containing a pragma.DoNotCopy /
+// sync.Mutex pair; embedding by value would have GORM Find/Save copy a lock
+// every time it walks the struct, which go vet rightly flags.
 package domain
 
 import (
@@ -5,26 +18,14 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 )
 
-// MemeStatus represents the processing status of a meme record.
-// Values include MemeStatusPending, MemeStatusActive, and MemeStatusFailed.
-type MemeStatus string
-
-const (
-	MemeStatusPending MemeStatus = "pending"
-	MemeStatusActive  MemeStatus = "active"
-	MemeStatusFailed  MemeStatus = "failed"
-)
-
-// StringArray is a custom type for storing string arrays as JSON in the database.
+// StringArray persists a Go string slice as a JSON array TEXT column.
 type StringArray []string
 
 // Value implements the driver.Valuer interface for database serialization.
-// Parameters: none.
-// Returns:
-//   - driver.Value: JSON-encoded string representation of the slice.
-//   - error: non-nil if marshaling fails.
 func (a StringArray) Value() (driver.Value, error) {
 	if a == nil {
 		return "[]", nil
@@ -37,11 +38,6 @@ func (a StringArray) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface for database deserialization.
-// Parameters:
-//   - value: raw database value to decode.
-//
-// Returns:
-//   - error: non-nil if decoding fails or the type is unexpected.
 func (a *StringArray) Scan(value interface{}) error {
 	if value == nil {
 		*a = StringArray{}
@@ -59,37 +55,18 @@ func (a *StringArray) Scan(value interface{}) error {
 }
 
 // Meme represents a meme/sticker in the system.
-// Fields include identifiers, storage metadata, content metadata, and processing status.
 type Meme struct {
-	ID             string      `gorm:"type:text;primaryKey" json:"id"`
-	SourceType     string      `gorm:"type:text;not null;index:idx_memes_source,unique" json:"source_type"`
-	SourceID       string      `gorm:"type:text;not null;index:idx_memes_source,unique" json:"source_id"`
-	StorageKey     string      `gorm:"type:text" json:"storage_key"`
-	LocalPath      string      `gorm:"column:local_path" json:"local_path,omitempty"`
-	Width          int         `json:"width"`
-	Height         int         `json:"height"`
-	Format         string      `json:"format"`
-	IsAnimated     bool        `json:"is_animated"` // Kept for schema compatibility; new ingestion stores false.
-	FileSize       int64       `json:"file_size"`
-	MD5Hash        string      `gorm:"uniqueIndex:idx_memes_md5" json:"md5_hash"`
-	PerceptualHash string      `gorm:"type:text" json:"perceptual_hash,omitempty"`
-	Tags           StringArray `gorm:"type:text" json:"tags"`
-	Category       string      `gorm:"type:text;index:idx_memes_category" json:"category"`
-	Status         MemeStatus  `gorm:"type:text;index:idx_memes_status;default:pending" json:"status"`
-	CreatedAt      time.Time   `json:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at"`
+	ID          string         `gorm:"type:text;primaryKey" json:"id"`
+	StorageKey  string         `gorm:"type:text;not null" json:"storage_key"`
+	ContentHash string         `gorm:"type:text;not null;uniqueIndex:idx_memes_content_hash" json:"content_hash"`
+	ImageInfo   *pb.ImageInfo  `gorm:"type:text;not null;serializer:protojson" json:"image_info"`
+	Tags        StringArray    `gorm:"type:text" json:"tags"`
+	Category    string         `gorm:"type:text;index:idx_memes_category" json:"category"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 // TableName returns the database table name for Meme.
-// Parameters: none.
-// Returns:
-//   - string: table name for GORM mapping.
 func (Meme) TableName() string {
 	return "memes"
-}
-
-// MemeSearchResult represents a search result with a similarity score.
-type MemeSearchResult struct {
-	Meme
-	Score float32 `json:"score"`
 }

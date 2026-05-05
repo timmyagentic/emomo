@@ -15,28 +15,35 @@ license: mit
 > 本目录是 emomo monorepo 的后端子项目。仓库总览见 [../README.md](../README.md)。
 > Hugging Face Space 通过 GitHub Actions 仅同步本目录（见仓库 `.github/workflows/sync_to_hf.yml`），所以 Space 看到的根就是这里。
 
-Emomo 是一个基于 Go + Qdrant + VLM + Text Embedding 的表情包语义搜索系统，支持本地静态图片目录摄入、自动描述生成与向量检索。表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
+Emomo 是一个基于 Go + Qdrant + 多模态 Embedding 的表情包语义搜索系统，支持本地静态图片目录摄入、图片向量检索、caption/keyword 辅助检索和元数据管理。当前默认链路使用 Qwen3-VL：导入时直接为图片生成 image 向量，搜索时将用户文本嵌入到同一语义空间并与图片向量匹配；VLM 描述和 OCR 仍会生成，但主要作为 caption/BM25 辅助信号和展示元数据。表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
+
+关系库当前收敛为三张核心表：`memes`、`meme_annotations`、`meme_vectors`。protobuf message schema 定义在 `proto/emomo/v1/{types,meme,api}.proto`，生成代码在 `gen/emomo/v1/`（导入为 `pb`）。本项目把 protobuf 限定在 API DTO、前后端生成类型、跨边界封闭枚举，以及少量结构化 DB JSON 值（当前仅 `memes.image_info` / `meme_annotations.labels`，通过 `protojson` + `UseEnumNumbers=true` 序列化）。关系表结构、索引、迁移、运行时配置、开放业务集合和 UI 状态不由 protobuf 管。它**不是** RPC 协议——HTTP API 仍是 RESTful（POST `/api/v1/search` 等），handler 直接对 protobuf message 做 `protojson.Marshal/Unmarshal`。
+
+数据库迁移完全由代码托管：`internal/repository/db.go` 中的 GORM AutoMigrate 加上 `prepareLegacy*` / `migrate*` / `dropLegacy*` 这一组迁移函数是唯一的事实来源（single source of truth）；项目**不使用** goose / golang-migrate / atlas 等独立 SQL 迁移工具，也不存在 `backend/migrations/` 目录。新增 schema 演进需要修改 `db.go`，并在 `db_test.go` 里补一条 SQLite 集成测试。
+
+三张核心表**不启用 Row Level Security**——访问控制完全在连接层（service-role DSN）做。Supabase 部署的前提是不通过 Data API（PostgREST）暴露这些表给 anon/authenticated 角色；前端只调用 Go API，Go 后端持服务端连接读写 Postgres。`disableCoreTableRLS` 会在每次 `InitDB` 时强制把 RLS 关闭，老库即使之前 ENABLE 过也会被自动关回。
 
 ## 功能概览
 
-- 语义搜索：输入文字描述即可检索相似表情包。
+- 多模态语义搜索：输入文字即可直接检索图片向量，默认融合 image、caption 和 keyword 三路结果。
 - 数据摄入：支持本地静态图片目录分批摄入，仅接收静态图片并跳过 GIF 文件。
-- 向量管理：支持多 Embedding 模型/多集合管理。
+- 向量管理：支持多 Embedding 模型、多集合和 image/caption 多路向量管理。
 - 存储抽象：兼容 Cloudflare R2、AWS S3 与其他 S3 兼容服务。
-- 可扩展：查询扩展、VLM 描述与多模型配置均可开关。
+- 可扩展：查询扩展、VLM/OCR 辅助分析与多模型配置均可开关。
 
 ## 技术栈
 
 - **后端**: Go + Gin + GORM
+- **Protobuf message schema**: protobuf-go + protobuf-es + buf
 - **向量数据库**: Qdrant (gRPC)
 - **元数据存储**: SQLite (本地) / PostgreSQL (生产)
 - **对象存储**: S3 兼容存储（Cloudflare R2、AWS S3 等）
-- **VLM**: OpenAI-compatible API (图片描述生成)
-- **Text Embedding**: Jina Embeddings / OpenAI-compatible Embeddings
+- **Embedding**: Qwen3-VL 多模态 Embedding / Jina / OpenAI-compatible Embeddings
+- **VLM/OCR**: OpenAI-compatible API (caption、OCR、keyword 辅助分析)
 
 ## 环境要求
 
-- Go 1.24.6（见 `go.mod`）
+- Go 1.26.2（见 `go.mod`）
 - Docker（可选，用于本地 Qdrant/MinIO 或日志采集）
 
 ## 快速开始（本地开发）
@@ -102,7 +109,7 @@ STORAGE_USE_SSL=false
 ```bash
 # 在仓库根执行（compose 文件在 ../deployments）
 cd ..
-docker compose -f deployments/docker-compose.yml up -d
+docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d
 ```
 
 ### 3) 准备数据源
@@ -120,12 +127,11 @@ data/memes/
 ### 4) 摄入数据
 
 ```bash
-# 使用导入脚本（推荐，无需预先编译）
-./scripts/import-data.sh -p ./data/memes -l 100
-
-# 或使用 go run 直接运行
-go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
+# 使用唯一导入脚本（无需预先编译，默认导入目录中的全部图片）
+./scripts/import-data.sh -p ./data/memes
 ```
+
+`scripts/import-data.sh` 是唯一支持的数据导入入口；`cmd/ingest` 只作为脚本内部 worker 使用。
 
 ### 5) 启动 API 服务
 
@@ -184,9 +190,10 @@ curl http://localhost:8080/api/v1/stats
 
 | 配置项 | 环境变量 | 说明 |
 |--------|----------|------|
-| vlm.api_key | OPENAI_API_KEY | OpenAI-compatible API Key |
+| vlm.api_key | OPENAI_API_KEY | OpenAI-compatible API Key（VLM/OCR/查询扩展） |
 | vlm.base_url | OPENAI_BASE_URL | OpenAI-compatible Base URL |
-| embedding.api_key | EMBEDDING_API_KEY | Embedding API Key |
+| embeddings[].api_key_env | SILICONFLOW_API_KEY | 默认 Qwen3-VL 多模态 Embedding API Key |
+| embeddings[].base_url_env | SILICONFLOW_BASE_URL | 默认 Qwen3-VL Embedding API Base URL |
 | storage.type | STORAGE_TYPE | 存储类型：r2, s3, s3compatible |
 | storage.endpoint | STORAGE_ENDPOINT | 存储端点（不含 bucket） |
 | storage.bucket | STORAGE_BUCKET | 存储桶名称 |
@@ -208,21 +215,30 @@ go test ./...
 go run ./cmd/api
 ```
 
+### 更新 protobuf 消息 schema
+
+```bash
+GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
+```
+
+修改 `proto/emomo/v1/` 下的任意 `.proto` 后需要重新生成 `gen/emomo/v1/*.pb.go`，并同步更新前端 `frontend/gen/`，再运行 `go test ./...`。
+
 ## 项目结构（backend/）
 
 ```
 backend/
-├── cmd/                 # Go 入口（api/ingest）
+├── cmd/                 # Go 入口（api；ingest 为导入脚本内部 worker）
 ├── internal/            # Go 应用核心逻辑
 │   ├── api/             # API 层
 │   ├── config/          # 配置管理
-│   ├── domain/          # 领域模型
-│   ├── repository/      # 数据访问层
+│   ├── domain/          # 领域模型（GORM 结构体）
+│   ├── repository/      # 数据访问层；db.go 统管全部迁移
 │   ├── service/         # 业务逻辑层
 │   ├── source/          # 数据源适配器
 │   └── storage/         # 对象存储
 ├── configs/             # 配置文件
-├── migrations/          # SQL 迁移
+├── proto/               # 手写 protobuf message schema（types/meme/api 三个 .proto）
+├── gen/                 # buf generate 输出的 Go 代码（不要手改）
 ├── data/                # 本地数据目录（被 gitignore，仅保留 .gitkeep）
 ├── scripts/             # 后端脚本（import-data / setup / check-data-dir）
 └── Dockerfile           # 后端镜像

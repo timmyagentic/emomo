@@ -1,0 +1,139 @@
+syntax = "proto3";
+
+// HTTP request / response messages and SSE events for emomo's RESTful API.
+// Endpoint paths and HTTP verbs are noted as comments on each Request
+// message; the binding is enforced by hand-written Gin handlers under
+// backend/internal/api/handler/.
+
+package emomo.v1;
+
+import "emomo/v1/types.proto";
+import "emomo/v1/meme.proto";
+
+option go_package = "github.com/timmy/emomo/gen/emomo/v1;emomov1";
+
+// SearchRequest is the body of POST /api/v1/search and POST
+// /api/v1/search/stream.
+message SearchRequest {
+  string query = 1;
+  int32 top_k = 2;
+  string category = 3;
+  // text_presence == TEXT_PRESENCE_UNSPECIFIED means "no filter".
+  TextPresence text_presence = 4;
+  // Specifies which Qdrant collection to search (legacy single-route).
+  string collection = 5;
+  // Specifies which multi-route search profile to use.
+  string profile = 6;
+}
+
+// SearchResponse is the body returned by POST /api/v1/search.
+message SearchResponse {
+  repeated SearchResult results = 1;
+  int32 total = 2;
+  string query = 3;
+  string expanded_query = 4;
+  string collection = 5;
+  string profile = 6;
+}
+
+// ListMemesRequest is built by the handler from the GET /api/v1/memes query
+// string (?category=&limit=&offset=).
+message ListMemesRequest {
+  string category = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+// ListMemesResponse is the body returned by GET /api/v1/memes.
+message ListMemesResponse {
+  repeated SearchResult results = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// GetMemeRequest is built by the handler from the path param of
+// GET /api/v1/memes/:id.
+message GetMemeRequest {
+  string id = 1;
+}
+
+// GetMemeResponse is the body returned by GET /api/v1/memes/:id.
+message GetMemeResponse {
+  Meme meme = 1;
+}
+
+// GetCategoriesResponse is the body returned by GET /api/v1/categories.
+message GetCategoriesResponse {
+  repeated string categories = 1;
+  int32 total = 2;
+}
+
+// GetStatsResponse is the body returned by GET /api/v1/stats.
+message GetStatsResponse {
+  int64 total_memes = 1;
+  int32 total_categories = 2;
+  repeated string available_collections = 3;
+  repeated string available_profiles = 4;
+}
+
+// SearchStage names each step of the streaming search pipeline. The numeric
+// value is wire-stable; new stages MUST append.
+enum SearchStage {
+  SEARCH_STAGE_UNSPECIFIED = 0;
+  SEARCH_STAGE_QUERY_EXPANSION_START = 1;
+  SEARCH_STAGE_THINKING = 2;
+  SEARCH_STAGE_QUERY_EXPANSION_DONE = 3;
+  SEARCH_STAGE_EMBEDDING = 4;
+  SEARCH_STAGE_SEARCHING = 5;
+  SEARCH_STAGE_ENRICHING = 6;
+  SEARCH_STAGE_COMPLETE = 7;
+  SEARCH_STAGE_ERROR = 8;
+}
+
+// SearchProgressEvent is one SSE event in the stream returned by
+// POST /api/v1/search/stream. Each event is encoded as a single SSE
+// `data: <protojson>` line (the SSE `event: <name>` line carries the lowercase
+// stage label for human debugging only — clients should route on `stage`).
+message SearchProgressEvent {
+  SearchStage stage = 1;
+  // Human-readable progress message (Chinese, surfaced in UI).
+  string message = 2;
+  // Stage-specific structured payload. The `case` on the frontend mirrors the
+  // discriminator behaviour of @bufbuild/protobuf's oneof handling.
+  oneof payload {
+    ThinkingDelta thinking = 3;
+    ExpansionDone expansion = 4;
+    SearchComplete complete = 5;
+    SearchError error = 6;
+  }
+}
+
+// ThinkingDelta is the payload for SEARCH_STAGE_THINKING events: incremental
+// chunks of the LLM expansion model's chain-of-thought.
+message ThinkingDelta {
+  string text = 1;
+  bool is_delta = 2;
+}
+
+// ExpansionDone is the payload for SEARCH_STAGE_QUERY_EXPANSION_DONE events.
+message ExpansionDone {
+  string expanded_query = 1;
+}
+
+// SearchComplete is the payload for SEARCH_STAGE_COMPLETE events. Mirrors
+// SearchResponse (the final result) except that it is delivered inline in the
+// SSE stream rather than as a top-level HTTP body.
+message SearchComplete {
+  repeated SearchResult results = 1;
+  int32 total = 2;
+  string query = 3;
+  string expanded_query = 4;
+  string collection = 5;
+  string profile = 6;
+}
+
+// SearchError is the payload for SEARCH_STAGE_ERROR events.
+message SearchError {
+  string error = 1;
+}

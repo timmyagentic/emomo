@@ -4,10 +4,11 @@
 > All commands below assume `cd frontend`.
 
 ## Project Overview
-`emomo-frontend` is a React-based web application designed for searching, viewing, and discovering memes. It serves as the frontend for the Emomo platform, interacting with a backend API to fetch meme data based on semantic search queries (likely powered by VLM descriptions).
+`emomo-frontend` is a React-based web application designed for searching, viewing, and discovering memes. It serves as the frontend for the Emomo platform, interacting with a backend API whose default search path uses multimodal image embeddings. VLM/OCR descriptions are auxiliary metadata returned for display, not the primary retrieval mechanism.
 
 **Key Features:**
 - **Semantic Search:** Users can search for memes using natural language queries.
+- **Backend Filters:** Search can pass category/profile filters; "has visible text" is represented backend-side as a derived `text_presence` filter from `meme_annotations.labels.has_text`.
 - **Meme Discovery:** A homepage displaying recommended memes.
 - **Detailed View:** Modal view for individual memes with high-resolution images and metadata.
 - **Resilience:** Includes a "Demo Mode" with hardcoded data that activates automatically if the backend API is unreachable.
@@ -24,7 +25,7 @@
 ```text
 /
 ├── src/
-│   ├── api/            # API client functions (search, fetch memes)
+│   ├── api/            # API client functions; protobuf DTOs stop here
 │   ├── components/     # UI Components (Header, MemeGrid, etc.)
 │   ├── types/          # Shared TypeScript definitions (Meme, API responses)
 │   ├── App.tsx         # Main application logic (Routing/State)
@@ -68,6 +69,6 @@ npm run build
 ## Development Conventions
 - **Components:** Create new components in `src/components/` with a corresponding `PascalCase.module.css` file.
 - **State Management:** Uses React hooks (`useState`, `useEffect`) for local state. Complex global state is currently minimal.
-- **API:** All network requests are encapsulated in `src/api/index.ts`.
-- **Types:** Define shared interfaces in `src/types/index.ts`.
+- **API:** All network requests are encapsulated in `src/api/index.ts`. Decode/encode generated protobuf DTOs at this boundary, then project them into UI-owned shapes.
+- **Types:** Define shared UI interfaces in `src/types/index.ts`. Do not use generated protobuf types as component state/props or local fallback-data shapes after API decoding.
 - **Styling:** Prefer CSS Modules for component-specific styles. Global styles go in `src/App.css` or `src/index.css`.

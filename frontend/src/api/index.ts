@@ -1,11 +1,20 @@
-import type {
-  Meme,
-  SearchResponse,
-  Category,
-  CategoriesResponse,
-  MemesListResponse,
-  SearchResult,
-  StatsResponse,
+import { create, fromJson, toJson } from '@bufbuild/protobuf';
+import {
+  SearchRequestSchema,
+  SearchResponseSchema,
+  ListMemesResponseSchema,
+  GetMemeResponseSchema,
+  GetCategoriesResponseSchema,
+  GetStatsResponseSchema,
+  SearchProgressEventSchema,
+  SearchStage,
+} from '@gen/emomo/v1/api_pb';
+import type { SearchRequest } from '@gen/emomo/v1/api_pb';
+import { TextPresence } from '@gen/emomo/v1/types_pb';
+import {
+  pbSearchResultToDisplay,
+  pbMemeToDisplay,
+  type DisplayMeme,
 } from '../types';
 
 /**
@@ -19,188 +28,33 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api/v1'
  */
 const API_TOKEN = import.meta.env.VITE_API_TOKEN || '';
 
-/**
- * Generates request headers, including the Authorization header if an API token is present.
- *
- * @param contentType - The optional Content-Type header value (e.g., 'application/json').
- * @returns A HeadersInit object containing the configured headers.
- */
 function getHeaders(contentType?: string): HeadersInit {
   const headers: HeadersInit = {};
-
   if (contentType) {
     headers['Content-Type'] = contentType;
   }
-
   if (API_TOKEN) {
     headers['Authorization'] = `Bearer ${API_TOKEN}`;
   }
-
   return headers;
 }
 
-/**
- * Normalizes API search results into the unified `Meme` format for UI consistency.
- *
- * @param results - The list of results from the backend (SearchResponse['results']).
- * @returns An array of normalized `Meme` objects.
- */
-function normalizeResults(results: SearchResult[]): Meme[] {
-  return results.map((result) => ({
-    id: result.id,
-    url: result.url,
-    score: result.score,
-    description: result.description,
-    vlm_description: result.description, // keep for backward compatibility
-    category: result.category,
-    tags: result.tags,
-    width: result.width,
-    height: result.height,
-  }));
+/** Aggregate stats returned by GET /api/v1/stats, projected for UI consumption. */
+export interface StatsView {
+  totalMemes: number;
+  totalCategories: number;
+  availableCollections: string[];
+  availableProfiles: string[];
 }
 
-/**
- * Searches for memes based on a text query.
- *
- * @param query - The search query text.
- * @param topK - The number of top results to return. Defaults to 20.
- * @param category - An optional category filter.
- * @returns A promise that resolves to an object containing the list of found memes and the total count.
- * @throws An error if the search request fails.
- */
-export async function searchMemes(
-  query: string,
-  topK: number = 20,
-  category?: string,
-  profile?: string
-): Promise<{ results: Meme[]; total: number }> {
-  const response = await fetch(`${API_BASE}/search`, {
-    method: 'POST',
-    headers: getHeaders('application/json'),
-    body: JSON.stringify({
-      query,
-      top_k: topK,
-      category,
-      profile,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Search failed: ${response.statusText}`);
-  }
-
-  const data: SearchResponse = await response.json();
-  return {
-    results: normalizeResults(data.results),
-    total: data.total,
-  };
+/** Categories list projected for UI consumption. */
+export interface CategoryView {
+  name: string;
+  count?: number;
 }
 
-/**
- * Retrieves all available meme categories.
- *
- * @returns A promise that resolves to an array of `Category` objects.
- * @throws An error if the request fails.
- */
-export async function getCategories(): Promise<Category[]> {
-  const response = await fetch(`${API_BASE}/categories`, {
-    headers: getHeaders(),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch categories: ${response.statusText}`);
-  }
-
-  // Backend returns { categories: string[], total: number }
-  const data: CategoriesResponse = await response.json();
-  
-  // Convert string array to Category objects
-  return data.categories.map((name) => ({
-    name,
-    count: undefined, // Backend doesn't provide count per category in this endpoint
-  }));
-}
-
-/**
- * Retrieves a paginated list of memes.
- *
- * @param limit - The maximum number of memes to return. Defaults to 30.
- * @param offset - The number of memes to skip (for pagination). Defaults to 0.
- * @param category - An optional category filter.
- * @param signal - An optional AbortSignal to cancel the request.
- * @returns A promise that resolves to an object containing the list of memes and the total count.
- * @throws An error if the request fails.
- */
-export async function getMemes(
-  limit: number = 30,
-  offset: number = 0,
-  category?: string,
-  signal?: AbortSignal
-): Promise<{ results: Meme[]; total: number }> {
-  const params = new URLSearchParams({
-    limit: limit.toString(),
-    offset: offset.toString(),
-  });
-
-  if (category) {
-    params.append('category', category);
-  }
-
-  const response = await fetch(`${API_BASE}/memes?${params}`, {
-    headers: getHeaders(),
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch memes: ${response.statusText}`);
-  }
-
-  const data: MemesListResponse = await response.json();
-  return {
-    results: normalizeResults(data.results),
-    total: data.total,
-  };
-}
-
-/**
- * Retrieves a single meme by its ID.
- *
- * @param id - The unique identifier of the meme.
- * @returns A promise that resolves to the `Meme` object.
- * @throws An error if the request fails.
- */
-export async function getMeme(id: string): Promise<Meme> {
-  const response = await fetch(`${API_BASE}/memes/${id}`, {
-    headers: getHeaders(),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch meme: ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
-/**
- * Retrieves aggregate backend stats for the header and system status.
- *
- * @returns A promise that resolves to aggregate stats.
- * @throws An error if the request fails.
- */
-export async function getStats(): Promise<StatsResponse> {
-  const response = await fetch(`${API_BASE}/stats`, {
-    headers: getHeaders(),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch stats: ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
-// Search stage types
-export type SearchStage =
+/** UI-friendly stage slug carried alongside SearchProgressEvent. */
+export type SearchStageSlug =
   | 'query_expansion_start'
   | 'thinking'
   | 'query_expansion_done'
@@ -210,37 +64,171 @@ export type SearchStage =
   | 'complete'
   | 'error';
 
-// Search progress event from SSE
-export interface SearchProgressEvent {
-  stage: SearchStage;
+/** Streaming progress event surface used by App.tsx — flattens the protobuf
+ *  oneof payload into a denormalized view that maps cleanly to UI state. */
+export interface SearchProgressView {
+  stage: SearchStageSlug;
+  /** Human-readable message attached to the stage (Chinese strings from backend). */
   message?: string;
-  thinking_text?: string;
-  is_delta?: boolean;
-  expanded_query?: string;
-  results?: Meme[];
+  /** Incremental LLM thinking chunk; only set on stage === 'thinking'. */
+  thinkingText?: string;
+  /** Whether the chunk is an incremental delta (always true for thinking events). */
+  isDelta?: boolean;
+  /** Final expanded query, set on stage === 'query_expansion_done'. */
+  expandedQuery?: string;
+  /** Final search results, set on stage === 'complete'. */
+  results?: DisplayMeme[];
+  /** Total result count, set on stage === 'complete'. */
   total?: number;
+  /** Original query echoed back, set on stage === 'complete'. */
   query?: string;
+  /** Backend collection used for this search, set on stage === 'complete'. */
   collection?: string;
+  /** Backend profile used for this search, set on stage === 'complete'. */
   profile?: string;
+  /** Error message, set on stage === 'error'. */
   error?: string;
 }
 
-// Stream search memes with progress updates
+const STAGE_TO_SLUG: Record<SearchStage, SearchStageSlug | undefined> = {
+  [SearchStage.UNSPECIFIED]: undefined,
+  [SearchStage.QUERY_EXPANSION_START]: 'query_expansion_start',
+  [SearchStage.THINKING]: 'thinking',
+  [SearchStage.QUERY_EXPANSION_DONE]: 'query_expansion_done',
+  [SearchStage.EMBEDDING]: 'embedding',
+  [SearchStage.SEARCHING]: 'searching',
+  [SearchStage.ENRICHING]: 'enriching',
+  [SearchStage.COMPLETE]: 'complete',
+  [SearchStage.ERROR]: 'error',
+};
+
+/** Builds a SearchRequest message body for the search endpoints. Empty fields
+ *  default to proto3 zero values (UNSPECIFIED / 0 / "") which the backend
+ *  treats as "not provided". */
+function buildSearchRequest(query: string, topK: number, profile?: string, category?: string): SearchRequest {
+  return create(SearchRequestSchema, {
+    query,
+    topK,
+    category: category ?? '',
+    textPresence: TextPresence.UNSPECIFIED,
+    collection: '',
+    profile: profile ?? '',
+  });
+}
+
+/** POST /api/v1/search — non-streaming hybrid search. */
+export async function searchMemes(
+  query: string,
+  topK: number = 20,
+  category?: string,
+  profile?: string,
+): Promise<{ results: DisplayMeme[]; total: number }> {
+  const request = buildSearchRequest(query, topK, profile, category);
+  const response = await fetch(`${API_BASE}/search`, {
+    method: 'POST',
+    headers: getHeaders('application/json'),
+    body: JSON.stringify(toJson(SearchRequestSchema, request)),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Search failed: ${response.statusText}`);
+  }
+
+  const body = await response.json();
+  const decoded = fromJson(SearchResponseSchema, body);
+  return {
+    results: decoded.results.map(pbSearchResultToDisplay),
+    total: decoded.total,
+  };
+}
+
+/** GET /api/v1/categories. */
+export async function getCategories(): Promise<CategoryView[]> {
+  const response = await fetch(`${API_BASE}/categories`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch categories: ${response.statusText}`);
+  }
+  const decoded = fromJson(GetCategoriesResponseSchema, await response.json());
+  return decoded.categories.map((name) => ({ name }));
+}
+
+/** GET /api/v1/memes — paginated browse. */
+export async function getMemes(
+  limit: number = 30,
+  offset: number = 0,
+  category?: string,
+  signal?: AbortSignal,
+): Promise<{ results: DisplayMeme[]; total: number }> {
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    offset: offset.toString(),
+  });
+  if (category) {
+    params.append('category', category);
+  }
+
+  const response = await fetch(`${API_BASE}/memes?${params}`, {
+    headers: getHeaders(),
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch memes: ${response.statusText}`);
+  }
+
+  const decoded = fromJson(ListMemesResponseSchema, await response.json());
+  return {
+    results: decoded.results.map(pbSearchResultToDisplay),
+    total: decoded.total,
+  };
+}
+
+/** GET /api/v1/memes/:id. */
+export async function getMeme(id: string): Promise<DisplayMeme> {
+  const response = await fetch(`${API_BASE}/memes/${encodeURIComponent(id)}`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch meme: ${response.statusText}`);
+  }
+  const decoded = fromJson(GetMemeResponseSchema, await response.json());
+  if (!decoded.meme) {
+    throw new Error('Empty meme response');
+  }
+  return pbMemeToDisplay(decoded.meme);
+}
+
+/** GET /api/v1/stats. */
+export async function getStats(): Promise<StatsView> {
+  const response = await fetch(`${API_BASE}/stats`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch stats: ${response.statusText}`);
+  }
+  const decoded = fromJson(GetStatsResponseSchema, await response.json());
+  return {
+    totalMemes: Number(decoded.totalMemes),
+    totalCategories: decoded.totalCategories,
+    availableCollections: decoded.availableCollections,
+    availableProfiles: decoded.availableProfiles,
+  };
+}
+
+/** POST /api/v1/search/stream — SSE streaming search. */
 export async function searchMemesStream(
   query: string,
   topK: number = 20,
-  onProgress: (event: SearchProgressEvent) => void,
+  onProgress: (event: SearchProgressView) => void,
   signal?: AbortSignal,
-  profile?: string
+  profile?: string,
 ): Promise<void> {
+  const request = buildSearchRequest(query, topK, profile);
   const response = await fetch(`${API_BASE}/search/stream`, {
     method: 'POST',
     headers: getHeaders('application/json'),
-    body: JSON.stringify({
-      query,
-      top_k: topK,
-      profile,
-    }),
+    body: JSON.stringify(toJson(SearchRequestSchema, request)),
     signal,
   });
 
@@ -262,39 +250,72 @@ export async function searchMemesStream(
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-
-      // Process complete SSE events
       const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-      let currentEventType = 'progress';
+      buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          currentEventType = line.slice(7).trim();
-        } else if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          try {
-            const event = JSON.parse(data) as SearchProgressEvent;
-            
-            // Normalize results if present
-            if (event.results) {
-              event.results = normalizeResults(event.results as unknown as SearchResponse['results']);
-            }
-            
-            // Set stage from event type if not present
-            if (!event.stage && currentEventType) {
-              event.stage = currentEventType as SearchStage;
-            }
-            
-            onProgress(event);
-          } catch (e) {
-            console.warn('Failed to parse SSE data:', data, e);
-          }
+        if (!line.startsWith('data: ')) continue;
+        const dataPart = line.slice(6);
+        if (!dataPart) continue;
+
+        let json: unknown;
+        try {
+          json = JSON.parse(dataPart);
+        } catch (err) {
+          console.warn('Failed to parse SSE data line:', dataPart, err);
+          continue;
+        }
+
+        let event;
+        try {
+          event = fromJson(SearchProgressEventSchema, json as Parameters<typeof fromJson>[1]);
+        } catch (err) {
+          console.warn('Failed to decode SearchProgressEvent:', err, json);
+          continue;
+        }
+
+        const view = projectProgressEvent(event);
+        if (view) {
+          onProgress(view);
         }
       }
     }
   } finally {
     reader.releaseLock();
   }
+}
+
+function projectProgressEvent(event: ReturnType<typeof fromJson<typeof SearchProgressEventSchema>>): SearchProgressView | undefined {
+  const stage = STAGE_TO_SLUG[event.stage];
+  if (!stage) {
+    return undefined;
+  }
+  const view: SearchProgressView = {
+    stage,
+    message: event.message || undefined,
+  };
+
+  switch (event.payload.case) {
+    case 'thinking':
+      view.thinkingText = event.payload.value.text;
+      view.isDelta = event.payload.value.isDelta;
+      break;
+    case 'expansion':
+      view.expandedQuery = event.payload.value.expandedQuery;
+      break;
+    case 'complete':
+      view.results = event.payload.value.results.map(pbSearchResultToDisplay);
+      view.total = event.payload.value.total;
+      view.query = event.payload.value.query;
+      view.expandedQuery = event.payload.value.expandedQuery || undefined;
+      view.collection = event.payload.value.collection || undefined;
+      view.profile = event.payload.value.profile || undefined;
+      break;
+    case 'error':
+      view.error = event.payload.value.error;
+      break;
+    default:
+      break;
+  }
+  return view;
 }

@@ -225,11 +225,11 @@ func optionalString(v string) *string {
 // MemePayload represents the payload stored with each vector.
 type MemePayload struct {
 	MemeID         string   `json:"meme_id"`
-	SourceType     string   `json:"source_type"`
 	Category       string   `json:"category"`
 	Tags           []string `json:"tags"`
 	VLMDescription string   `json:"vlm_description"`
 	OCRText        string   `json:"ocr_text"`
+	TextPresence   string   `json:"text_presence"`
 	StorageURL     string   `json:"storage_url"`
 }
 
@@ -261,10 +261,10 @@ func (r *QdrantRepository) Upsert(ctx context.Context, pointID string, vector []
 			}),
 			Payload: map[string]*pb.Value{
 				"meme_id":         {Kind: &pb.Value_StringValue{StringValue: payload.MemeID}},
-				"source_type":     {Kind: &pb.Value_StringValue{StringValue: payload.SourceType}},
 				"category":        {Kind: &pb.Value_StringValue{StringValue: payload.Category}},
 				"vlm_description": {Kind: &pb.Value_StringValue{StringValue: payload.VLMDescription}},
 				"ocr_text":        {Kind: &pb.Value_StringValue{StringValue: payload.OCRText}},
+				"text_presence":   {Kind: &pb.Value_StringValue{StringValue: payload.TextPresence}},
 				"storage_url":     {Kind: &pb.Value_StringValue{StringValue: payload.StorageURL}},
 				"tags":            tagsToValue(payload.Tags),
 			},
@@ -323,10 +323,10 @@ func (r *QdrantRepository) UpsertHybrid(ctx context.Context, pointID string, vec
 			Vectors: pb.NewVectorsMap(vectorsMap),
 			Payload: map[string]*pb.Value{
 				"meme_id":         {Kind: &pb.Value_StringValue{StringValue: payload.MemeID}},
-				"source_type":     {Kind: &pb.Value_StringValue{StringValue: payload.SourceType}},
 				"category":        {Kind: &pb.Value_StringValue{StringValue: payload.Category}},
 				"vlm_description": {Kind: &pb.Value_StringValue{StringValue: payload.VLMDescription}},
 				"ocr_text":        {Kind: &pb.Value_StringValue{StringValue: payload.OCRText}},
+				"text_presence":   {Kind: &pb.Value_StringValue{StringValue: payload.TextPresence}},
 				"storage_url":     {Kind: &pb.Value_StringValue{StringValue: payload.StorageURL}},
 				"tags":            tagsToValue(payload.Tags),
 			},
@@ -583,8 +583,8 @@ func (r *QdrantRepository) HybridSearch(
 
 // SearchFilters defines optional filters for search.
 type SearchFilters struct {
-	Category   *string
-	SourceType *string
+	Category     *string
+	TextPresence *string
 }
 
 func buildFilter(filters *SearchFilters) *pb.Filter {
@@ -607,13 +607,13 @@ func buildFilter(filters *SearchFilters) *pb.Filter {
 		})
 	}
 
-	if filters.SourceType != nil && *filters.SourceType != "" {
+	if filters.TextPresence != nil && *filters.TextPresence != "" {
 		conditions = append(conditions, &pb.Condition{
 			ConditionOneOf: &pb.Condition_Field{
 				Field: &pb.FieldCondition{
-					Key: "source_type",
+					Key: "text_presence",
 					Match: &pb.Match{
-						MatchValue: &pb.Match_Keyword{Keyword: *filters.SourceType},
+						MatchValue: &pb.Match_Keyword{Keyword: *filters.TextPresence},
 					},
 				},
 			},
@@ -638,9 +638,6 @@ func parsePayload(payload map[string]*pb.Value) *MemePayload {
 	if v, ok := payload["meme_id"]; ok {
 		p.MemeID = v.GetStringValue()
 	}
-	if v, ok := payload["source_type"]; ok {
-		p.SourceType = v.GetStringValue()
-	}
 	if v, ok := payload["category"]; ok {
 		p.Category = v.GetStringValue()
 	}
@@ -649,6 +646,9 @@ func parsePayload(payload map[string]*pb.Value) *MemePayload {
 	}
 	if v, ok := payload["ocr_text"]; ok {
 		p.OCRText = v.GetStringValue()
+	}
+	if v, ok := payload["text_presence"]; ok {
+		p.TextPresence = v.GetStringValue()
 	}
 	if v, ok := payload["storage_url"]; ok {
 		p.StorageURL = v.GetStringValue()

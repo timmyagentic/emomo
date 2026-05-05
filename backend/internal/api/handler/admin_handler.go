@@ -1,43 +1,26 @@
 package handler
 
 import (
-	"context"
 	"net/http"
-	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/timmy/emomo/internal/logger"
-	"github.com/timmy/emomo/internal/service"
-	"github.com/timmy/emomo/internal/source"
 )
 
 // AdminHandler handles admin operations.
 type AdminHandler struct {
-	ingestService *service.IngestService
-	sources       map[string]source.Source
-	logger        *logger.Logger
-
-	// Ingest job state
-	mu            sync.RWMutex
-	isRunning     bool
-	currentStats  *service.IngestStats
-	lastRunTime   time.Time
-	lastRunStatus string
+	logger *logger.Logger
 }
 
 // NewAdminHandler creates a new admin handler.
 // Parameters:
-//   - ingestService: ingest service instance.
-//   - sources: map of source adapters keyed by name.
 //   - log: logger instance.
+//
 // Returns:
 //   - *AdminHandler: initialized handler.
-func NewAdminHandler(ingestService *service.IngestService, sources map[string]source.Source, log *logger.Logger) *AdminHandler {
+func NewAdminHandler(log *logger.Logger) *AdminHandler {
 	return &AdminHandler{
-		ingestService: ingestService,
-		sources:       sources,
-		logger:        log,
+		logger: log,
 	}
 }
 
@@ -49,30 +32,10 @@ func (h *AdminHandler) log(c *gin.Context) *logger.Logger {
 	return h.logger
 }
 
-// IngestRequest represents the ingest API request.
-type IngestRequest struct {
-	Source string `json:"source" binding:"required"`
-	Limit  int    `json:"limit" binding:"required,min=1,max=10000"`
-	Force  bool   `json:"force"`
-}
-
-// IngestResponse represents the ingest API response.
-type IngestResponse struct {
-	Message string               `json:"message"`
-	Stats   *service.IngestStats `json:"stats,omitempty"`
-}
-
-// IngestStatusResponse represents the ingest status.
-type IngestStatusResponse struct {
-	IsRunning     bool                 `json:"is_running"`
-	LastRunTime   string               `json:"last_run_time,omitempty"`
-	LastRunStatus string               `json:"last_run_status,omitempty"`
-	CurrentStats  *service.IngestStats `json:"current_stats,omitempty"`
-}
-
 // AdminPage serves the admin dashboard HTML page.
 // Parameters:
 //   - c: Gin request context.
+//
 // Returns: none (writes HTML response).
 func (h *AdminHandler) AdminPage(c *gin.Context) {
 	html := `<!DOCTYPE html>
@@ -235,33 +198,12 @@ func (h *AdminHandler) AdminPage(c *gin.Context) {
             <h1>🎭 Emomo Admin</h1>
             <p class="subtitle">表情包语义搜索系统管理面板</p>
 
-            <form id="ingestForm">
-	                <div class="form-group">
-	                    <label for="source">数据源</label>
-	                    <select id="source" name="source">
-	                        <option value="localdir">本地静态图片目录</option>
-	                    </select>
-	                </div>
-
-                <div class="form-group">
-                    <label for="limit">导入数量</label>
-                    <input type="number" id="limit" name="limit" value="100" min="1" max="10000">
-                </div>
-
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="force" name="force">
-                        <label for="force" style="margin: 0;">强制重新处理（跳过重复检查）</label>
-                    </div>
-                </div>
-
-                <button type="submit" id="submitBtn">
-                    开始导入
-                </button>
-            </form>
-
-            <div id="status" class="status"></div>
-            <div id="stats" class="stats" style="display: none;"></div>
+            <div class="stats">
+                <div class="stats-row"><span>唯一导入入口</span><span>backend/scripts/import-data.sh</span></div>
+                <div class="stats-row"><span>本地目录参数</span><span>-p / --path</span></div>
+            </div>
+            <pre style="margin-top: 1rem; padding: 1rem; background: #1f2937; color: #f9fafb; border-radius: 8px; overflow-x: auto;">cd backend
+./scripts/import-data.sh -p ./data/memes --profile qwen3vl</pre>
         </div>
 
         <div class="card">
@@ -274,173 +216,8 @@ func (h *AdminHandler) AdminPage(c *gin.Context) {
             </div>
         </div>
     </div>
-
-    <script>
-        const form = document.getElementById('ingestForm');
-        const submitBtn = document.getElementById('submitBtn');
-        const statusDiv = document.getElementById('status');
-        const statsDiv = document.getElementById('stats');
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const source = document.getElementById('source').value;
-            const limit = parseInt(document.getElementById('limit').value);
-            const force = document.getElementById('force').checked;
-
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner"></span>导入中...';
-            statusDiv.className = 'status running';
-            statusDiv.textContent = '正在导入数据，请稍候...';
-            statsDiv.style.display = 'none';
-
-            try {
-                const response = await fetch('/api/v1/ingest', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ source, limit, force })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    statusDiv.className = 'status success';
-                    statusDiv.textContent = '✓ ' + data.message;
-
-                    if (data.stats) {
-                        statsDiv.style.display = 'block';
-                        statsDiv.innerHTML = ` + "`" + `
-                            <div class="stats-row"><span>总计</span><span>${data.stats.TotalItems}</span></div>
-                            <div class="stats-row"><span>已处理</span><span>${data.stats.ProcessedItems}</span></div>
-                            <div class="stats-row"><span>跳过</span><span>${data.stats.SkippedItems}</span></div>
-                            <div class="stats-row"><span>失败</span><span>${data.stats.FailedItems}</span></div>
-                        ` + "`" + `;
-                    }
-                } else {
-                    statusDiv.className = 'status error';
-                    statusDiv.textContent = '✗ ' + (data.error || '导入失败');
-                }
-            } catch (err) {
-                statusDiv.className = 'status error';
-                statusDiv.textContent = '✗ 网络错误: ' + err.message;
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = '开始导入';
-            }
-        });
-    </script>
 </body>
 </html>`
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.String(http.StatusOK, html)
-}
-
-// TriggerIngest handles the ingest API endpoint.
-// Parameters:
-//   - c: Gin request context.
-// Returns: none (writes JSON response).
-func (h *AdminHandler) TriggerIngest(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var req IngestRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.CtxWarn(ctx, "Invalid ingest request: client_ip=%s, error=%v", c.ClientIP(), err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	logger.CtxInfo(ctx, "Received ingest request: source=%s, limit=%d, force=%v, client_ip=%s",
-		req.Source, req.Limit, req.Force, c.ClientIP())
-
-	// Check if ingest is already running
-	h.mu.RLock()
-	if h.isRunning {
-		h.mu.RUnlock()
-		logger.CtxWarn(ctx, "Ingest request rejected: already running, source=%s, client_ip=%s",
-			req.Source, c.ClientIP())
-		c.JSON(http.StatusConflict, gin.H{"error": "Ingest is already running"})
-		return
-	}
-	h.mu.RUnlock()
-
-	// Get source
-	src, ok := h.sources[req.Source]
-	if !ok {
-		logger.CtxWarn(ctx, "Unknown source requested: source=%s, client_ip=%s", req.Source, c.ClientIP())
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Unknown source: " + req.Source})
-		return
-	}
-
-	// Set running state
-	h.mu.Lock()
-	h.isRunning = true
-	h.currentStats = nil
-	h.mu.Unlock()
-
-	logger.CtxInfo(ctx, "Starting ingest process: source=%s, limit=%d, force=%v",
-		req.Source, req.Limit, req.Force)
-
-	// Run ingest (use background context to avoid cancellation on HTTP timeout)
-	ingestCtx := context.Background()
-	startTime := time.Now()
-	stats, err := h.ingestService.IngestFromSource(ingestCtx, src, req.Limit, &service.IngestOptions{
-		Force: req.Force,
-	})
-	duration := time.Since(startTime)
-
-	// Update state
-	h.mu.Lock()
-	h.isRunning = false
-	h.currentStats = stats
-	h.lastRunTime = time.Now()
-	if err != nil {
-		h.lastRunStatus = "failed: " + err.Error()
-	} else {
-		h.lastRunStatus = "success"
-	}
-	h.mu.Unlock()
-
-	if err != nil {
-		logger.With(logger.Fields{
-			logger.FieldDurationMs: duration.Milliseconds(),
-		}).Error(ctx, "Ingest process failed: source=%s, limit=%d, force=%v, error=%v",
-			req.Source, req.Limit, req.Force, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	logger.With(logger.Fields{
-		logger.FieldDurationMs: duration.Milliseconds(),
-		logger.FieldCount:      stats.ProcessedItems,
-	}).Info(ctx, "Ingest process completed: source=%s, total=%d, processed=%d, skipped=%d, failed=%d",
-		req.Source, stats.TotalItems, stats.ProcessedItems, stats.SkippedItems, stats.FailedItems)
-
-	c.JSON(http.StatusOK, IngestResponse{
-		Message: "Ingest completed successfully",
-		Stats:   stats,
-	})
-}
-
-// GetIngestStatus returns the current ingest status.
-// Parameters:
-//   - c: Gin request context.
-// Returns: none (writes JSON response).
-func (h *AdminHandler) GetIngestStatus(c *gin.Context) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	ctx := c.Request.Context()
-	logger.CtxDebug(ctx, "Ingest status requested: client_ip=%s, is_running=%v", c.ClientIP(), h.isRunning)
-
-	resp := IngestStatusResponse{
-		IsRunning:     h.isRunning,
-		LastRunStatus: h.lastRunStatus,
-		CurrentStats:  h.currentStats,
-	}
-
-	if !h.lastRunTime.IsZero() {
-		resp.LastRunTime = h.lastRunTime.Format(time.RFC3339)
-	}
-
-	c.JSON(http.StatusOK, resp)
 }

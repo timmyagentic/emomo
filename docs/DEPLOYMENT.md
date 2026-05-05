@@ -12,9 +12,12 @@
 - **向量数据库**：Qdrant（需要部署）
 - **对象存储**：S3 兼容存储（Cloudflare R2、AWS S3 等）
 - **元数据数据库**：SQLite / PostgreSQL
-- **外部 API**：OpenAI Compatible VLM API（图片理解）、Jina（Embedding）
+- **外部 API**：SiliconFlow/Qwen3-VL 多模态 Embedding、OpenAI Compatible VLM/OCR/查询扩展
 
 > 说明：`deployments/docker-compose*.yml` 仅包含 API 与 Grafana Alloy，Qdrant 与对象存储需自行提供（云服务或本地容器）。
+> 当前检索主链路是 Qwen3-VL 多模态 image embedding：导入时直接把图片写成向量，搜索时文本 query 直接匹配图片向量；VLM/OCR 只作为 annotation、caption/BM25 和展示元数据。
+> 关系库核心表是 `memes`、`meme_annotations`、`meme_vectors`，protobuf 消息 schema 定义在 `backend/proto/emomo/v1/{types,meme,api}.proto`，生成代码集中在 `backend/gen/` 与 `frontend/gen/`。
+> 使用 Supabase/PostgreSQL 时，核心表启用 Row Level Security；浏览器端不直连这些表，前端应继续通过 Go API 访问数据。
 
 ## CORS 配置（前端部署在 Vercel）
 
@@ -129,9 +132,9 @@ docker run -d --name minio -p 9000:9000 -p 9001:9001 \
 
 #### 5. 配置环境变量
 ```bash
-# 创建 .env 文件
+# 创建后端 .env 文件
 cd /home/opc/emomo
-cat > .env << EOF
+cat > backend/.env << EOF
 # 对象存储配置（推荐使用 Cloudflare R2）
 STORAGE_TYPE=r2
 STORAGE_ENDPOINT=<account-id>.r2.cloudflarestorage.com
@@ -160,11 +163,12 @@ QDRANT_USE_TLS=true
 # QDRANT_PORT=6334
 # QDRANT_USE_TLS=false
 
-# OpenAI API
+# OpenAI-compatible API (VLM/OCR/query expansion)
 OPENAI_API_KEY=your-openai-key
 
-# Jina API
-JINA_API_KEY=your-jina-key
+# Qwen3-VL multimodal embedding
+SILICONFLOW_API_KEY=your-siliconflow-key
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 
 # 可选配置
 VLM_MODEL=gpt-4o-mini
@@ -175,7 +179,7 @@ EOF
 
 #### 6. 构建并运行后端 API
 ```bash
-cd /home/opc/emomo
+cd /home/opc/emomo/backend
 
 # 构建
 go build -o api ./cmd/api
@@ -189,9 +193,9 @@ After=network.target
 [Service]
 Type=simple
 User=opc
-WorkingDirectory=/home/opc/emomo
-EnvironmentFile=/home/opc/emomo/.env
-ExecStart=/home/opc/emomo/api
+WorkingDirectory=/home/opc/emomo/backend
+EnvironmentFile=/home/opc/emomo/backend/.env
+ExecStart=/home/opc/emomo/backend/api
 Restart=always
 RestartSec=5
 
@@ -323,9 +327,10 @@ STORAGE_USE_SSL=true
 STORAGE_BUCKET=memes
 STORAGE_PUBLIC_URL=https://pub-xxx.r2.dev
 
-# OpenAI & Jina
+# VLM/OCR/query expansion + Qwen3-VL multimodal embedding
 OPENAI_API_KEY=your-key
-JINA_API_KEY=your-key
+SILICONFLOW_API_KEY=your-key
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 ```
 
 ## 方案四：Render（免费但会休眠）
@@ -349,7 +354,7 @@ JINA_API_KEY=your-key
 ### 使用 Docker Compose 部署
 
 `deployments/docker-compose.yml` 启动 API + Grafana Alloy，Qdrant 与对象存储需外部提供（云服务或本地容器）。
-如仅需日志采集，可运行 `docker-compose -f deployments/docker-compose.yml up -d alloy`。
+如仅需日志采集，可运行 `docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d alloy`。
 
 详细说明请参考 [`deployments/README.md`](../deployments/README.md)。
 
@@ -409,7 +414,7 @@ export STORAGE_PUBLIC_URL=https://pub-xxx.r2.dev  # 可选
 3. **启动服务**
    ```bash
    cd deployments
-   docker-compose -f docker-compose.yml up -d
+   docker compose --env-file ../backend/.env -f docker-compose.yml up -d
    ```
 
 4. **验证目录挂载**
@@ -440,9 +445,9 @@ export STORAGE_PUBLIC_URL=https://pub-xxx.r2.dev  # 可选
 
 **解决方案**：
 1. 检查主机上的目录是否存在：`ls -la /path/to/emomo/backend/data/memes`
-2. 检查 docker-compose.yml 中的挂载路径是否正确（使用相对路径 `../data` 或绝对路径）
+2. 检查 docker-compose.yml 中的挂载路径是否正确（在 `deployments/` 下使用相对路径 `../backend/data`，或使用绝对路径）
 3. 确保目录包含静态图片文件（.jpg, .jpeg, .png, .webp）；GIF 不会被摄入
-4. 重启容器：`docker-compose -f docker-compose.yml restart api`
+4. 重启容器：`docker compose --env-file ../backend/.env -f docker-compose.yml restart api`
 5. 查看容器日志：`docker logs emomo-api`
 
 **问题：使用绝对路径挂载**
@@ -451,8 +456,8 @@ export STORAGE_PUBLIC_URL=https://pub-xxx.r2.dev  # 可选
 
 ```yaml
 volumes:
-  - /absolute/path/to/emomo/data:/root/data
-  - /absolute/path/to/emomo/configs:/root/configs
+  - /absolute/path/to/emomo/backend/data:/root/data
+  - /absolute/path/to/emomo/backend/configs:/root/configs
 ```
 
 **问题：目录权限问题**
@@ -468,27 +473,7 @@ chmod -R 755 /path/to/emomo/backend/data/memes
 
 ## 数据摄入
 
-部署完成后，需要摄入数据：
-
-### 方式一：通过 API 端点摄入（推荐）
-
-```bash
-# 使用 curl 调用 API
-curl -X POST http://localhost:8080/api/v1/ingest \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source": "localdir",
-    "limit": 100,
-    "force": false
-  }'
-
-# 或访问管理界面
-# http://localhost:8080/
-```
-
-**说明**：API 和 CLI 摄入目前仅支持 `localdir`。
-
-### 方式二：使用命令行工具摄入
+部署完成后，需要摄入数据。`backend/scripts/import-data.sh` 是唯一支持的数据导入入口；API 不再提供导入端点，底层 Go worker 也不作为直接入口使用。
 
 ```bash
 # 在服务器上或本地
@@ -497,25 +482,18 @@ cd emomo
 # 确保数据目录存在，并放入 .jpg/.jpeg/.png/.webp 静态图片
 mkdir -p ./backend/data/memes
 
-# 使用导入脚本（推荐，无需预先编译）
+# 使用唯一导入脚本（无需预先编译，默认导入目录中的全部图片）
 cd backend
-./scripts/import-data.sh -p ./data/memes -l 100
-
-# 如果成功，摄入全部
-./scripts/import-data.sh -p ./data/memes -l 10000
-
-# 或使用 go run 直接运行
-go run ./cmd/ingest --source=localdir --path=./data/memes --limit=100
+./scripts/import-data.sh -p ./data/memes
 ```
 
-### 方式三：在 Docker 容器内摄入
+### 在 Docker 容器内摄入
 
 ```bash
 # 进入容器
 docker exec -it emomo-api sh
 
-# 在容器内使用 API 端点（推荐）
-# 或使用 ingest 工具（如果已构建）
+# 在容器内仍然使用 backend/scripts/import-data.sh
 ```
 
 ## 成本对比
@@ -569,7 +547,7 @@ docker exec -it emomo-api sh
   docker exec emomo-api find /root/data/memes -type f | wc -l
   ```
 - **检查 docker-compose.yml 挂载配置**：
-  - 确保 `../data:/root/data` 挂载正确
+  - 确保 `../backend/data:/root/data` 挂载正确
   - 如果使用绝对路径，确保路径正确
 - **检查主机上的目录**：
   ```bash
@@ -581,7 +559,7 @@ docker exec -it emomo-api sh
   ```
 - **重启容器**：
   ```bash
-  docker-compose -f docker-compose.yml restart api
+  docker compose --env-file ../backend/.env -f docker-compose.yml restart api
   ```
 
 ## 安全建议

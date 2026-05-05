@@ -3,6 +3,8 @@
 本目录包含 Docker Compose 配置文件，用于启动 API 服务与 Grafana Alloy（日志采集）。
 Qdrant 与对象存储需外部提供（云服务或本地容器）。
 
+API 使用当前后端 schema：关系库核心表为 `memes`、`meme_annotations`、`meme_vectors`；默认检索链路直接使用图片向量，VLM/OCR 只作为辅助 annotation。Protobuf 消息 schema 定义在 `backend/proto/emomo/v1/` 下 `types.proto` / `meme.proto` / `api.proto`，生成代码集中在 `backend/gen/`（Go）与 `frontend/gen/`（TS）。
+
 ## 文件说明
 
 - `docker-compose.yml` - 启动 API + Grafana Alloy（日志采集）
@@ -10,10 +12,10 @@ Qdrant 与对象存储需外部提供（云服务或本地容器）。
 ## 快速开始
 
 1. 准备外部服务（Qdrant + S3 兼容存储）
-2. 配置环境变量（`.env` 或系统环境变量）
+2. 配置环境变量（推荐使用 `backend/.env`，Compose 已通过 `env_file` 读取；也可使用系统环境变量覆盖）
 3. 启动服务：
    ```bash
-   docker-compose -f docker-compose.yml up -d
+   docker compose --env-file ../backend/.env -f docker-compose.yml up -d
    ```
 
 ## 环境变量配置
@@ -74,22 +76,22 @@ export STORAGE_USE_SSL=true
 
 ```bash
 # 启动服务
-docker-compose -f docker-compose.yml up -d
+docker compose --env-file ../backend/.env -f docker-compose.yml up -d
 
 # 查看日志
-docker-compose -f docker-compose.yml logs -f api
+docker compose --env-file ../backend/.env -f docker-compose.yml logs -f api
 
 # 停止服务
-docker-compose -f docker-compose.yml down
+docker compose --env-file ../backend/.env -f docker-compose.yml down
 
 # 停止并删除数据卷（谨慎使用）
-docker-compose -f docker-compose.yml down -v
+docker compose --env-file ../backend/.env -f docker-compose.yml down -v
 
 # 重启服务
-docker-compose -f docker-compose.yml restart api
+docker compose --env-file ../backend/.env -f docker-compose.yml restart api
 
 # 查看运行状态
-docker-compose -f docker-compose.yml ps
+docker compose --env-file ../backend/.env -f docker-compose.yml ps
 ```
 
 ## 故障排查

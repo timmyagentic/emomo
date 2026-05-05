@@ -75,6 +75,7 @@ emoji_images/
 
 .env.backup
 backend/r2list
+backend/r2purge
 backend/reembed
 backend/.wrangler
 

@@ -7,14 +7,11 @@ import (
 	"github.com/timmy/emomo/internal/config"
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/service"
-	"github.com/timmy/emomo/internal/source"
 )
 
 // SetupRouter configures the Gin router with all routes and middleware.
 // Parameters:
 //   - searchService: search service used by API handlers.
-//   - ingestService: ingest service used by admin handlers.
-//   - sources: map of source adapters keyed by name.
 //   - cfg: application configuration for server settings.
 //   - log: logger instance for middleware.
 //
@@ -22,8 +19,6 @@ import (
 //   - *gin.Engine: configured Gin router.
 func SetupRouter(
 	searchService *service.SearchService,
-	ingestService *service.IngestService,
-	sources map[string]source.Source,
 	cfg *config.Config,
 	log *logger.Logger,
 ) *gin.Engine {
@@ -51,7 +46,7 @@ func SetupRouter(
 	healthHandler := handler.NewHealthHandler()
 	searchHandler := handler.NewSearchHandler(searchService)
 	memeHandler := handler.NewMemeHandler(searchService)
-	adminHandler := handler.NewAdminHandler(ingestService, sources, log)
+	adminHandler := handler.NewAdminHandler(log)
 
 	// Admin page (root)
 	r.GET("/", adminHandler.AdminPage)
@@ -75,10 +70,6 @@ func SetupRouter(
 
 		// Stats
 		v1.GET("/stats", searchHandler.GetStats)
-
-		// Ingest (admin)
-		v1.POST("/ingest", adminHandler.TriggerIngest)
-		v1.GET("/ingest/status", adminHandler.GetIngestStatus)
 	}
 
 	return r

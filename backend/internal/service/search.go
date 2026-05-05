@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"sort"
 
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
+	"github.com/timmy/emomo/internal/persistence"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/storage"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // SearchConfig holds configuration for search service.
@@ -48,17 +51,17 @@ type SearchProfileConfig struct {
 
 // SearchService handles meme search operations.
 type SearchService struct {
-	memeRepo          *repository.MemeRepository
-	memeDescRepo      *repository.MemeDescriptionRepository
-	defaultQdrantRepo *repository.QdrantRepository
-	defaultEmbedding  EmbeddingProvider
-	queryExpansion    *QueryExpansionService
-	storage           storage.ObjectStorage
-	logger            *logger.Logger
-	scoreThreshold    float32
-	defaultCollection string
-	defaultProfile    string
-	retrieval         RetrievalConfig
+	memeRepo           *repository.MemeRepository
+	memeAnnotationRepo *repository.MemeAnnotationRepository
+	defaultQdrantRepo  *repository.QdrantRepository
+	defaultEmbedding   EmbeddingProvider
+	queryExpansion     *QueryExpansionService
+	storage            storage.ObjectStorage
+	logger             *logger.Logger
+	scoreThreshold     float32
+	defaultCollection  string
+	defaultProfile     string
+	retrieval          RetrievalConfig
 
 	// Multi-collection support: collection name -> config
 	collections map[string]*CollectionConfig
@@ -66,21 +69,9 @@ type SearchService struct {
 }
 
 // NewSearchService creates a new search service.
-// Parameters:
-//   - memeRepo: repository for meme records.
-//   - memeDescRepo: repository for meme descriptions (metadata access).
-//   - qdrantRepo: default Qdrant repository.
-//   - embedding: default embedding provider.
-//   - queryExpansion: optional query expansion service.
-//   - objectStorage: object storage client for URL generation.
-//   - log: logger instance.
-//   - cfg: search configuration settings.
-//
-// Returns:
-//   - *SearchService: initialized search service.
 func NewSearchService(
 	memeRepo *repository.MemeRepository,
-	memeDescRepo *repository.MemeDescriptionRepository,
+	memeAnnotationRepo *repository.MemeAnnotationRepository,
 	qdrantRepo *repository.QdrantRepository,
 	embedding EmbeddingProvider,
 	queryExpansion *QueryExpansionService,
@@ -99,29 +90,23 @@ func NewSearchService(
 		retrieval = normalizeRetrievalConfig(cfg.Retrieval)
 	}
 	return &SearchService{
-		memeRepo:          memeRepo,
-		memeDescRepo:      memeDescRepo,
-		defaultQdrantRepo: qdrantRepo,
-		defaultEmbedding:  embedding,
-		queryExpansion:    queryExpansion,
-		storage:           objectStorage,
-		logger:            log,
-		scoreThreshold:    threshold,
-		defaultCollection: defaultCollection,
-		defaultProfile:    defaultProfile,
-		retrieval:         retrieval,
-		collections:       make(map[string]*CollectionConfig),
-		profiles:          make(map[string]*SearchProfileConfig),
+		memeRepo:           memeRepo,
+		memeAnnotationRepo: memeAnnotationRepo,
+		defaultQdrantRepo:  qdrantRepo,
+		defaultEmbedding:   embedding,
+		queryExpansion:     queryExpansion,
+		storage:            objectStorage,
+		logger:             log,
+		scoreThreshold:     threshold,
+		defaultCollection:  defaultCollection,
+		defaultProfile:     defaultProfile,
+		retrieval:          retrieval,
+		collections:        make(map[string]*CollectionConfig),
+		profiles:           make(map[string]*SearchProfileConfig),
 	}
 }
 
 // RegisterCollection registers a collection configuration for multi-collection search.
-// Parameters:
-//   - name: collection name key.
-//   - qdrantRepo: Qdrant repository for the collection.
-//   - embedding: embedding provider for the collection.
-//
-// Returns: none.
 func (s *SearchService) RegisterCollection(name string, qdrantRepo *repository.QdrantRepository, embedding EmbeddingProvider) {
 	s.collections[name] = &CollectionConfig{
 		QdrantRepo: qdrantRepo,
@@ -150,9 +135,6 @@ func (s *SearchService) RegisterProfile(
 }
 
 // GetAvailableCollections returns the list of available collection keys.
-// Parameters: none.
-// Returns:
-//   - []string: collection keys including default and registered ones.
 func (s *SearchService) GetAvailableCollections() []string {
 	collections := make([]string, 0, len(s.collections)+1)
 	if s.defaultCollection != "" {
@@ -246,10 +228,10 @@ func normalizeRetrievalConfig(cfg RetrievalConfig) RetrievalConfig {
 	return cfg
 }
 
-func (s *SearchService) resolveRequestedProfile(req *SearchRequest) (*SearchProfileConfig, string, bool, error) {
-	requested := req.Profile
+func (s *SearchService) resolveRequestedProfile(req *pb.SearchRequest) (*SearchProfileConfig, string, bool, error) {
+	requested := req.GetProfile()
 	if requested == "" {
-		requested = req.Collection
+		requested = req.GetCollection()
 	}
 	if requested == "" {
 		requested = s.defaultProfile
@@ -261,8 +243,8 @@ func (s *SearchService) resolveRequestedProfile(req *SearchRequest) (*SearchProf
 	if ok {
 		return profile, name, true, nil
 	}
-	if req.Profile != "" {
-		return nil, "", false, fmt.Errorf("unknown profile: %s", req.Profile)
+	if req.GetProfile() != "" {
+		return nil, "", false, fmt.Errorf("unknown profile: %s", req.GetProfile())
 	}
 	return nil, "", false, nil
 }
@@ -275,87 +257,80 @@ func (s *SearchService) log(ctx context.Context) *logger.Logger {
 	return s.logger
 }
 
-// SearchRequest represents a text search request.
-type SearchRequest struct {
-	Query      string  `json:"query" binding:"required"`
-	TopK       int     `json:"top_k"`
-	Category   *string `json:"category,omitempty"`
-	SourceType *string `json:"source_type,omitempty"`
-	Collection string  `json:"collection,omitempty"` // Optional: specify which collection to search
-	Profile    string  `json:"profile,omitempty"`    // Optional: specify multi-route search profile
-}
-
-// SearchResult represents a single search result.
-type SearchResult struct {
-	ID          string   `json:"id"`
-	URL         string   `json:"url"`
-	Score       float32  `json:"score"`
-	Description string   `json:"description"`
-	Category    string   `json:"category"`
-	Tags        []string `json:"tags"`
-	Width       int      `json:"width,omitempty"`
-	Height      int      `json:"height,omitempty"`
-}
-
-// SearchResponse represents the search response.
-type SearchResponse struct {
-	Results       []SearchResult `json:"results"`
-	Total         int            `json:"total"`
-	Query         string         `json:"query"`
-	ExpandedQuery string         `json:"expanded_query,omitempty"`
-	Collection    string         `json:"collection,omitempty"` // Which collection was searched
-	Profile       string         `json:"profile,omitempty"`    // Which profile was searched
-}
-
-// SearchProgress represents a progress update during streaming search.
-type SearchProgress struct {
-	Stage         string `json:"stage"`                    // Current stage of the search
-	Message       string `json:"message,omitempty"`        // User-friendly message
-	ThinkingText  string `json:"thinking_text,omitempty"`  // LLM thinking content (for streaming)
-	IsDelta       bool   `json:"is_delta,omitempty"`       // Whether thinking_text is incremental
-	ExpandedQuery string `json:"expanded_query,omitempty"` // Expanded query (when available)
-}
-
-// TextSearch performs a hybrid text search (dense + BM25).
-// Parameters:
-//   - ctx: context for cancellation and deadlines.
-//   - req: search request parameters.
-//
-// Returns:
-//   - *SearchResponse: search results and metadata.
-//   - error: non-nil if search fails.
-func (s *SearchService) TextSearch(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
-	// Set defaults
-	if req.TopK <= 0 {
-		req.TopK = 20
+// buildSearchFilters projects the protobuf request into the repository's
+// generic filter struct. UNSPECIFIED text presence becomes "no filter".
+func buildSearchFilters(req *pb.SearchRequest) *repository.SearchFilters {
+	filters := &repository.SearchFilters{}
+	if cat := req.GetCategory(); cat != "" {
+		filters.Category = &cat
 	}
-	if req.TopK > 100 {
-		req.TopK = 100
+	if presence := req.GetTextPresence(); presence != pb.TextPresence_TEXT_PRESENCE_UNSPECIFIED {
+		s := persistence.TextPresenceToString(presence)
+		filters.TextPresence = &s
 	}
+	return filters
+}
 
-	originalQuery := req.Query
+// memeToPb projects a domain.Meme record into the wire-shape protobuf
+// message, populating url from the storage backend. Returns nil for nil
+// inputs.
+func (s *SearchService) memeToPb(meme *domain.Meme) *pb.Meme {
+	if meme == nil {
+		return nil
+	}
+	url := ""
+	if meme.StorageKey != "" && s.storage != nil {
+		url = s.storage.GetURL(meme.StorageKey)
+	}
+	return &pb.Meme{
+		Id:          meme.ID,
+		StorageKey:  meme.StorageKey,
+		ContentHash: meme.ContentHash,
+		ImageInfo:   meme.ImageInfo,
+		Tags:        []string(meme.Tags),
+		Category:    meme.Category,
+		Url:         url,
+		CreatedAt:   timestamppb.New(meme.CreatedAt),
+		UpdatedAt:   timestamppb.New(meme.UpdatedAt),
+	}
+}
+
+// applyTopKDefaults clamps top_k into the [1, 100] range, applying a 20
+// default when unset.
+func applyTopKDefaults(topK int32) int32 {
+	if topK <= 0 {
+		return 20
+	}
+	if topK > 100 {
+		return 100
+	}
+	return topK
+}
+
+// TextSearch performs a hybrid text search (dense + BM25) against the
+// configured collection or profile.
+func (s *SearchService) TextSearch(ctx context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
+	topK := applyTopKDefaults(req.GetTopK())
+	originalQuery := req.GetQuery()
 	route := classifyQuery(originalQuery)
 	expandedQuery := ""
 
-	// Inject search tracing fields into context
 	ctx = logger.WithFields(ctx, logger.Fields{
 		logger.FieldComponent: "search",
-		logger.FieldSearchID:  fmt.Sprintf("%d", ctx.Value("request_id")), // Will be overwritten if request_id exists
+		logger.FieldSearchID:  fmt.Sprintf("%d", ctx.Value("request_id")),
 	})
 
-	// Expand query using LLM if enabled (skip exact-match routes)
 	if route != QueryRouteExact && s.queryExpansion != nil && s.queryExpansion.IsEnabled() {
-		expanded, err := s.queryExpansion.Expand(ctx, req.Query)
+		expanded, err := s.queryExpansion.Expand(ctx, originalQuery)
 		if err != nil {
 			logger.CtxWarn(ctx, "Query expansion failed, using original query: query=%q, error=%v",
-				req.Query, err)
-		} else if expanded != req.Query {
+				originalQuery, err)
+		} else if expanded != originalQuery {
 			expandedQuery = expanded
-			logger.CtxInfo(ctx, "Query expanded: original=%q, expanded=%q", req.Query, expanded)
+			logger.CtxInfo(ctx, "Query expanded: original=%q, expanded=%q", originalQuery, expanded)
 		}
 	}
 
-	// Use expanded query for embedding if available
 	queryForEmbedding := originalQuery
 	if expandedQuery != "" {
 		queryForEmbedding = expandedQuery
@@ -364,43 +339,50 @@ func (s *SearchService) TextSearch(ctx context.Context, req *SearchRequest) (*Se
 	if profile, profileName, ok, err := s.resolveRequestedProfile(req); err != nil {
 		return nil, err
 	} else if ok {
-		return s.searchProfile(ctx, req, profileName, profile, originalQuery, queryForEmbedding, expandedQuery)
+		return s.searchProfile(ctx, req, topK, profileName, profile, originalQuery, queryForEmbedding, expandedQuery)
 	}
 
-	qdrantRepo, embedding, collectionName, err := s.resolveCollection(req.Collection)
+	qdrantRepo, embedding, collectionName, err := s.resolveCollection(req.GetCollection())
 	if err != nil {
 		return nil, err
 	}
 
 	logger.CtxInfo(ctx, "Performing text search: query=%q, query_for_embedding=%q, top_k=%d, collection=%s, route=%s",
-		originalQuery, queryForEmbedding, req.TopK, collectionName, route)
+		originalQuery, queryForEmbedding, topK, collectionName, route)
 
-	// Generate query embedding using the appropriate embedding provider
 	queryEmbedding, err := embedding.EmbedQuery(ctx, queryForEmbedding)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
 
-	// Build filters
-	filters := &repository.SearchFilters{
-		Category:   req.Category,
-		SourceType: req.SourceType,
-	}
-
-	plan := buildHybridPlan(route, req.TopK)
+	filters := buildSearchFilters(req)
+	plan := buildHybridPlan(route, int(topK))
 	usingHybrid := true
 
-	qdrantResults, err := qdrantRepo.HybridSearch(ctx, queryEmbedding, originalQuery, req.TopK, &plan, filters)
+	qdrantResults, err := qdrantRepo.HybridSearch(ctx, queryEmbedding, originalQuery, int(topK), &plan, filters)
 	if err != nil {
 		usingHybrid = false
 		logger.CtxWarn(ctx, "Hybrid search failed, falling back to dense search: error=%v", err)
-		qdrantResults, err = qdrantRepo.Search(ctx, queryEmbedding, req.TopK, filters)
+		qdrantResults, err = qdrantRepo.Search(ctx, queryEmbedding, int(topK), filters)
 		if err != nil {
 			return nil, fmt.Errorf("failed to search in Qdrant: %w", err)
 		}
 	}
 
-	results := make([]SearchResult, 0, req.TopK)
+	results := s.buildSearchResultsFromQdrant(qdrantResults, usingHybrid, int(topK))
+	s.enrichSearchResults(ctx, results)
+
+	return &pb.SearchResponse{
+		Results:       results,
+		Total:         int32(len(results)),
+		Query:         originalQuery,
+		ExpandedQuery: expandedQuery,
+		Collection:    collectionName,
+	}, nil
+}
+
+func (s *SearchService) buildSearchResultsFromQdrant(qdrantResults []repository.SearchResult, usingHybrid bool, topK int) []*pb.SearchResult {
+	results := make([]*pb.SearchResult, 0, topK)
 	for _, qr := range qdrantResults {
 		if qr.Payload == nil {
 			continue
@@ -408,64 +390,34 @@ func (s *SearchService) TextSearch(ctx context.Context, req *SearchRequest) (*Se
 		if !usingHybrid && s.scoreThreshold > 0 && qr.Score < s.scoreThreshold {
 			continue
 		}
-		results = append(results, SearchResult{
-			ID:          qr.Payload.MemeID,
-			URL:         qr.Payload.StorageURL,
-			Score:       qr.Score,
-			Description: qr.Payload.VLMDescription,
-			Category:    qr.Payload.Category,
-			Tags:        qr.Payload.Tags,
+		results = append(results, &pb.SearchResult{
+			Meme: &pb.Meme{
+				Id:       qr.Payload.MemeID,
+				Url:      qr.Payload.StorageURL,
+				Category: qr.Payload.Category,
+				Tags:     qr.Payload.Tags,
+			},
+			Score:        qr.Score,
+			Description:  qr.Payload.VLMDescription,
+			TextPresence: persistence.TextPresenceFromString(qr.Payload.TextPresence),
 		})
 	}
-
-	// Slice to TopK
-	if len(results) > req.TopK {
-		results = results[:req.TopK]
+	if len(results) > topK {
+		results = results[:topK]
 	}
-
-	// Optionally enrich with full meme data from database
-	if len(results) > 0 {
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.ID
-		}
-
-		memes, err := s.memeRepo.GetByIDs(ctx, ids)
-		if err != nil {
-			logger.CtxWarn(ctx, "Failed to enrich results from database: error=%v", err)
-		} else {
-			memeMap := make(map[string]*domain.Meme)
-			for i := range memes {
-				memeMap[memes[i].ID] = &memes[i]
-			}
-
-			for i := range results {
-				if meme, ok := memeMap[results[i].ID]; ok {
-					results[i].Width = meme.Width
-					results[i].Height = meme.Height
-				}
-			}
-		}
-	}
-
-	return &SearchResponse{
-		Results:       results,
-		Total:         len(results),
-		Query:         originalQuery,
-		ExpandedQuery: expandedQuery,
-		Collection:    collectionName,
-	}, nil
+	return results
 }
 
 func (s *SearchService) searchProfile(
 	ctx context.Context,
-	req *SearchRequest,
+	req *pb.SearchRequest,
+	topK int32,
 	profileName string,
 	profile *SearchProfileConfig,
 	originalQuery string,
 	queryForEmbedding string,
 	expandedQuery string,
-) (*SearchResponse, error) {
+) (*pb.SearchResponse, error) {
 	if profile == nil || profile.Image == nil || profile.Caption == nil ||
 		profile.Image.QdrantRepo == nil || profile.Image.Embedding == nil ||
 		profile.Caption.QdrantRepo == nil || profile.Caption.Embedding == nil {
@@ -473,7 +425,7 @@ func (s *SearchService) searchProfile(
 	}
 
 	logger.CtxInfo(ctx, "Performing profile search: query=%q, query_for_embedding=%q, top_k=%d, profile=%s",
-		originalQuery, queryForEmbedding, req.TopK, profileName)
+		originalQuery, queryForEmbedding, topK, profileName)
 
 	imageQueryEmbedding, err := profile.Image.Embedding.EmbedQuery(ctx, queryForEmbedding)
 	if err != nil {
@@ -485,10 +437,7 @@ func (s *SearchService) searchProfile(
 		return nil, fmt.Errorf("failed to generate caption route query embedding: %w", err)
 	}
 
-	filters := &repository.SearchFilters{
-		Category:   req.Category,
-		SourceType: req.SourceType,
-	}
+	filters := buildSearchFilters(req)
 
 	imageResults, imageErr := profile.Image.QdrantRepo.Search(ctx, imageQueryEmbedding, s.retrieval.ImageTopK, filters)
 	if imageErr != nil {
@@ -512,16 +461,16 @@ func (s *SearchService) searchProfile(
 		return nil, fmt.Errorf("all profile search routes failed: image=%v, caption=%v, keyword=%v", imageErr, captionErr, keywordErr)
 	}
 
-	finalTopK := req.TopK
+	finalTopK := int(topK)
 	if finalTopK <= 0 {
 		finalTopK = s.retrieval.FinalTopK
 	}
 	results := fuseProfileResults(imageResults, captionResults, keywordResults, s.retrieval.Weights, finalTopK)
 	s.enrichSearchResults(ctx, results)
 
-	return &SearchResponse{
+	return &pb.SearchResponse{
 		Results:       results,
-		Total:         len(results),
+		Total:         int32(len(results)),
 		Query:         originalQuery,
 		ExpandedQuery: expandedQuery,
 		Profile:       profileName,
@@ -539,7 +488,7 @@ func fuseProfileResults(
 	keywordResults []repository.SearchResult,
 	weights RetrievalWeights,
 	topK int,
-) []SearchResult {
+) []*pb.SearchResult {
 	if topK <= 0 {
 		topK = 20
 	}
@@ -550,7 +499,7 @@ func fuseProfileResults(
 	}
 
 	type scoredResult struct {
-		result SearchResult
+		result *pb.SearchResult
 		score  float32
 	}
 	byMemeID := make(map[string]*scoredResult)
@@ -567,12 +516,15 @@ func fuseProfileResults(
 			item, ok := byMemeID[qr.Payload.MemeID]
 			if !ok {
 				item = &scoredResult{
-					result: SearchResult{
-						ID:          qr.Payload.MemeID,
-						URL:         qr.Payload.StorageURL,
-						Description: qr.Payload.VLMDescription,
-						Category:    qr.Payload.Category,
-						Tags:        qr.Payload.Tags,
+					result: &pb.SearchResult{
+						Meme: &pb.Meme{
+							Id:       qr.Payload.MemeID,
+							Url:      qr.Payload.StorageURL,
+							Category: qr.Payload.Category,
+							Tags:     qr.Payload.Tags,
+						},
+						Description:  qr.Payload.VLMDescription,
+						TextPresence: persistence.TextPresenceFromString(qr.Payload.TextPresence),
 					},
 				}
 				byMemeID[qr.Payload.MemeID] = item
@@ -584,16 +536,16 @@ func fuseProfileResults(
 		}
 	}
 
-	items := make([]scoredResult, 0, len(byMemeID))
+	items := make([]*scoredResult, 0, len(byMemeID))
 	for _, item := range byMemeID {
 		if maxScore > 0 {
 			item.result.Score = item.score / maxScore
 		}
-		items = append(items, *item)
+		items = append(items, item)
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].result.Score == items[j].result.Score {
-			return items[i].result.ID < items[j].result.ID
+			return items[i].result.Meme.GetId() < items[j].result.Meme.GetId()
 		}
 		return items[i].result.Score > items[j].result.Score
 	})
@@ -602,20 +554,25 @@ func fuseProfileResults(
 		items = items[:topK]
 	}
 
-	results := make([]SearchResult, len(items))
+	results := make([]*pb.SearchResult, len(items))
 	for i := range items {
 		results[i] = items[i].result
 	}
 	return results
 }
 
-func (s *SearchService) enrichSearchResults(ctx context.Context, results []SearchResult) {
+// enrichSearchResults backfills full meme metadata (image_info, content_hash,
+// timestamps) into already-built SearchResult.Meme objects, using the
+// relational store as the source of truth.
+func (s *SearchService) enrichSearchResults(ctx context.Context, results []*pb.SearchResult) {
 	if len(results) == 0 || s.memeRepo == nil {
 		return
 	}
-	ids := make([]string, len(results))
-	for i, r := range results {
-		ids[i] = r.ID
+	ids := make([]string, 0, len(results))
+	for _, r := range results {
+		if r != nil && r.Meme != nil {
+			ids = append(ids, r.Meme.GetId())
+		}
 	}
 
 	memes, err := s.memeRepo.GetByIDs(ctx, ids)
@@ -629,62 +586,69 @@ func (s *SearchService) enrichSearchResults(ctx context.Context, results []Searc
 		memeMap[memes[i].ID] = &memes[i]
 	}
 
-	for i := range results {
-		if meme, ok := memeMap[results[i].ID]; ok {
-			results[i].Width = meme.Width
-			results[i].Height = meme.Height
+	for _, r := range results {
+		if r == nil || r.Meme == nil {
+			continue
+		}
+		if dbMeme, ok := memeMap[r.Meme.GetId()]; ok {
+			r.Meme.StorageKey = dbMeme.StorageKey
+			r.Meme.ContentHash = dbMeme.ContentHash
+			r.Meme.ImageInfo = dbMeme.ImageInfo
+			if r.Meme.Url == "" && dbMeme.StorageKey != "" && s.storage != nil {
+				r.Meme.Url = s.storage.GetURL(dbMeme.StorageKey)
+			}
+			// keep existing tags/category from qdrant payload if non-empty;
+			// fall back to relational record otherwise.
+			if len(r.Meme.Tags) == 0 {
+				r.Meme.Tags = []string(dbMeme.Tags)
+			}
+			if r.Meme.Category == "" {
+				r.Meme.Category = dbMeme.Category
+			}
+			r.Meme.CreatedAt = timestamppb.New(dbMeme.CreatedAt)
+			r.Meme.UpdatedAt = timestamppb.New(dbMeme.UpdatedAt)
 		}
 	}
 }
 
 // TextSearchWithProgress performs a hybrid text search with progress updates.
-// Parameters:
-//   - ctx: context for cancellation and deadlines.
-//   - req: search request parameters.
-//   - progressCh: channel for sending progress updates.
-//
-// Returns:
-//   - *SearchResponse: search results and metadata.
-//   - error: non-nil if search fails.
-func (s *SearchService) TextSearchWithProgress(ctx context.Context, req *SearchRequest, progressCh chan<- SearchProgress) (*SearchResponse, error) {
+// The progress channel is closed by this function before it returns.
+func (s *SearchService) TextSearchWithProgress(
+	ctx context.Context,
+	req *pb.SearchRequest,
+	progressCh chan<- *pb.SearchProgressEvent,
+) (*pb.SearchResponse, error) {
 	defer close(progressCh)
 
-	// Set defaults
-	if req.TopK <= 0 {
-		req.TopK = 20
-	}
-	if req.TopK > 100 {
-		req.TopK = 100
-	}
-
-	originalQuery := req.Query
+	topK := applyTopKDefaults(req.GetTopK())
+	originalQuery := req.GetQuery()
 	route := classifyQuery(originalQuery)
 	expandedQuery := ""
 
-	// Stage 1: Query Expansion (with streaming)
 	if route != QueryRouteExact && s.queryExpansion != nil && s.queryExpansion.IsEnabled() {
-		// Send start event
-		progressCh <- SearchProgress{
-			Stage:   "query_expansion_start",
+		progressCh <- &pb.SearchProgressEvent{
+			Stage:   pb.SearchStage_SEARCH_STAGE_QUERY_EXPANSION_START,
 			Message: "AI 正在理解搜索意图...",
 		}
 
-		// Create token channel for streaming
 		tokenCh := make(chan string, 100)
 		expandDone := make(chan struct{})
 		var expandErr error
 
 		go func() {
 			defer close(expandDone)
-			expandedQuery, expandErr = s.queryExpansion.ExpandStream(ctx, req.Query, tokenCh)
+			expandedQuery, expandErr = s.queryExpansion.ExpandStream(ctx, originalQuery, tokenCh)
 		}()
 
-		// Stream thinking tokens
 		for token := range tokenCh {
-			progressCh <- SearchProgress{
-				Stage:        "thinking",
-				ThinkingText: token,
-				IsDelta:      true,
+			progressCh <- &pb.SearchProgressEvent{
+				Stage: pb.SearchStage_SEARCH_STAGE_THINKING,
+				Payload: &pb.SearchProgressEvent_Thinking{
+					Thinking: &pb.ThinkingDelta{
+						Text:    token,
+						IsDelta: true,
+					},
+				},
 			}
 		}
 
@@ -692,150 +656,100 @@ func (s *SearchService) TextSearchWithProgress(ctx context.Context, req *SearchR
 
 		if expandErr != nil {
 			logger.CtxWarn(ctx, "Query expansion failed, using original query: query=%q, error=%v",
-				req.Query, expandErr)
-			// Silent fallback - continue with original query
+				originalQuery, expandErr)
 			expandedQuery = ""
-		} else if expandedQuery != req.Query && expandedQuery != "" {
-			logger.CtxInfo(ctx, "Query expanded: original=%q, expanded=%q", req.Query, expandedQuery)
-
-			progressCh <- SearchProgress{
-				Stage:         "query_expansion_done",
-				Message:       "理解完成",
-				ExpandedQuery: expandedQuery,
+		} else if expandedQuery != originalQuery && expandedQuery != "" {
+			logger.CtxInfo(ctx, "Query expanded: original=%q, expanded=%q", originalQuery, expandedQuery)
+			progressCh <- &pb.SearchProgressEvent{
+				Stage:   pb.SearchStage_SEARCH_STAGE_QUERY_EXPANSION_DONE,
+				Message: "理解完成",
+				Payload: &pb.SearchProgressEvent_Expansion{
+					Expansion: &pb.ExpansionDone{
+						ExpandedQuery: expandedQuery,
+					},
+				},
 			}
 		}
 	}
 
-	// Use expanded query for embedding if available
 	queryForEmbedding := originalQuery
 	if expandedQuery != "" {
 		queryForEmbedding = expandedQuery
 	}
 
-	// Stage 2: Generate Embedding
-	progressCh <- SearchProgress{
-		Stage:   "embedding",
+	progressCh <- &pb.SearchProgressEvent{
+		Stage:   pb.SearchStage_SEARCH_STAGE_EMBEDDING,
 		Message: "正在生成语义向量...",
 	}
 
 	if profile, profileName, ok, err := s.resolveRequestedProfile(req); err != nil {
 		return nil, err
 	} else if ok {
-		progressCh <- SearchProgress{
-			Stage:   "searching",
+		progressCh <- &pb.SearchProgressEvent{
+			Stage:   pb.SearchStage_SEARCH_STAGE_SEARCHING,
 			Message: "在表情库中搜索...",
 		}
-		result, err := s.searchProfile(ctx, req, profileName, profile, originalQuery, queryForEmbedding, expandedQuery)
+		result, err := s.searchProfile(ctx, req, topK, profileName, profile, originalQuery, queryForEmbedding, expandedQuery)
 		if err != nil {
 			return nil, err
 		}
-		if len(result.Results) > 0 {
-			progressCh <- SearchProgress{
-				Stage:   "enriching",
+		if len(result.GetResults()) > 0 {
+			progressCh <- &pb.SearchProgressEvent{
+				Stage:   pb.SearchStage_SEARCH_STAGE_ENRICHING,
 				Message: "加载表情包详情...",
 			}
 		}
 		return result, nil
 	}
 
-	qdrantRepo, embedding, collectionName, err := s.resolveCollection(req.Collection)
+	qdrantRepo, embedding, collectionName, err := s.resolveCollection(req.GetCollection())
 	if err != nil {
 		return nil, err
 	}
 
 	logger.CtxInfo(ctx, "Performing text search: query=%q, query_for_embedding=%q, top_k=%d, collection=%s, route=%s",
-		originalQuery, queryForEmbedding, req.TopK, collectionName, route)
+		originalQuery, queryForEmbedding, topK, collectionName, route)
 
 	queryEmbedding, err := embedding.EmbedQuery(ctx, queryForEmbedding)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
 
-	// Stage 3: Search in Qdrant
-	progressCh <- SearchProgress{
-		Stage:   "searching",
+	progressCh <- &pb.SearchProgressEvent{
+		Stage:   pb.SearchStage_SEARCH_STAGE_SEARCHING,
 		Message: "在表情库中搜索...",
 	}
 
-	filters := &repository.SearchFilters{
-		Category:   req.Category,
-		SourceType: req.SourceType,
-	}
-
-	plan := buildHybridPlan(route, req.TopK)
+	filters := buildSearchFilters(req)
+	plan := buildHybridPlan(route, int(topK))
 	usingHybrid := true
 
-	qdrantResults, err := qdrantRepo.HybridSearch(ctx, queryEmbedding, originalQuery, req.TopK, &plan, filters)
+	qdrantResults, err := qdrantRepo.HybridSearch(ctx, queryEmbedding, originalQuery, int(topK), &plan, filters)
 	if err != nil {
 		usingHybrid = false
 		logger.CtxWarn(ctx, "Hybrid search failed, falling back to dense search: error=%v", err)
-		progressCh <- SearchProgress{
-			Stage:   "searching",
+		progressCh <- &pb.SearchProgressEvent{
+			Stage:   pb.SearchStage_SEARCH_STAGE_SEARCHING,
 			Message: "混合检索失败，切换为语义检索...",
 		}
-		qdrantResults, err = qdrantRepo.Search(ctx, queryEmbedding, req.TopK, filters)
+		qdrantResults, err = qdrantRepo.Search(ctx, queryEmbedding, int(topK), filters)
 		if err != nil {
 			return nil, fmt.Errorf("failed to search in Qdrant: %w", err)
 		}
 	}
 
-	results := make([]SearchResult, 0, req.TopK)
-	for _, qr := range qdrantResults {
-		if qr.Payload == nil {
-			continue
-		}
-		if !usingHybrid && s.scoreThreshold > 0 && qr.Score < s.scoreThreshold {
-			continue
-		}
-		result := SearchResult{
-			ID:          qr.Payload.MemeID,
-			URL:         qr.Payload.StorageURL,
-			Score:       qr.Score,
-			Description: qr.Payload.VLMDescription,
-			Category:    qr.Payload.Category,
-			Tags:        qr.Payload.Tags,
-		}
-		results = append(results, result)
-	}
-
-	// Slice to TopK
-	if len(results) > req.TopK {
-		results = results[:req.TopK]
-	}
-
-	// Stage 4: Enrich with database data
+	results := s.buildSearchResultsFromQdrant(qdrantResults, usingHybrid, int(topK))
 	if len(results) > 0 {
-		progressCh <- SearchProgress{
-			Stage:   "enriching",
+		progressCh <- &pb.SearchProgressEvent{
+			Stage:   pb.SearchStage_SEARCH_STAGE_ENRICHING,
 			Message: "加载表情包详情...",
 		}
-
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.ID
-		}
-
-		memes, err := s.memeRepo.GetByIDs(ctx, ids)
-		if err != nil {
-			logger.CtxWarn(ctx, "Failed to enrich results from database: error=%v", err)
-		} else {
-			memeMap := make(map[string]*domain.Meme)
-			for i := range memes {
-				memeMap[memes[i].ID] = &memes[i]
-			}
-
-			for i := range results {
-				if meme, ok := memeMap[results[i].ID]; ok {
-					results[i].Width = meme.Width
-					results[i].Height = meme.Height
-				}
-			}
-		}
+		s.enrichSearchResults(ctx, results)
 	}
 
-	return &SearchResponse{
+	return &pb.SearchResponse{
 		Results:       results,
-		Total:         len(results),
+		Total:         int32(len(results)),
 		Query:         originalQuery,
 		ExpandedQuery: expandedQuery,
 		Collection:    collectionName,
@@ -843,104 +757,56 @@ func (s *SearchService) TextSearchWithProgress(ctx context.Context, req *SearchR
 }
 
 // GetCategories returns all available categories.
-// Parameters:
-//   - ctx: context for cancellation and deadlines.
-//
-// Returns:
-//   - []string: distinct category names.
-//   - error: non-nil if lookup fails.
 func (s *SearchService) GetCategories(ctx context.Context) ([]string, error) {
 	return s.memeRepo.GetCategories(ctx)
 }
 
-// GetMemeByID retrieves a meme by its ID.
-// Parameters:
-//   - ctx: context for cancellation and deadlines.
-//   - id: meme ID.
-//
-// Returns:
-//   - *domain.Meme: meme record if found.
-//   - error: non-nil if lookup fails.
-func (s *SearchService) GetMemeByID(ctx context.Context, id string) (*domain.Meme, error) {
-	return s.memeRepo.GetByID(ctx, id)
-}
-
-// MemeListResponse represents the response for listing memes.
-type MemeListResponse struct {
-	Results []SearchResult `json:"results"`
-	Total   int            `json:"total"`
-	Limit   int            `json:"limit"`
-	Offset  int            `json:"offset"`
+// GetMeme retrieves a meme by its ID.
+func (s *SearchService) GetMeme(ctx context.Context, req *pb.GetMemeRequest) (*pb.GetMemeResponse, error) {
+	meme, err := s.memeRepo.GetByID(ctx, req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetMemeResponse{Meme: s.memeToPb(meme)}, nil
 }
 
 // ListMemes retrieves memes with optional category filter.
-// Parameters:
-//   - ctx: context for cancellation and deadlines.
-//   - category: category name to filter by; empty means all.
-//   - limit: maximum number of records to return.
-//   - offset: number of records to skip.
-//
-// Returns:
-//   - *MemeListResponse: list results in search-compatible format.
-//   - error: non-nil if retrieval fails.
-//
-// Returns results in the same format as search results for API consistency.
-func (s *SearchService) ListMemes(ctx context.Context, category string, limit, offset int) (*MemeListResponse, error) {
+func (s *SearchService) ListMemes(ctx context.Context, req *pb.ListMemesRequest) (*pb.ListMemesResponse, error) {
+	limit := req.GetLimit()
 	if limit <= 0 {
 		limit = 20
 	}
 	if limit > 100 {
 		limit = 100
 	}
+	offset := req.GetOffset()
+	if offset < 0 {
+		offset = 0
+	}
 
-	memes, err := s.memeRepo.ListByCategory(ctx, category, limit, offset)
+	memes, err := s.memeRepo.ListByCategory(ctx, req.GetCategory(), int(limit), int(offset))
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert domain.Meme to SearchResult format for API consistency
-	results := make([]SearchResult, len(memes))
+	results := make([]*pb.SearchResult, len(memes))
 	for i, meme := range memes {
-		// Generate URL from storage_key
-		url := ""
-		if meme.StorageKey != "" && s.storage != nil {
-			url = s.storage.GetURL(meme.StorageKey)
-		}
-
-		results[i] = SearchResult{
-			ID:          meme.ID,
-			URL:         url,
-			Score:       0,  // No score for listing (not a search)
-			Description: "", // VLM description moved to meme_descriptions table; use search for descriptions
-			Category:    meme.Category,
-			Tags:        meme.Tags,
-			Width:       meme.Width,
-			Height:      meme.Height,
+		results[i] = &pb.SearchResult{
+			Meme: s.memeToPb(&meme),
 		}
 	}
 
-	return &MemeListResponse{
+	return &pb.ListMemesResponse{
 		Results: results,
-		Total:   len(results),
+		Total:   int32(len(results)),
 		Limit:   limit,
 		Offset:  offset,
 	}, nil
 }
 
 // GetStats returns search-related statistics.
-// Parameters:
-//   - ctx: context for cancellation and deadlines.
-//
-// Returns:
-//   - map[string]interface{}: aggregated stats for search and ingest.
-//   - error: non-nil if statistics cannot be computed.
-func (s *SearchService) GetStats(ctx context.Context) (map[string]interface{}, error) {
-	activeCount, err := s.memeRepo.CountByStatus(ctx, domain.MemeStatusActive)
-	if err != nil {
-		return nil, err
-	}
-
-	pendingCount, err := s.memeRepo.CountByStatus(ctx, domain.MemeStatusPending)
+func (s *SearchService) GetStats(ctx context.Context) (*pb.GetStatsResponse, error) {
+	totalCount, err := s.memeRepo.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -950,11 +816,10 @@ func (s *SearchService) GetStats(ctx context.Context) (map[string]interface{}, e
 		return nil, err
 	}
 
-	return map[string]interface{}{
-		"total_active":          activeCount,
-		"total_pending":         pendingCount,
-		"total_categories":      len(categories),
-		"available_collections": s.GetAvailableCollections(),
-		"available_profiles":    s.GetAvailableProfiles(),
+	return &pb.GetStatsResponse{
+		TotalMemes:           totalCount,
+		TotalCategories:      int32(len(categories)),
+		AvailableCollections: s.GetAvailableCollections(),
+		AvailableProfiles:    s.GetAvailableProfiles(),
 	}, nil
 }

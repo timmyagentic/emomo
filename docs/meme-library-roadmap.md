@@ -1,9 +1,11 @@
 # AI 表情库项目路线图
 
-> 技术栈：Golang + Qdrant + VLM + Text Embedding  
+> 技术栈：Golang + Qdrant + Qwen3-VL 多模态 Embedding + VLM/OCR 辅助分析
 > 数据源：本地静态图片目录（MVP）、API/上传入口（扩展）
 > 目标：快速跑通 MVP，同时预留多数据源扩展能力
 > 备注：下文为早期规划示意，实际实现以当前仓库为准（Docker Compose 仅包含 API + Alloy，Qdrant/存储外部）。
+
+> 当前实现更新：默认检索链路已经不是 “VLM 生成图片描述 -> Text Embedding -> 向量检索”。默认 `qwen3vl` profile 会在导入时直接为图片生成 image 向量；搜索时用户文本直接生成 query embedding，并与图片向量匹配。VLM 描述和 OCR 仍保留，但只作为 caption/BM25 辅助信号和展示元数据。详见 [MULTI_EMBEDDING.md](MULTI_EMBEDDING.md)。
 
 ---
 
@@ -44,7 +46,7 @@
           │    ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
           │    │ Source Adapter  │  │ Source Adapter  │  │ Embedding       │
           │    │ (LocalDir)      │  │ (Upload/API)    │  │ Service         │
-          │    └─────────────────┘  └─────────────────┘  │ (文本向量生成)   │
+          │    └─────────────────┘  └─────────────────┘  │ (多模态/文本向量) │
           │              │                 │              └─────────────────┘
           │              │    ┌────────────┘                      │
           │              ▼    ▼                                   │
@@ -55,8 +57,8 @@
           │                                                        │
           ▼                                                        ▼
 ┌─────────────────────┐                     ┌─────────────────────────────┐
-│       Qdrant        │◄────────────────────│   Text Embedding API        │
-│   (向量数据库)       │                     │   (Jina/OpenAI)             │
+│       Qdrant        │◄────────────────────│ Multimodal Embedding API    │
+│   (向量数据库)       │                     │   (Qwen3-VL/Jina/etc.)      │
 └─────────────────────┘                     └─────────────────────────────┘
           │                                               ▲
           ▼                                               │
@@ -75,15 +77,15 @@
 
 ### 1.2 核心设计原则
 
-**数据源抽象层**：当前主数据源是本地静态图片目录，后续上传/API 数据源也应实现统一接口，无需修改核心摄入逻辑。
+**数据源抽象层**：当前主数据源是本地静态图片目录，后续上传/API 数据源也应实现统一接口，无需修改核心摄入逻辑。数据源标识属于运行时适配器配置，不作为 `memes` 一级字段持久化。
 
 **摄入与搜索分离**：数据摄入是后台异步任务，搜索是实时低延迟服务，两者独立扩展。
 
-**VLM 描述 + Text Embedding 方案**：
-- 预处理阶段：使用 VLM（如 GPT-4o mini）为每张图片生成语义描述，再通过 Text Embedding 模型生成向量
-- 文本搜索：用户查询文本直接生成 Embedding，与预计算向量匹配
-- 图片搜索：用户上传图片先过 VLM 生成描述，再生成 Embedding 进行匹配
-- 优势：语义理解更深，搜索质量更高；劣势：预处理成本较高，图搜图延迟较大
+**多模态 Embedding + VLM/OCR 辅助方案**：
+- 主检索路径：导入阶段直接对图片生成多模态 image 向量；文本搜索时对用户查询生成 query 向量，并与 image 向量匹配
+- 辅助路径：VLM 描述、OCR、category、tags 和情绪词拼成 caption 文本，生成 caption 向量和 BM25 sparse 向量
+- 默认融合：image、caption、keyword 三路结果按权重融合，image 路是当前主信号
+- 优势：不再依赖图片先转文字，图片语义保真度更高；VLM/OCR 仍能补充文字梗、情绪词和关键词召回
 
 **MVP 轻量化原则**：MVP 阶段使用 SQLite 替代 PostgreSQL，降低运维复杂度；待规模扩大后再迁移。
 
@@ -114,17 +116,17 @@
 负责编排数据从各数据源到存储层的完整流程：
 
 ```
-数据源 → 下载图片 → 去重检查 → 存储图片 → 生成Embedding → 写入Qdrant → 写入元数据
+数据源 → 读取/校验图片 → 去重检查 → 存储图片 → 生成 image/caption 向量 → 写入 Qdrant → 写入元数据
 ```
 
 **关键设计**：
 - 使用 Go 的 Worker Pool 模式控制并发
 - 每个步骤独立，支持断点续传
-- 失败任务进入重试队列
+- 失败通过日志和运行时统计暴露；已有图片缺失向量时通过 `--retry` / `cmd/reembed` 回填，不单独维护 `ingest_jobs` 表
 
-### 2.3 VLM 服务（图片描述生成）
+### 2.3 VLM/OCR 辅助分析服务
 
-负责将表情包图片转换为语义描述文本，是搜索质量的关键。
+负责生成图片描述和 OCR 文本，供 caption 向量、BM25 sparse 检索、结果展示和后续结构化筛选使用。它不再是默认 image 向量检索的前置步骤。
 
 **Prompt 设计建议**：
 ```
@@ -147,19 +149,23 @@
 
 **MVP 方案**：使用 GPT-4o mini，5000 张图预处理成本约 $0.75
 
-### 2.4 Text Embedding 服务
+### 2.4 多模态 Embedding 服务
 
-将 VLM 描述文本和用户查询转换为向量。
+默认使用 Qwen3-VL 多模态 embedding，同时支持 `document_mode=image` 和 `document_mode=text`：
+
+- image route：图片 URL/data 直接生成图片向量
+- query：用户文本生成同空间 query 向量，用于直接搜索 image collection
+- caption route：OCR/描述/category/tags 生成 caption 文本向量
 
 **选型对比**：
 
 | 方案 | 延迟 | 成本 | 向量维度 | 适用阶段 |
 |------|------|------|----------|----------|
-| Jina Embeddings v3 | ~50ms | 免费 1M tokens/月 | 1024 | MVP 首选 |
-| OpenAI text-embedding-3-small | ~100ms | $0.02/1M tokens | 1536 | 备选 |
-| BGE-M3 (本地) | ~20ms | 服务器成本 | 1024 | 大规模 |
+| Qwen3-VL Embedding | 中 | API 成本 | 1024 | 当前默认，多模态文搜图 |
+| Jina v4 image/text | 中 | API 成本 | 2048 | 可选 provider |
+| BGE-M3 / 本地多模态模型 | 低到中 | 服务器成本 | 取决于模型 | 大规模自建 |
 
-**MVP 方案**：使用 Jina Embeddings v3 Cloud API，免费额度足够 MVP
+**当前默认方案**：使用 SiliconFlow Qwen/Qwen3-VL-Embedding-8B，分别维护 image 与 caption 两个 collection。
 
 ### 2.5 搜索服务
 
@@ -167,27 +173,28 @@
 
 #### 文本搜索流程（文搜图）
 1. 接收用户输入的自然语言查询
-2. 调用 Text Embedding 服务生成查询向量
-3. 在 Qdrant 中执行相似度搜索，返回 TopK 结果
-4. 从 SQLite 补充元数据（可选，Qdrant Payload 已含基础信息）
-5. 返回结果（含图片 URL、相似度分数、标签等）
+2. 调用多模态 Embedding 服务生成查询向量
+3. 在 image collection 中直接搜索图片向量
+4. 同时在 caption collection 做 caption dense 搜索和 BM25 sparse 搜索
+5. 融合 image、caption、keyword 三路结果
+6. 从数据库补充元数据（可选，Qdrant Payload 已含基础信息）
+7. 返回结果（含图片 URL、相似度分数、标签等）
 
 #### 图片搜索流程（图搜图）
 1. 接收用户上传的图片
-2. 调用 VLM 服务生成图片描述
-3. 调用 Text Embedding 服务生成描述向量
-4. 在 Qdrant 中执行相似度搜索，返回 TopK 结果
-5. 返回结果
+2. 调用多模态 Embedding 服务直接生成图片 query 向量
+3. 在 image collection 中执行相似度搜索，返回 TopK 结果
+4. 返回结果
 
 **图搜图优化策略**：
-- 缓存：对上传图片计算 MD5，缓存 VLM 描述结果，相同图片无需重复调用
-- 前端体验：显示「正在分析图片...」进度提示，预期延迟 1-3 秒
+- 缓存：对上传图片计算内容 hash，缓存图片 query embedding 或近似查询结果
+- 前端体验：显示「正在分析图片...」进度提示，预期延迟取决于多模态 embedding API
 
 **Qdrant 配置建议**：
 - Collection 使用余弦相似度（Cosine）
-- 向量维度：1024（Jina Embeddings v3）
+- 向量维度：1024（当前 Qwen3-VL 默认配置）
 - 开启 HNSW 索引，ef=128, m=16
-- Payload 存储：source_type, category, tags, vlm_description
+- Payload 存储：category, tags, annotation 派生的 vlm_description/ocr_text/text_presence, storage_url
 
 ---
 
@@ -210,84 +217,70 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | TEXT (UUID) | 主键 |
-| source_type | TEXT | 数据源类型（localdir/upload 等） |
-| source_id | TEXT | 数据源内的原始ID |
 | storage_key | TEXT | 对象存储路径 |
-| original_url | TEXT | 原始来源URL |
-| width | INTEGER | 宽度 |
-| height | INTEGER | 高度 |
-| format | TEXT | 静态图片格式（jpeg/png/webp；GIF 不支持） |
-| is_animated | INTEGER | 历史兼容字段，新摄入始终为 0 |
-| file_size | INTEGER | 文件大小（字节） |
-| md5_hash | TEXT | MD5哈希（精确去重） |
-| perceptual_hash | TEXT | 感知哈希（相似去重，可选） |
-| qdrant_point_id | TEXT | Qdrant 中的向量ID |
-| vlm_description | TEXT | VLM 生成的图片描述 |
-| vlm_model | TEXT | 使用的 VLM 模型版本 |
-| embedding_model | TEXT | 使用的 Embedding 模型版本 |
+| content_hash | TEXT | 处理后图片内容 hash，精确去重 |
+| image_info | TEXT | protobuf `ImageInfo` JSON，包含宽、高、格式 enum |
 | tags | TEXT | 标签（JSON 数组格式） |
 | category | TEXT | 分类 |
-| status | TEXT | 状态（pending/active/failed） |
 | created_at | TEXT | 入库时间（ISO8601） |
 | updated_at | TEXT | 更新时间（ISO8601） |
 
 **索引设计**：
 ```sql
-CREATE UNIQUE INDEX idx_memes_source ON memes(source_type, source_id);
-CREATE INDEX idx_memes_md5 ON memes(md5_hash);
-CREATE INDEX idx_memes_status ON memes(status);
+CREATE UNIQUE INDEX idx_memes_content_hash ON memes(content_hash);
 CREATE INDEX idx_memes_category ON memes(category);
 ```
 
-**data_sources 表（数据源管理）**
+**meme_annotations 表（VLM/OCR 辅助分析 + 结构化筛选）**
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | TEXT | 数据源标识（主键） |
-| name | TEXT | 显示名称 |
-| type | TEXT | 类型（static/api） |
-| config | TEXT | 配置信息（JSON 格式） |
-| last_sync_at | TEXT | 上次同步时间 |
-| last_sync_cursor | TEXT | 同步游标（支持增量） |
-| is_enabled | INTEGER | 是否启用（0/1） |
-| priority | INTEGER | 优先级 |
+| id | TEXT (UUID) | 主键 |
+| meme_id | TEXT | 关联 memes.id |
+| analyzer_model | TEXT | 分析模型 |
+| description | TEXT | VLM 描述，作为 caption/BM25 辅助信号 |
+| ocr_text | TEXT | OCR 文字 |
+| labels | TEXT | protobuf `MemeAnnotationLabels` JSON，`labels.has_text` 表示是否有文字 |
+| created_at | TEXT | 创建时间 |
+| updated_at | TEXT | 更新时间 |
 
-**ingest_jobs 表（摄入任务追踪）**
+**meme_vectors 表（多路向量记录）**
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | TEXT (UUID) | 任务ID |
-| source_id | TEXT | 数据源 |
-| status | TEXT | pending/running/completed/failed |
-| total_items | INTEGER | 总数 |
-| processed_items | INTEGER | 已处理数 |
-| failed_items | INTEGER | 失败数 |
-| started_at | TEXT | 开始时间 |
-| completed_at | TEXT | 完成时间 |
-| error_log | TEXT | 错误日志 |
+| id | TEXT (UUID) | 主键 |
+| meme_id | TEXT | 关联 memes.id |
+| collection | TEXT | Qdrant collection |
+| vector_type | INTEGER | protobuf `VectorType`：1=image，2=caption |
+| embedding_model | TEXT | Embedding 模型 |
+| input_hash | TEXT | 向量输入哈希 |
+| annotation_id | TEXT | 关联 meme_annotations.id |
+| qdrant_point_id | TEXT | Qdrant Point ID |
+
+当前不单独建 `data_sources` / `ingest_jobs` 表。导入来源由配置和导入命令表达，任务状态暂时保留在运行时统计和日志中，避免提前增加维护面。
 
 ### 3.3 Qdrant Collection 结构
 
-**Collection**: `memes`
+**默认 Collections**
 
-| 配置项 | 值 |
-|--------|-----|
-| 向量维度 | 1024（Jina Embeddings v3） |
-| 距离度量 | Cosine |
-| 索引类型 | HNSW (ef=128, m=16) |
+| Collection | 用途 | 向量维度 | 距离 |
+|------------|------|----------|------|
+| `meme_image_qwen3vl_1024` | 图片直接生成的 image 向量 | 1024 | Cosine |
+| `meme_caption_qwen3vl_1024` | caption 文本向量 + BM25 sparse 向量 | 1024 | Cosine |
 
 **Payload 字段设计**：
 
 | 字段 | 类型 | 用途 |
 |------|------|------|
 | meme_id | string | 关联 SQLite 主键 |
-| source_type | string | 过滤数据源 |
 | category | string | 分类过滤 |
 | tags | string[] | 标签过滤 |
-| vlm_description | string | 描述文本（调试用） |
+| text_presence | string | 文字筛选：with_text / without_text / unknown |
+| vlm_description | string | annotation 派生的描述文本（展示/调试用，不是主检索语料） |
+| ocr_text | string | OCR 文本 |
 | storage_url | string | 图片 URL（直接返回，减少查库） |
 
-**Payload 用于过滤**：搜索时可以附加条件，如「只搜索某分类」或「只搜索某数据源」。
+**Payload 用于过滤**：搜索时可以附加条件，如「只搜索某分类」或「只搜索带文字/不带文字的表情包」。文字筛选的关系库来源是 `meme_annotations.labels.has_text`，Qdrant 中的 `text_presence` 是派生 payload。
 
 **示例向量点结构**：
 ```json
@@ -296,10 +289,11 @@ CREATE INDEX idx_memes_category ON memes(category);
   "vector": [0.1, 0.2, ...],
   "payload": {
     "meme_id": "550e8400-e29b-41d4-a716-446655440000",
-    "source_type": "localdir",
     "category": "猫猫表情",
     "tags": ["猫", "无语", "可爱"],
     "vlm_description": "一只橘猫露出无语的表情，眼神呆滞",
+    "ocr_text": "我不理解",
+    "text_presence": "with_text",
     "storage_url": "https://cdn.example.com/memes/abc123.jpg"
   }
 }
@@ -309,7 +303,29 @@ CREATE INDEX idx_memes_category ON memes(category);
 
 ## 四、核心流程时序图
 
-### 4.1 预处理（摄入）时序图
+本节保留部分早期时序图作为历史规划参考。当前实现以以下流程为准：
+
+```text
+导入:
+localdir 静态图片
+  -> 校验/转换格式
+  -> 计算 content_hash
+  -> 写 memes / 复用已有 storage_key
+  -> 可选生成或复用 VLM description + OCR，写 meme_annotations
+  -> image route: 图片直接生成向量 -> meme_image_qwen3vl_1024
+  -> caption route: OCR/描述/category/tags 生成文本向量 + BM25 -> meme_caption_qwen3vl_1024
+  -> 写 meme_vectors
+
+搜索:
+用户文本
+  -> query expansion（可选）
+  -> 文本 query embedding 直接搜索 image collection
+  -> 文本 query embedding 搜索 caption collection
+  -> 原始 query 搜索 BM25 sparse vector
+  -> 三路结果按权重融合
+```
+
+### 4.1 预处理（摄入）时序图（历史文本化方案）
 
 ```
 ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
@@ -323,9 +339,9 @@ CREATE INDEX idx_memes_category ON memes(category);
      │ 2. 返回图片列表 [{url, id, category}]   │             │             │             │
      │<────────────│             │             │             │             │             │
      │             │             │             │             │             │             │
-     │ 3. 下载图片 & 计算 MD5                  │             │             │             │
+     │ 3. 下载/标准化图片 & 计算 content_hash  │             │             │             │
      │─────────────────────────────────────────────────────────────────────────────────>│
-     │             │             │             │             │             │ 4. 查询 MD5 │
+     │             │             │             │             │             │ 4. 查询 content_hash │
      │             │             │             │             │             │    是否存在 │
      │<─────────────────────────────────────────────────────────────────────────────────│
      │             │             │             │             │             │             │
@@ -364,7 +380,7 @@ CREATE INDEX idx_memes_category ON memes(category);
      │             │             │             │             │             │             │
 
 预处理耗时估算（单张图片）：
-- Step 3-4: ~10ms (MD5 + 查库)
+- Step 3-4: ~10ms (content_hash + 查库)
 - Step 5-6: ~100ms (上传存储)
 - Step 7-8: ~2000ms (VLM 推理，主要耗时)
 - Step 9-10: ~50ms (Text Embedding)
@@ -372,7 +388,7 @@ CREATE INDEX idx_memes_category ON memes(category);
 - 总计: ~2.2s/张，5000张约 3 小时
 ```
 
-### 4.2 文本搜索时序图（文搜图）
+### 4.2 文本搜索时序图（历史单路方案）
 
 ```
 ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
@@ -416,61 +432,51 @@ CREATE INDEX idx_memes_category ON memes(category);
 - 总计: ~100ms (P99 目标 < 200ms)
 ```
 
-### 4.3 图片搜索时序图（图搜图）
+### 4.3 图片搜索时序图（当前多模态方案）
 
 ```
-┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-│  Client  │  │   API    │  │  Cache   │  │   VLM    │  │Embedding │  │  Qdrant  │
-│          │  │ Gateway  │  │ (可选)   │  │ Service  │  │ Service  │  │          │
-└────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘
-     │             │             │             │             │             │
-     │ 1. POST /api/v1/search/image            │             │             │
-     │    {"image": "<base64>", "top_k": 20}   │             │             │
-     │────────────>│             │             │             │             │
-     │             │             │             │             │             │
-     │             │ 2. 计算图片 MD5            │             │             │
-     │             │────────────>│             │             │             │
-     │             │             │             │             │             │
-     │             │ 3. 查询缓存 (MD5 → 描述)   │             │             │
-     │             │<────────────│             │             │             │
-     │             │             │             │             │             │
-     │ [缓存命中则跳到 Step 7]   │             │             │             │
-     │             │             │             │             │             │
-     │             │ 4. 调用 VLM 描述图片       │             │             │
-     │             │─────────────────────────────>│           │             │
-     │             │             │             │             │             │
-     │             │ 5. 返回图片描述文本        │             │             │
-     │             │    "一只猫咪露出无语表情"  │             │             │
-     │             │<─────────────────────────────│           │             │
-     │             │             │             │             │             │
-     │             │ 6. 缓存描述 (MD5 → 描述)   │             │             │
-     │             │────────────>│             │             │             │
-     │             │             │             │             │             │
-     │             │ 7. 生成描述文本的 Embedding│             │             │
-     │             │──────────────────────────────────────────>│            │
-     │             │             │             │             │             │
-     │             │ 8. 返回向量 [1024 维]      │             │             │
-     │             │<──────────────────────────────────────────│            │
-     │             │             │             │             │             │
-     │             │ 9. 向量相似搜索 (TopK=20)  │             │             │
-     │             │─────────────────────────────────────────────────────────>│
-     │             │             │             │             │             │
-     │             │ 10. 返回结果               │             │             │
-     │             │     [{point_id, score, payload}]        │             │
-     │             │<─────────────────────────────────────────────────────────│
-     │             │             │             │             │             │
-     │ 11. 返回搜索结果                         │             │             │
-     │     [{url, score, description, tags}]   │             │             │
-     │<────────────│             │             │             │             │
-     │             │             │             │             │             │
+┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+│  Client  │  │   API    │  │  Cache   │  │Embedding │  │  Qdrant  │
+│          │  │ Gateway  │  │ (可选)   │  │ Service  │  │          │
+└────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘
+     │             │             │             │             │
+     │ 1. POST /api/v1/search/image            │             │
+     │    {"image": "<base64>", "top_k": 20}   │             │
+     │────────────>│             │             │             │
+     │             │             │             │             │
+     │             │ 2. 计算图片 content_hash   │             │
+     │             │────────────>│             │             │
+     │             │             │             │             │
+     │             │ 3. 查询缓存 (hash → 向量/结果)          │
+     │             │<────────────│             │             │
+     │             │             │             │             │
+     │ [缓存命中则跳到 Step 7]   │             │             │
+     │             │             │             │             │
+     │             │ 4. 直接生成图片 query 向量 │             │
+     │             │───────────────────────────>│            │
+     │             │             │             │             │
+     │             │ 5. 返回 image embedding    │             │
+     │             │<───────────────────────────│            │
+     │             │             │             │             │
+     │             │ 6. 缓存图片向量/查询结果   │             │
+     │             │────────────>│             │             │
+     │             │             │             │             │
+     │             │ 7. image collection 相似搜索             │
+     │             │────────────────────────────────────────>│
+     │             │             │             │             │
+     │             │ 8. 返回结果 [{point_id, score, payload}] │
+     │             │<────────────────────────────────────────│
+     │             │             │             │             │
+     │ 9. 返回搜索结果 [{url, score, description, tags}]    │
+     │<────────────│             │             │             │
+     │             │             │             │             │
 
 响应时间预估：
-- Step 2-3: ~5ms (MD5 + 缓存查询)
-- Step 4-5: ~1500ms (VLM 推理，缓存命中则跳过)
+- Step 2-3: ~5ms (content_hash + 缓存查询)
+- Step 4-5: 取决于多模态 embedding API，缓存命中则跳过
 - Step 6: ~5ms (缓存写入)
-- Step 7-8: ~50ms (Text Embedding)
-- Step 9-10: ~30ms (Qdrant 搜索)
-- 总计: ~1600ms (P99 目标 < 3s)
+- Step 7-8: ~30ms (Qdrant 搜索)
+- 总计: 主要取决于 image embedding 延迟
 - 缓存命中: ~100ms
 ```
 
@@ -504,8 +510,8 @@ CREATE INDEX idx_memes_category ON memes(category);
 
 | 服务 | 用途 | MVP 方案 | 备选方案 |
 |------|------|----------|----------|
-| VLM API | 图片描述生成 | GPT-4o mini | Qwen-VL、Claude 3 Haiku |
-| Text Embedding API | 向量生成 | Jina Embeddings v3（免费） | OpenAI text-embedding-3-small |
+| Multimodal Embedding API | image/caption/query 向量生成 | Qwen3-VL Embedding | Jina v4、其他多模态模型 |
+| VLM/OCR API | 辅助描述、OCR、查询扩展 | OpenAI-compatible VLM | Qwen-VL、Claude、GPT-4o mini |
 | 图片 CDN | 图片分发 | 直接用 MinIO | CloudFront / 阿里云 CDN |
 
 ---
@@ -533,20 +539,20 @@ meme-library/
 │   │
 │   ├── domain/                 # 领域模型
 │   │   ├── meme.go             # 表情包实体
-│   │   ├── source.go           # 数据源实体
-│   │   └── job.go              # 任务实体
+│   │   ├── meme_annotation.go  # VLM/OCR 分析与结构化 labels
+│   │   └── meme_vector.go      # Qdrant point 索引记录
 │   │
 │   ├── service/                # 业务逻辑层
 │   │   ├── search.go           # 搜索服务（文搜图 + 图搜图）
 │   │   ├── ingest.go           # 摄入编排
-│   │   ├── vlm.go              # VLM 图片描述服务
-│   │   └── embedding.go        # Text Embedding 服务
+│   │   ├── vlm.go              # VLM/OCR 辅助分析服务
+│   │   └── embedding.go        # 多模态/文本 Embedding 服务
 │   │
 │   ├── repository/             # 数据访问层
-│   │   ├── meme_repo.go        # SQLite 表情包存储
-│   │   ├── source_repo.go      # 数据源配置存储
+│   │   ├── meme_repo.go        # SQLite/PostgreSQL 表情包存储
+│   │   ├── meme_vector_repo.go # 向量索引记录存储
 │   │   ├── qdrant_repo.go      # Qdrant 向量操作
-│   │   └── cache_repo.go       # VLM 描述缓存
+│   │   └── meme_annotation_repo.go  # VLM/OCR 分析结果与筛选字段存储
 │   │
 │   ├── source/                 # 数据源适配器（扩展点）
 │   │   ├── interface.go        # 统一接口定义
@@ -559,18 +565,16 @@ meme-library/
 │   │   ├── minio.go
 │   │   └── s3.go
 │   │
-│   └── pkg/                    # 工具包
-│       ├── hash/               # MD5、感知哈希
-│       ├── image/              # 图片处理（尺寸、格式校验）
-│       └── retry/              # 重试逻辑
-│
 ├── data/                       # 本地数据目录（.gitignore）
 │   ├── memes.db                # SQLite 数据库文件
-│   └── cache/                  # VLM 描述缓存
+│   └── cache/                  # 可选缓存
 │
 ├── configs/                    # 配置文件
 │   ├── config.yaml             # 主配置
 │   └── config.example.yaml     # 示例配置
+│
+├── proto/                      # 手写 protobuf API/structured-value schema (.proto 源)
+├── gen/                        # buf 生成的 Go protobuf DTO 代码
 │
 ├── deployments/                # 部署相关
 │   ├── docker-compose.yml      # API + Alloy（Qdrant/存储外部）
@@ -598,24 +602,24 @@ meme-library/
 |------|------|--------|
 | 搭建 Docker Compose 环境 | API + Alloy Compose（Qdrant/存储外部） | P0 |
 | 初始化 Go 项目结构 | 按目录规划创建骨架 | P0 |
-| 实现 SQLite 数据模型 | memes、data_sources、ingest_jobs 三张表 + GORM | P0 |
+| 实现 SQLite 数据模型 | memes、meme_annotations、meme_vectors 三张核心表 + GORM | P0 |
 | 实现存储抽象层 | MinIO 上传/下载/URL 生成 | P0 |
 | 配置管理 | Viper 读取 config.yaml + 环境变量 | P1 |
 
-**Week 2：VLM + Embedding + 搜索**
+**Week 2：多模态 Embedding + VLM/OCR 辅助 + 搜索**
 
 | 任务 | 产出 | 优先级 |
 |------|------|--------|
 | 实现数据源接口定义 | source/interface.go | P0 |
 | 实现 LocalDir Adapter | 递归扫描本地静态图片目录 | P0 |
-| 实现 VLM 服务 | 对接 GPT-4o mini API，生成图片描述 | P0 |
-| 实现 Text Embedding 服务 | 对接 Jina Embeddings v3 API | P0 |
-| 实现摄入流程 | 下载 → 存储 → VLM 描述 → Embedding → 写入 Qdrant | P0 |
+| 实现多模态 Embedding 服务 | 支持 image/text document mode 与 query embedding | P0 |
+| 实现 VLM/OCR 辅助服务 | 生成 caption、OCR 和可展示分析结果 | P0 |
+| 实现摄入流程 | 读取/存储图片 → image/caption 向量 → 写入 Qdrant | P0 |
 | 实现文本搜索 API | POST /api/v1/search 接口 | P0 |
-| 基础去重 | MD5 哈希去重 | P1 |
+| 基础去重 | content_hash 精确去重 | P1 |
 
 **MVP 里程碑验收**：
-- [ ] 成功导入本地静态图片目录中的表情包（含 VLM 描述）
+- [ ] 成功导入本地静态图片目录中的表情包（含 image/caption 向量）
 - [ ] 输入「无语」返回相关表情包
 - [ ] 输入「开心猫猫」返回相关表情包
 - [ ] 文本搜索延迟 < 200ms
@@ -631,7 +635,7 @@ meme-library/
 | 任务 | 产出 | 优先级 |
 |------|------|--------|
 | 实现图片搜索 API | POST /api/v1/search/image（图搜图） | P0 |
-| VLM 描述缓存 | MD5 → 描述 缓存，避免重复调用 VLM | P0 |
+| VLM/OCR 分析复用 | 按 meme_id + analyzer_model 复用 description/OCR/labels | P0 |
 | 分类浏览 API | GET /api/v1/categories, GET /api/v1/memes?category=xxx | P0 |
 | 标签过滤搜索 | 支持 Qdrant Payload 过滤 + 向量搜索组合 | P1 |
 | GIF 排除策略 | 数据源跳过 + 摄入校验拒绝 | P0 |
@@ -651,17 +655,17 @@ meme-library/
 
 **结论**：MVP 阶段 Qdrant 的简洁性和 Go 支持是最佳选择。
 
-### 8.2 为什么选择 VLM 描述 + Text Embedding 而不是 CLIP？
+### 8.2 为什么当前改为多模态 Embedding 主链路？
 
-| 对比项 | VLM + Text Embedding | CLIP 多模态 |
-|--------|----------------------|-------------|
-| 语义理解深度 | 深，VLM 理解场景和情绪 | 中等，端到端学习 |
-| 文搜图质量 | 高 | 中等 |
-| 图搜图延迟 | 高（需过 VLM） | 低（直接 Embedding） |
-| 预处理成本 | 高（VLM 推理） | 低 |
-| 中文支持 | 优秀（用中文 VLM） | 取决于模型 |
+| 对比项 | 多模态 Embedding 主链路 | VLM 描述 + Text Embedding |
+|--------|------------------------|---------------------------|
+| 图片语义保真 | 高，图片直接入向量空间 | 受描述文本质量影响 |
+| 文搜图路径 | 文本 query 直接匹配图片向量 | query 匹配描述向量 |
+| 导入成本 | 主要是 embedding | VLM 推理 + embedding |
+| 文字梗/OCR | 需要辅助 caption/BM25 补强 | VLM 描述天然会包含一部分 |
+| 可解释性 | 依赖 payload/辅助描述展示 | 描述文本更直观 |
 
-**结论**：表情包搜索更注重语义匹配（如「无语」「尴尬」等抽象概念），VLM 描述方案质量更高。图搜图延迟可通过缓存优化。
+**结论**：当前默认使用多模态 image embedding 作为主检索信号，避免把图片语义压缩成一段描述文本；VLM/OCR 继续作为 caption、BM25、展示和筛选属性的辅助来源。
 
 ### 8.3 为什么 MVP 用 SQLite 不用 PostgreSQL？
 

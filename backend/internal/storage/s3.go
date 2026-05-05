@@ -52,6 +52,7 @@ type S3Storage struct {
 // NewS3Storage creates a new S3-compatible storage client.
 // Parameters:
 //   - cfg: storage configuration including endpoint, credentials, and bucket.
+//
 // Returns:
 //   - *S3Storage: initialized storage client.
 //   - error: non-nil if configuration or client initialization fails.
@@ -129,6 +130,7 @@ func normalizeEndpoint(endpoint string) string {
 // EnsureBucket ensures the configured bucket exists.
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
+//
 // Returns:
 //   - error: non-nil if the bucket check/create fails.
 func (s *S3Storage) EnsureBucket(ctx context.Context) error {
@@ -163,6 +165,7 @@ func (s *S3Storage) EnsureBucket(ctx context.Context) error {
 //   - reader: stream providing the object content.
 //   - size: content length in bytes.
 //   - contentType: MIME type for the object.
+//
 // Returns:
 //   - error: non-nil if the upload fails.
 func (s *S3Storage) Upload(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
@@ -197,6 +200,7 @@ func (s *S3Storage) Upload(ctx context.Context, key string, reader io.Reader, si
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
 //   - key: storage key (path) for the object.
+//
 // Returns:
 //   - io.ReadCloser: reader for the object contents.
 //   - error: non-nil if the download fails.
@@ -226,6 +230,7 @@ func (s *S3Storage) Download(ctx context.Context, key string) (io.ReadCloser, er
 // GetURL returns a public or signed URL for accessing an object.
 // Parameters:
 //   - key: storage key (path) for the object.
+//
 // Returns:
 //   - string: URL that can be used to access the object.
 func (s *S3Storage) GetURL(key string) string {
@@ -261,6 +266,7 @@ func (s *S3Storage) GetURL(key string) string {
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
 //   - key: storage key (path) for the object.
+//
 // Returns:
 //   - error: non-nil if the delete fails.
 func (s *S3Storage) Delete(ctx context.Context, key string) error {
@@ -278,6 +284,7 @@ func (s *S3Storage) Delete(ctx context.Context, key string) error {
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
 //   - key: storage key (path) for the object.
+//
 // Returns:
 //   - bool: true if the object exists.
 //   - error: non-nil if the check fails.

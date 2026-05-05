@@ -15,6 +15,7 @@ type CORSConfig struct {
 // CORS returns middleware that handles Cross-Origin Resource Sharing.
 // Parameters:
 //   - config: CORS configuration values.
+//
 // Returns:
 //   - gin.HandlerFunc: middleware handler.
 func CORS(config CORSConfig) gin.HandlerFunc {
@@ -70,6 +71,7 @@ func CORS(config CORSConfig) gin.HandlerFunc {
 // Parameters:
 //   - origin: origin header value to check.
 //   - config: CORS configuration values.
+//
 // Returns:
 //   - bool: true if the origin is allowed.
 func IsOriginAllowed(origin string, config CORSConfig) bool {
