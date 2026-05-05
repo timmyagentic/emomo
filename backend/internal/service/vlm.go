@@ -271,7 +271,15 @@ func (s *VLMService) AnalyzeImage(ctx context.Context, imageData []byte, format 
 		return analysis, nil
 	}
 
-	logger.CtxWarn(ctx, "VLM AnalyzeImage first attempt produced unusable output, retrying once: error=%v, raw=%q", err, truncateForLog(raw, 200))
+	// Log the full raw reply (no truncation) so post-mortem diagnosis can see
+	// the exact byte sequence that broke parsing — most failures are caused
+	// by malformed escapes hiding mid-string and the previous 200-rune cap
+	// hid them. The retry round-trip embeds the previous raw via
+	// buildAnalyzeRetryUserPrompt, which has its own 1000-rune cap so a
+	// runaway reply can't blow the model's context window. Bounded by
+	// MaxTokens=8092 on the model side, single replies are typically well
+	// under 30KB even on Chinese-heavy outputs.
+	logger.CtxWarn(ctx, "VLM AnalyzeImage first attempt produced unusable output, retrying once: error=%v, raw=%q", err, raw)
 
 	retryMessages := make([]openAIMessage, 0, len(baseMessages)+1)
 	retryMessages = append(retryMessages, baseMessages...)
@@ -511,10 +519,11 @@ func isHexByte(b byte) bool {
 }
 
 // truncateForLog clips s to at most max runes (not bytes), appending an
-// ellipsis if the input was cut. Used both for human-readable error logs and
-// for embedding the previous raw reply in the retry user message — keeping
-// the runtime context bounded so we do not blow past the model's context
-// window when an upstream returns megabytes of garbage.
+// ellipsis if the input was cut. Used to embed the previous raw reply in
+// the retry user message — keeping the runtime context bounded so we do
+// not blow past the model's context window when an upstream returns
+// megabytes of garbage. Diagnostic log lines write the full untruncated
+// raw reply directly via fmt %q.
 func truncateForLog(s string, max int) string {
 	if max <= 0 {
 		return ""
