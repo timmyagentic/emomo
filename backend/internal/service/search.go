@@ -202,7 +202,7 @@ func defaultRetrievalConfig() RetrievalConfig {
 	return RetrievalConfig{
 		ImageTopK:   100,
 		CaptionTopK: 100,
-		FinalTopK:   20,
+		FinalTopK:   100,
 		Weights: RetrievalWeights{
 			Image:   0.60,
 			Caption: 0.30,

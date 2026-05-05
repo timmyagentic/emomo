@@ -75,7 +75,7 @@ search:
   retrieval:
     image_top_k: 100
     caption_top_k: 100
-    final_top_k: 20
+    final_top_k: 100
     weights:
       image: 0.60
       caption: 0.30

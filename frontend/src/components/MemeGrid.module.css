@@ -51,11 +51,6 @@
   color: var(--accent-coral);
 }
 
-.resultsCount {
-  font-size: var(--text-base);
-  color: var(--text-secondary);
-}
-
 .qualityNotice {
   width: 100%;
   margin: calc(-1 * var(--space-xs)) 0 0;
