@@ -64,6 +64,16 @@ func TestResolveRequestedProfileFallsBackWhenDefaultProfileUnregistered(t *testi
 	}
 }
 
+func TestApplyTopKDefaultsUses100WhenUnset(t *testing.T) {
+	t.Parallel()
+
+	for _, topK := range []int32{0, -1} {
+		if got := applyTopKDefaults(topK); got != 100 {
+			t.Fatalf("applyTopKDefaults(%d) = %d, want 100", topK, got)
+		}
+	}
+}
+
 func TestFuseProfileResultsCombinesRoutesByMemeID(t *testing.T) {
 	t.Parallel()
 

@@ -276,7 +276,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("search.default_profile", "")
 	v.SetDefault("search.retrieval.image_top_k", 100)
 	v.SetDefault("search.retrieval.caption_top_k", 100)
-	v.SetDefault("search.retrieval.final_top_k", 20)
+	v.SetDefault("search.retrieval.final_top_k", 100)
 	v.SetDefault("search.retrieval.weights.image", 0.60)
 	v.SetDefault("search.retrieval.weights.caption", 0.30)
 	v.SetDefault("search.retrieval.weights.keyword", 0.10)

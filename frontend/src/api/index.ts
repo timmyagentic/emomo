@@ -119,7 +119,7 @@ function buildSearchRequest(query: string, topK: number, profile?: string, categ
 /** POST /api/v1/search — non-streaming hybrid search. */
 export async function searchMemes(
   query: string,
-  topK: number = 20,
+  topK: number = 100,
   category?: string,
   profile?: string,
 ): Promise<{ results: DisplayMeme[]; total: number }> {

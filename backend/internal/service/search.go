@@ -295,11 +295,11 @@ func (s *SearchService) memeToPb(meme *domain.Meme) *pb.Meme {
 	}
 }
 
-// applyTopKDefaults clamps top_k into the [1, 100] range, applying a 20
+// applyTopKDefaults clamps top_k into the [1, 100] range, applying a 100
 // default when unset.
 func applyTopKDefaults(topK int32) int32 {
 	if topK <= 0 {
-		return 20
+		return 100
 	}
 	if topK > 100 {
 		return 100
