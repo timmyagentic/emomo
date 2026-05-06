@@ -44,6 +44,16 @@ export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
   const imageStyle = {
     '--meme-aspect-ratio': hasKnownSize ? `${meme.width} / ${meme.height}` : '1 / 1',
   } as CSSProperties;
+  const scorePercent = typeof meme.score === 'number' && meme.score > 0
+    ? Math.round(meme.score * 100)
+    : null;
+  const scoreTone = scorePercent === null
+    ? ''
+    : scorePercent >= 45
+      ? styles.scoreHigh
+      : scorePercent >= 15
+        ? styles.scoreMedium
+        : styles.scoreLow;
 
   const handleClick = () => {
     onClick?.(meme);
@@ -70,6 +80,11 @@ export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
     >
       {/* Image container */}
       <div className={styles.imageWrapper} style={imageStyle}>
+        {scorePercent !== null && (
+          <div className={`${styles.scorePill} ${scoreTone}`} aria-hidden="true">
+            {scorePercent}%
+          </div>
+        )}
         <button
           type="button"
           className={styles.openButton}

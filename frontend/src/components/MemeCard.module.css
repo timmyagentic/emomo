@@ -78,6 +78,37 @@
   opacity: 0.5;
 }
 
+/* Score pill — always-visible relevance badge on result cards */
+.scorePill {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.scoreHigh {
+  color: var(--accent-coral);
+}
+
+.scoreMedium {
+  color: #9a6a11;
+}
+
+.scoreLow {
+  color: var(--text-tertiary);
+}
+
 /* Hover overlay */
 .overlay {
   position: absolute;
@@ -138,5 +169,12 @@
   .actionBtn svg {
     width: 16px;
     height: 16px;
+  }
+
+  .scorePill {
+    top: 6px;
+    left: 6px;
+    padding: 2px 7px;
+    font-size: 10px;
   }
 }

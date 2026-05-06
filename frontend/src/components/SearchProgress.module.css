@@ -190,20 +190,36 @@
 /* Responsive */
 @media (max-width: 600px) {
   .container {
+    width: calc(100% - var(--space-lg));
     padding: var(--space-md);
+    margin-bottom: var(--space-sm);
+    border-radius: var(--radius-md);
   }
 
   .progressSteps {
-    flex-wrap: wrap;
-    gap: var(--space-sm);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-xs);
+    align-items: start;
   }
 
   .stepLine {
     display: none;
   }
 
+  .step {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--space-xs);
+    min-width: 0;
+    text-align: center;
+  }
+
   .stepLabel {
     font-size: var(--text-xs);
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .stepDot {
@@ -219,5 +235,9 @@
   .thinkingBubble {
     padding: var(--space-sm) var(--space-md);
   }
-}
 
+  .expandedQuery {
+    max-width: 100%;
+    font-size: var(--text-xs);
+  }
+}

@@ -313,3 +313,20 @@ textarea::placeholder {
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-md);
 }
+
+@media (max-width: 640px) {
+  body::before {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

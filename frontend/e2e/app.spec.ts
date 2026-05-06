@@ -72,20 +72,31 @@ test.describe('Emomo 表情包搜索应用', () => {
         body: [
           'event: complete',
           `data: ${JSON.stringify({
-            stage: 'complete',
-            results: [
-              {
-                id: 'search-cat-1',
-                url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22 viewBox=%220 0 120 120%22%3E%3Crect width=%22120%22 height=%22120%22 fill=%22%23fff4dc%22/%3E%3Ctext x=%2260%22 y=%2268%22 text-anchor=%22middle%22 font-size=%2232%22%3Ecat%3C/text%3E%3C/svg%3E',
-                score: 0.04,
-                description: '猫咪测试表情',
-                category: '测试',
-                tags: ['猫咪'],
-                width: 120,
-                height: 120,
-              },
-            ],
-            total: 1,
+            stage: 7,
+            message: '搜索完成',
+            complete: {
+              results: [
+                {
+                  meme: {
+                    id: 'search-cat-1',
+                    url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22 viewBox=%220 0 120 120%22%3E%3Crect width=%22120%22 height=%22120%22 fill=%22%23fff4dc%22/%3E%3Ctext x=%2260%22 y=%2268%22 text-anchor=%22middle%22 font-size=%2232%22%3Ecat%3C/text%3E%3C/svg%3E',
+                    imageInfo: {
+                      width: 120,
+                      height: 120,
+                      format: 2,
+                    },
+                    category: '测试',
+                    tags: ['猫咪'],
+                  },
+                  score: 0.04,
+                  description: '猫咪测试表情',
+                  textPresence: 1,
+                },
+              ],
+              total: 1,
+              query: '猫咪',
+              expandedQuery: '猫咪',
+            },
           })}`,
           '',
         ].join('\n'),
@@ -96,14 +107,14 @@ test.describe('Emomo 表情包搜索应用', () => {
     await searchInput.fill('猫咪');
     await page.getByRole('button', { name: '搜索', exact: true }).click();
 
-    await expect(page.getByText('找到 1 个表情包')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('「猫咪」')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('匹配度偏低')).toBeVisible();
 
     await page.getByRole('button', { name: '清空搜索' }).click();
 
     await expect(searchInput).toHaveValue('');
     await expect(page.getByRole('heading', { name: '随便逛逛' })).toBeVisible();
-    await expect(page.getByText('找到 1 个表情包')).toBeHidden();
+    await expect(page.getByText('「猫咪」')).toBeHidden();
     await expect(page.getByText('匹配度偏低')).toBeHidden();
   });
 
@@ -153,5 +164,50 @@ test.describe('Emomo 表情包搜索应用', () => {
 
     // 验证搜索被触发
     await expect(searchInput).toHaveValue('狗狗');
+  });
+
+  test('移动端搜索栏保持单行触达', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const searchInput = page.locator('input[type="text"]');
+    const searchButton = page.getByRole('button', { name: '搜索', exact: true });
+
+    await expect(searchInput).toBeVisible();
+    await expect(searchButton).toBeVisible();
+
+    const inputBox = await searchInput.boundingBox();
+    const buttonBox = await searchButton.boundingBox();
+
+    expect(inputBox).not.toBeNull();
+    expect(buttonBox).not.toBeNull();
+    expect(Math.abs((inputBox!.y + inputBox!.height / 2) - (buttonBox!.y + buttonBox!.height / 2))).toBeLessThan(10);
+    expect(buttonBox!.width).toBeLessThan(128);
+  });
+
+  test('移动端详情弹窗操作按钮不纵向堆叠', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const firstMemeImage = page.locator('img[alt]').first();
+    await expect(firstMemeImage).toBeVisible({ timeout: 10000 });
+    await firstMemeImage.click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+
+    const copyImageButton = page.getByRole('button', { name: '复制图片到剪贴板' });
+    const downloadButton = page.getByRole('button', { name: '下载表情图片' });
+    const copyLinkButton = page.getByRole('button', { name: '复制图片链接' });
+
+    const copyImageBox = await copyImageButton.boundingBox();
+    const downloadBox = await downloadButton.boundingBox();
+    const copyLinkBox = await copyLinkButton.boundingBox();
+
+    expect(copyImageBox).not.toBeNull();
+    expect(downloadBox).not.toBeNull();
+    expect(copyLinkBox).not.toBeNull();
+    expect(Math.abs(copyImageBox!.y - downloadBox!.y)).toBeLessThan(8);
+    expect(Math.abs(copyImageBox!.y - copyLinkBox!.y)).toBeLessThan(8);
   });
 });

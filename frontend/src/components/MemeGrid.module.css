@@ -250,12 +250,12 @@
 
 @media (max-width: 640px) {
   .container {
-    padding: var(--space-md) var(--space-md) var(--space-2xl);
+    padding: var(--space-sm) var(--space-md) var(--space-2xl);
   }
 
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-sm);
+    gap: 10px;
   }
 
   .resultsInfo {
@@ -272,6 +272,26 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-xs);
+  }
+
+  .sectionTitle {
+    font-size: var(--text-xl);
+  }
+
+  .loadMore {
+    min-height: 80px;
+    margin-top: var(--space-lg);
+    padding-bottom: var(--space-lg);
+  }
+
+  .endIndicator {
+    gap: var(--space-sm);
+    margin-top: var(--space-xl);
+  }
+
+  .endText {
+    white-space: normal;
+    text-align: center;
   }
 }
 

@@ -336,9 +336,10 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
                 </motion.button>
 
                 <motion.button
-                  className={styles.actionBtn}
+                  className={`${styles.actionBtn} ${styles.iconOnly}`}
                   onClick={handleCopyLink}
                   aria-label="复制图片链接"
+                  title="复制链接"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -346,7 +347,7 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
                     <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
                   </svg>
-                  复制链接
+                  <span>复制链接</span>
                 </motion.button>
               </div>
 
