@@ -98,6 +98,14 @@ search:
   query_expansion:
     enabled: true
     model: qwen/qwen-2.5-vl-7b-instruct:free
+  agentic:
+    enabled: false
+    planner_model: ""
+    reranker_model: ""
+    planner_timeout: 8s
+    reranker_timeout: 10s
+    rerank_top_k: 40
+    fallback_on_error: true
 
 sources:
   localdir:

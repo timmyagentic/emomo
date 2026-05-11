@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadDefaultsSearchRetrievalFinalTopKTo100(t *testing.T) {
@@ -23,6 +24,36 @@ func TestLoadDefaultsSearchRetrievalFinalTopKTo100(t *testing.T) {
 	}
 	if cfg.Search.Retrieval.FinalTopK != 100 {
 		t.Fatalf("final_top_k default = %d, want 100", cfg.Search.Retrieval.FinalTopK)
+	}
+}
+
+func TestLoadDefaultsAgenticSearchConfig(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("search: {}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Search.Agentic.Enabled {
+		t.Fatal("agentic.enabled = true, want false by default")
+	}
+	if cfg.Search.Agentic.PlannerTimeout != 8*time.Second {
+		t.Fatalf("planner_timeout = %s, want 8s", cfg.Search.Agentic.PlannerTimeout)
+	}
+	if cfg.Search.Agentic.RerankerTimeout != 10*time.Second {
+		t.Fatalf("reranker_timeout = %s, want 10s", cfg.Search.Agentic.RerankerTimeout)
+	}
+	if cfg.Search.Agentic.RerankTopK != 40 {
+		t.Fatalf("rerank_top_k = %d, want 40", cfg.Search.Agentic.RerankTopK)
+	}
+	if !cfg.Search.Agentic.FallbackOnError {
+		t.Fatal("fallback_on_error = false, want true by default")
 	}
 }
 

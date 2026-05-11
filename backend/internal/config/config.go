@@ -114,6 +114,7 @@ type SearchConfig struct {
 	Profiles       []SearchProfileConfig `mapstructure:"profiles"`
 	Retrieval      RetrievalConfig       `mapstructure:"retrieval"`
 	QueryExpansion QueryExpansionConfig  `mapstructure:"query_expansion"`
+	Agentic        AgenticSearchConfig   `mapstructure:"agentic"`
 }
 
 // SearchProfileConfig groups multiple embedding configs into one search profile.
@@ -145,6 +146,17 @@ type QueryExpansionConfig struct {
 	Model   string `mapstructure:"model"`
 	APIKey  string `mapstructure:"api_key"`
 	BaseURL string `mapstructure:"base_url"`
+}
+
+// AgenticSearchConfig configures optional LLM-planned search and reranking.
+type AgenticSearchConfig struct {
+	Enabled         bool          `mapstructure:"enabled"`
+	PlannerModel    string        `mapstructure:"planner_model"`
+	RerankerModel   string        `mapstructure:"reranker_model"`
+	PlannerTimeout  time.Duration `mapstructure:"planner_timeout"`
+	RerankerTimeout time.Duration `mapstructure:"reranker_timeout"`
+	RerankTopK      int           `mapstructure:"rerank_top_k"`
+	FallbackOnError bool          `mapstructure:"fallback_on_error"`
 }
 
 // SourcesConfig defines configuration for available data sources.
@@ -282,6 +294,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("search.retrieval.weights.keyword", 0.10)
 	v.SetDefault("search.query_expansion.enabled", true)
 	v.SetDefault("search.query_expansion.model", "gpt-4o-mini")
+	v.SetDefault("search.agentic.enabled", false)
+	v.SetDefault("search.agentic.planner_timeout", "8s")
+	v.SetDefault("search.agentic.reranker_timeout", "10s")
+	v.SetDefault("search.agentic.rerank_top_k", 40)
+	v.SetDefault("search.agentic.fallback_on_error", true)
 }
 
 // bindEnvVars binds environment variables to configuration keys.
@@ -328,6 +345,13 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("search.query_expansion.model", "QUERY_EXPANSION_MODEL")
 	v.BindEnv("search.query_expansion.api_key", "QUERY_EXPANSION_API_KEY")
 	v.BindEnv("search.query_expansion.base_url", "QUERY_EXPANSION_BASE_URL")
+	v.BindEnv("search.agentic.enabled", "AGENTIC_SEARCH_ENABLED")
+	v.BindEnv("search.agentic.planner_model", "AGENTIC_SEARCH_PLANNER_MODEL")
+	v.BindEnv("search.agentic.reranker_model", "AGENTIC_SEARCH_RERANKER_MODEL")
+	v.BindEnv("search.agentic.planner_timeout", "AGENTIC_SEARCH_PLANNER_TIMEOUT")
+	v.BindEnv("search.agentic.reranker_timeout", "AGENTIC_SEARCH_RERANKER_TIMEOUT")
+	v.BindEnv("search.agentic.rerank_top_k", "AGENTIC_SEARCH_RERANK_TOP_K")
+	v.BindEnv("search.agentic.fallback_on_error", "AGENTIC_SEARCH_FALLBACK_ON_ERROR")
 
 	// Sources
 	v.BindEnv("sources.localdir.root_path", "LOCAL_MEMES_DIR")

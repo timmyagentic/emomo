@@ -88,6 +88,15 @@ search:
     api_key: ""
     # base_url: set via QUERY_EXPANSION_BASE_URL env var (optional, defaults to VLM's OPENAI_BASE_URL)
     base_url: ""
+  agentic:
+    enabled: false
+    # planner_model/reranker_model default to query_expansion.model, then VLM_MODEL
+    planner_model: ""
+    reranker_model: ""
+    planner_timeout: 8s
+    reranker_timeout: 10s
+    rerank_top_k: 40
+    fallback_on_error: true
 
 sources:
   localdir:
