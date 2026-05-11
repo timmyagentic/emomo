@@ -43,6 +43,70 @@ func registerSearchProfiles(searchService *service.SearchService, registry *serv
 	}
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func buildAgenticSearchService(cfg *config.Config, appLogger *logger.Logger) *service.AgenticSearchService {
+	agenticCfg := cfg.Search.Agentic
+	if !agenticCfg.Enabled {
+		return nil
+	}
+
+	apiKey := firstNonEmpty(cfg.Search.QueryExpansion.APIKey, cfg.VLM.APIKey)
+	baseURL := firstNonEmpty(cfg.Search.QueryExpansion.BaseURL, cfg.VLM.BaseURL)
+	plannerModel := firstNonEmpty(agenticCfg.PlannerModel, cfg.Search.QueryExpansion.Model, cfg.VLM.Model)
+	rerankerModel := firstNonEmpty(agenticCfg.RerankerModel, cfg.Search.QueryExpansion.Model, cfg.VLM.Model)
+	if apiKey == "" || plannerModel == "" || rerankerModel == "" {
+		appLogger.Warn("Agentic search disabled because LLM credentials or models are incomplete")
+		return nil
+	}
+
+	plannerClient, err := service.NewOpenAICompatibleJSONClient(service.OpenAICompatibleJSONClientConfig{
+		Model:   plannerModel,
+		APIKey:  apiKey,
+		BaseURL: baseURL,
+		Timeout: agenticCfg.PlannerTimeout,
+	})
+	if err != nil {
+		appLogger.WithError(err).Warn("Agentic search planner client unavailable")
+		return nil
+	}
+	rerankerClient, err := service.NewOpenAICompatibleJSONClient(service.OpenAICompatibleJSONClientConfig{
+		Model:   rerankerModel,
+		APIKey:  apiKey,
+		BaseURL: baseURL,
+		Timeout: agenticCfg.RerankerTimeout,
+	})
+	if err != nil {
+		appLogger.WithError(err).Warn("Agentic search reranker client unavailable")
+		return nil
+	}
+
+	planner := service.NewLLMSearchPlanner(plannerClient, service.LLMSearchPlannerConfig{
+		Timeout: agenticCfg.PlannerTimeout,
+	})
+	reranker := service.NewLLMSearchReranker(rerankerClient, service.LLMSearchRerankerConfig{
+		TopK:    agenticCfg.RerankTopK,
+		Timeout: agenticCfg.RerankerTimeout,
+	})
+	appLogger.WithFields(logger.Fields{
+		"planner_model":  plannerModel,
+		"reranker_model": rerankerModel,
+		"rerank_top_k":   agenticCfg.RerankTopK,
+	}).Info("Agentic search enabled")
+	return service.NewAgenticSearchService(planner, reranker, service.AgenticSearchConfig{
+		Enabled:         true,
+		FallbackOnError: agenticCfg.FallbackOnError,
+		RerankTopK:      agenticCfg.RerankTopK,
+	})
+}
+
 func main() {
 	// Initialize logger first (with defaults)
 	appLogger := logger.New(&logger.Config{
@@ -139,6 +203,7 @@ func main() {
 			"model": cfg.Search.QueryExpansion.Model,
 		}).Info("Query expansion enabled")
 	}
+	agenticSearchService := buildAgenticSearchService(cfg, appLogger)
 
 	// Create search service
 	searchService := service.NewSearchService(
@@ -154,6 +219,7 @@ func main() {
 			DefaultCollection: defaultEmbeddingName,
 			DefaultProfile:    cfg.Search.DefaultProfile,
 			Retrieval:         serviceRetrievalConfig(cfg.Search.Retrieval),
+			Agentic:           agenticSearchService,
 		},
 	)
 

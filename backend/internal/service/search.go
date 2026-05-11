@@ -20,6 +20,7 @@ type SearchConfig struct {
 	DefaultCollection string // Default search collection key (embedding config name)
 	DefaultProfile    string
 	Retrieval         RetrievalConfig
+	Agentic           *AgenticSearchService
 }
 
 // CollectionConfig holds configuration for a single collection.
@@ -62,6 +63,7 @@ type SearchService struct {
 	defaultCollection  string
 	defaultProfile     string
 	retrieval          RetrievalConfig
+	agentic            *AgenticSearchService
 
 	// Multi-collection support: collection name -> config
 	collections map[string]*CollectionConfig
@@ -101,9 +103,17 @@ func NewSearchService(
 		defaultCollection:  defaultCollection,
 		defaultProfile:     defaultProfile,
 		retrieval:          retrieval,
+		agentic:            cfgAgentic(cfg),
 		collections:        make(map[string]*CollectionConfig),
 		profiles:           make(map[string]*SearchProfileConfig),
 	}
+}
+
+func cfgAgentic(cfg *SearchConfig) *AgenticSearchService {
+	if cfg == nil {
+		return nil
+	}
+	return cfg.Agentic
 }
 
 // RegisterCollection registers a collection configuration for multi-collection search.
@@ -307,19 +317,8 @@ func applyTopKDefaults(topK int32) int32 {
 	return topK
 }
 
-// TextSearch performs a hybrid text search (dense + BM25) against the
-// configured collection or profile.
-func (s *SearchService) TextSearch(ctx context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
-	topK := applyTopKDefaults(req.GetTopK())
-	originalQuery := req.GetQuery()
-	route := classifyQuery(originalQuery)
+func (s *SearchService) prepareLegacyQuery(ctx context.Context, originalQuery string, route QueryRoute) (string, string) {
 	expandedQuery := ""
-
-	ctx = logger.WithFields(ctx, logger.Fields{
-		logger.FieldComponent: "search",
-		logger.FieldSearchID:  fmt.Sprintf("%d", ctx.Value("request_id")),
-	})
-
 	if route != QueryRouteExact && s.queryExpansion != nil && s.queryExpansion.IsEnabled() {
 		expanded, err := s.queryExpansion.Expand(ctx, originalQuery)
 		if err != nil {
@@ -335,13 +334,97 @@ func (s *SearchService) TextSearch(ctx context.Context, req *pb.SearchRequest) (
 	if expandedQuery != "" {
 		queryForEmbedding = expandedQuery
 	}
+	return queryForEmbedding, expandedQuery
+}
+
+func (s *SearchService) prepareLegacyQueryWithProgress(
+	ctx context.Context,
+	originalQuery string,
+	route QueryRoute,
+	progressCh chan<- *pb.SearchProgressEvent,
+) (string, string) {
+	expandedQuery := ""
+	if route != QueryRouteExact && s.queryExpansion != nil && s.queryExpansion.IsEnabled() {
+		progressCh <- &pb.SearchProgressEvent{
+			Stage:   pb.SearchStage_SEARCH_STAGE_QUERY_EXPANSION_START,
+			Message: "AI 正在理解搜索意图...",
+		}
+
+		tokenCh := make(chan string, 100)
+		expandDone := make(chan struct{})
+		var expandErr error
+
+		go func() {
+			defer close(expandDone)
+			expandedQuery, expandErr = s.queryExpansion.ExpandStream(ctx, originalQuery, tokenCh)
+		}()
+
+		for token := range tokenCh {
+			progressCh <- &pb.SearchProgressEvent{
+				Stage: pb.SearchStage_SEARCH_STAGE_THINKING,
+				Payload: &pb.SearchProgressEvent_Thinking{
+					Thinking: &pb.ThinkingDelta{
+						Text:    token,
+						IsDelta: true,
+					},
+				},
+			}
+		}
+
+		<-expandDone
+
+		if expandErr != nil {
+			logger.CtxWarn(ctx, "Query expansion failed, using original query: query=%q, error=%v",
+				originalQuery, expandErr)
+			expandedQuery = ""
+		} else if expandedQuery != originalQuery && expandedQuery != "" {
+			logger.CtxInfo(ctx, "Query expanded: original=%q, expanded=%q", originalQuery, expandedQuery)
+			progressCh <- &pb.SearchProgressEvent{
+				Stage:   pb.SearchStage_SEARCH_STAGE_QUERY_EXPANSION_DONE,
+				Message: "理解完成",
+				Payload: &pb.SearchProgressEvent_Expansion{
+					Expansion: &pb.ExpansionDone{
+						ExpandedQuery: expandedQuery,
+					},
+				},
+			}
+		}
+	}
+
+	queryForEmbedding := originalQuery
+	if expandedQuery != "" {
+		queryForEmbedding = expandedQuery
+	}
+	return queryForEmbedding, expandedQuery
+}
+
+// TextSearch performs a hybrid text search (dense + BM25) against the
+// configured collection or profile.
+func (s *SearchService) TextSearch(ctx context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
+	topK := applyTopKDefaults(req.GetTopK())
+	originalQuery := req.GetQuery()
+	route := classifyQuery(originalQuery)
+	agenticEnabled := s.agentic.IsEnabled()
+
+	ctx = logger.WithFields(ctx, logger.Fields{
+		logger.FieldComponent: "search",
+		logger.FieldSearchID:  fmt.Sprintf("%d", ctx.Value("request_id")),
+	})
 
 	if profile, profileName, ok, err := s.resolveRequestedProfile(req); err != nil {
 		return nil, err
 	} else if ok {
+		if agenticEnabled {
+			return s.searchProfileAgentic(ctx, req, topK, profileName, profile, originalQuery, func() (*pb.SearchResponse, error) {
+				queryForEmbedding, expandedQuery := s.prepareLegacyQuery(ctx, originalQuery, route)
+				return s.searchProfile(ctx, req, topK, profileName, profile, originalQuery, queryForEmbedding, expandedQuery)
+			})
+		}
+		queryForEmbedding, expandedQuery := s.prepareLegacyQuery(ctx, originalQuery, route)
 		return s.searchProfile(ctx, req, topK, profileName, profile, originalQuery, queryForEmbedding, expandedQuery)
 	}
 
+	queryForEmbedding, expandedQuery := s.prepareLegacyQuery(ctx, originalQuery, route)
 	qdrantRepo, embedding, collectionName, err := s.resolveCollection(req.GetCollection())
 	if err != nil {
 		return nil, err
@@ -477,9 +560,196 @@ func (s *SearchService) searchProfile(
 	}, nil
 }
 
+func (s *SearchService) searchProfileAgentic(
+	ctx context.Context,
+	req *pb.SearchRequest,
+	topK int32,
+	profileName string,
+	profile *SearchProfileConfig,
+	originalQuery string,
+	legacyFallback func() (*pb.SearchResponse, error),
+) (*pb.SearchResponse, error) {
+	plan, ok, err := s.planAgenticProfileSearch(ctx, req, profileName, originalQuery)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		if legacyFallback == nil {
+			return nil, fmt.Errorf("agentic search planner failed and no legacy fallback is configured")
+		}
+		return legacyFallback()
+	}
+
+	return s.searchProfileWithPlan(ctx, req, topK, profileName, profile, originalQuery, plan)
+}
+
+func (s *SearchService) planAgenticProfileSearch(
+	ctx context.Context,
+	req *pb.SearchRequest,
+	profileName string,
+	originalQuery string,
+) (SearchPlan, bool, error) {
+	plan, err := s.agentic.planner.Plan(ctx, req, s.retrieval)
+	if err != nil {
+		logger.CtxWarn(ctx, "Agentic search planner failed: query=%q, profile=%s, error=%v",
+			originalQuery, profileName, err)
+		if !s.agentic.FallbackOnError() {
+			return SearchPlan{}, false, fmt.Errorf("agentic search planner failed: %w", err)
+		}
+		logger.CtxInfo(ctx, "Falling back to legacy profile search after agentic planner failure: query=%q, profile=%s",
+			originalQuery, profileName)
+		return SearchPlan{}, false, nil
+	}
+
+	logger.CtxInfo(ctx, "Agentic search plan: query=%q, intent=%s, dense_query=%q, sparse_query=%q, weights=image:%.3f caption:%.3f keyword:%.3f, top_k=image:%d caption:%d keyword:%d, reason=%q",
+		originalQuery, plan.Intent, plan.DenseQuery, plan.SparseQuery,
+		plan.Weights.Image, plan.Weights.Caption, plan.Weights.Keyword,
+		plan.ImageTopK, plan.CaptionTopK, plan.KeywordTopK, plan.Reason)
+	return plan, true, nil
+}
+
+func (s *SearchService) searchProfileWithPlan(
+	ctx context.Context,
+	req *pb.SearchRequest,
+	topK int32,
+	profileName string,
+	profile *SearchProfileConfig,
+	originalQuery string,
+	plan SearchPlan,
+) (*pb.SearchResponse, error) {
+	if profile == nil || profile.Image == nil || profile.Caption == nil ||
+		profile.Image.QdrantRepo == nil || profile.Image.Embedding == nil ||
+		profile.Caption.QdrantRepo == nil || profile.Caption.Embedding == nil {
+		return nil, fmt.Errorf("profile %q is incomplete", profileName)
+	}
+
+	logger.CtxInfo(ctx, "Performing agentic profile search: query=%q, dense_query=%q, sparse_query=%q, top_k=%d, profile=%s",
+		originalQuery, plan.DenseQuery, plan.SparseQuery, topK, profileName)
+
+	imageQueryEmbedding, err := profile.Image.Embedding.EmbedQuery(ctx, plan.DenseQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate image route query embedding: %w", err)
+	}
+
+	captionQueryEmbedding, err := profile.Caption.Embedding.EmbedQuery(ctx, plan.DenseQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate caption route query embedding: %w", err)
+	}
+
+	filters := buildSearchFiltersWithPlan(req, plan)
+
+	imageResults, imageErr := profile.Image.QdrantRepo.Search(ctx, imageQueryEmbedding, plan.ImageTopK, filters)
+	if imageErr != nil {
+		logger.CtxWarn(ctx, "Agentic profile image search failed: profile=%s, error=%v", profileName, imageErr)
+		imageResults = nil
+	}
+
+	captionResults, captionErr := profile.Caption.QdrantRepo.Search(ctx, captionQueryEmbedding, plan.CaptionTopK, filters)
+	if captionErr != nil {
+		logger.CtxWarn(ctx, "Agentic profile caption search failed: profile=%s, error=%v", profileName, captionErr)
+		captionResults = nil
+	}
+
+	keywordResults, keywordErr := profile.Caption.QdrantRepo.SparseSearch(ctx, plan.SparseQuery, plan.KeywordTopK, filters)
+	if keywordErr != nil {
+		logger.CtxWarn(ctx, "Agentic profile keyword search failed: profile=%s, error=%v", profileName, keywordErr)
+		keywordResults = nil
+	}
+
+	if imageErr != nil && captionErr != nil && keywordErr != nil {
+		return nil, fmt.Errorf("all agentic profile search routes failed: image=%v, caption=%v, keyword=%v", imageErr, captionErr, keywordErr)
+	}
+
+	finalTopK := int(topK)
+	if finalTopK <= 0 {
+		finalTopK = s.retrieval.FinalTopK
+	}
+	candidateLimit := finalTopK
+	if s.agentic != nil && s.agentic.RerankTopK() > candidateLimit {
+		candidateLimit = s.agentic.RerankTopK()
+	}
+	candidates := fuseProfileCandidates(imageResults, captionResults, keywordResults, plan.Weights, candidateLimit)
+	logTopRouteEvidence(ctx, candidates, 10)
+
+	if s.agentic != nil && s.agentic.reranker != nil && len(candidates) > 0 {
+		reranked, err := s.agentic.reranker.Rerank(ctx, req, plan, candidates)
+		if err != nil {
+			logger.CtxWarn(ctx, "Agentic search reranker failed, keeping fusion order: query=%q, error=%v", originalQuery, err)
+		} else {
+			candidates = reranked
+			logger.CtxInfo(ctx, "Agentic search reranked candidates: query=%q, kept=%d", originalQuery, len(candidates))
+		}
+	}
+
+	results := candidatesToSearchResults(candidates, finalTopK)
+	s.enrichSearchResults(ctx, results)
+
+	return &pb.SearchResponse{
+		Results:       results,
+		Total:         int32(len(results)),
+		Query:         originalQuery,
+		ExpandedQuery: plan.DenseQuery,
+		Profile:       profileName,
+	}, nil
+}
+
+func buildSearchFiltersWithPlan(req *pb.SearchRequest, plan SearchPlan) *repository.SearchFilters {
+	filters := buildSearchFilters(req)
+	if filters == nil {
+		filters = &repository.SearchFilters{}
+	}
+	if req.GetTextPresence() == pb.TextPresence_TEXT_PRESENCE_UNSPECIFIED &&
+		plan.TextPresence != pb.TextPresence_TEXT_PRESENCE_UNSPECIFIED {
+		presence := persistence.TextPresenceToString(plan.TextPresence)
+		filters.TextPresence = &presence
+	}
+	if filters.Category == nil && filters.TextPresence == nil {
+		return nil
+	}
+	return filters
+}
+
+func logTopRouteEvidence(ctx context.Context, candidates []SearchCandidate, limit int) {
+	if limit <= 0 || len(candidates) == 0 {
+		return
+	}
+	if len(candidates) < limit {
+		limit = len(candidates)
+	}
+	for i := 0; i < limit; i++ {
+		candidate := candidates[i]
+		if candidate.Result == nil || candidate.Result.Meme == nil {
+			continue
+		}
+		logger.CtxDebug(ctx, "Agentic search candidate evidence: rank=%d, meme_id=%s, score=%.4f, image_rank=%d, caption_rank=%d, keyword_rank=%d",
+			i+1, candidate.Result.Meme.GetId(), candidate.Result.GetScore(),
+			candidate.Evidence.ImageRank, candidate.Evidence.CaptionRank, candidate.Evidence.KeywordRank)
+	}
+}
+
 type routeResults struct {
 	results []repository.SearchResult
 	weight  float32
+	route   string
+}
+
+// RouteEvidence records where a candidate appeared before cross-route fusion.
+type RouteEvidence struct {
+	ImageRank    int     `json:"image_rank"`
+	ImageScore   float32 `json:"image_score"`
+	CaptionRank  int     `json:"caption_rank"`
+	CaptionScore float32 `json:"caption_score"`
+	KeywordRank  int     `json:"keyword_rank"`
+	KeywordScore float32 `json:"keyword_score"`
+}
+
+// SearchCandidate is the internal representation used by agentic reranking.
+type SearchCandidate struct {
+	Result         *pb.SearchResult
+	Evidence       RouteEvidence
+	FusionScore    float32
+	PayloadOCRText string
+	RerankReason   string
 }
 
 func fuseProfileResults(
@@ -489,20 +759,27 @@ func fuseProfileResults(
 	weights RetrievalWeights,
 	topK int,
 ) []*pb.SearchResult {
+	candidates := fuseProfileCandidates(imageResults, captionResults, keywordResults, weights, topK)
+	return candidatesToSearchResults(candidates, topK)
+}
+
+func fuseProfileCandidates(
+	imageResults []repository.SearchResult,
+	captionResults []repository.SearchResult,
+	keywordResults []repository.SearchResult,
+	weights RetrievalWeights,
+	topK int,
+) []SearchCandidate {
 	if topK <= 0 {
 		topK = 20
 	}
 	routes := []routeResults{
-		{results: imageResults, weight: weights.Image},
-		{results: captionResults, weight: weights.Caption},
-		{results: keywordResults, weight: weights.Keyword},
+		{results: imageResults, weight: weights.Image, route: "image"},
+		{results: captionResults, weight: weights.Caption, route: "caption"},
+		{results: keywordResults, weight: weights.Keyword, route: "keyword"},
 	}
 
-	type scoredResult struct {
-		result *pb.SearchResult
-		score  float32
-	}
-	byMemeID := make(map[string]*scoredResult)
+	byMemeID := make(map[string]*SearchCandidate)
 	maxScore := float32(0)
 	for _, route := range routes {
 		if route.weight <= 0 {
@@ -515,8 +792,8 @@ func fuseProfileResults(
 			rankScore := route.weight * (1 / float32(rank+60))
 			item, ok := byMemeID[qr.Payload.MemeID]
 			if !ok {
-				item = &scoredResult{
-					result: &pb.SearchResult{
+				item = &SearchCandidate{
+					Result: &pb.SearchResult{
 						Meme: &pb.Meme{
 							Id:       qr.Payload.MemeID,
 							Url:      qr.Payload.StorageURL,
@@ -526,37 +803,72 @@ func fuseProfileResults(
 						Description:  qr.Payload.VLMDescription,
 						TextPresence: persistence.TextPresenceFromString(qr.Payload.TextPresence),
 					},
+					PayloadOCRText: qr.Payload.OCRText,
 				}
 				byMemeID[qr.Payload.MemeID] = item
 			}
-			item.score += rankScore
-			if item.score > maxScore {
-				maxScore = item.score
+			applyRouteEvidence(item, route.route, rank+1, qr.Score, qr.Payload)
+			item.FusionScore += rankScore
+			if item.FusionScore > maxScore {
+				maxScore = item.FusionScore
 			}
 		}
 	}
 
-	items := make([]*scoredResult, 0, len(byMemeID))
+	items := make([]SearchCandidate, 0, len(byMemeID))
 	for _, item := range byMemeID {
 		if maxScore > 0 {
-			item.result.Score = item.score / maxScore
+			item.Result.Score = item.FusionScore / maxScore
+			item.FusionScore = item.Result.Score
 		}
-		items = append(items, item)
+		items = append(items, *item)
 	}
 	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].result.Score == items[j].result.Score {
-			return items[i].result.Meme.GetId() < items[j].result.Meme.GetId()
+		if items[i].Result.Score == items[j].Result.Score {
+			return items[i].Result.Meme.GetId() < items[j].Result.Meme.GetId()
 		}
-		return items[i].result.Score > items[j].result.Score
+		return items[i].Result.Score > items[j].Result.Score
 	})
 
 	if len(items) > topK {
 		items = items[:topK]
 	}
 
-	results := make([]*pb.SearchResult, len(items))
-	for i := range items {
-		results[i] = items[i].result
+	return items
+}
+
+func applyRouteEvidence(candidate *SearchCandidate, route string, rank int, score float32, payload *repository.MemePayload) {
+	if candidate == nil {
+		return
+	}
+	if candidate.PayloadOCRText == "" && payload != nil {
+		candidate.PayloadOCRText = payload.OCRText
+	}
+	switch route {
+	case "image":
+		candidate.Evidence.ImageRank = rank
+		candidate.Evidence.ImageScore = score
+	case "caption":
+		candidate.Evidence.CaptionRank = rank
+		candidate.Evidence.CaptionScore = score
+	case "keyword":
+		candidate.Evidence.KeywordRank = rank
+		candidate.Evidence.KeywordScore = score
+	}
+}
+
+func candidatesToSearchResults(candidates []SearchCandidate, topK int) []*pb.SearchResult {
+	if topK <= 0 {
+		topK = len(candidates)
+	}
+	if len(candidates) > topK {
+		candidates = candidates[:topK]
+	}
+	results := make([]*pb.SearchResult, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Result != nil {
+			results = append(results, candidate.Result)
+		}
 	}
 	return results
 }
@@ -623,68 +935,44 @@ func (s *SearchService) TextSearchWithProgress(
 	topK := applyTopKDefaults(req.GetTopK())
 	originalQuery := req.GetQuery()
 	route := classifyQuery(originalQuery)
-	expandedQuery := ""
-
-	if route != QueryRouteExact && s.queryExpansion != nil && s.queryExpansion.IsEnabled() {
-		progressCh <- &pb.SearchProgressEvent{
-			Stage:   pb.SearchStage_SEARCH_STAGE_QUERY_EXPANSION_START,
-			Message: "AI 正在理解搜索意图...",
-		}
-
-		tokenCh := make(chan string, 100)
-		expandDone := make(chan struct{})
-		var expandErr error
-
-		go func() {
-			defer close(expandDone)
-			expandedQuery, expandErr = s.queryExpansion.ExpandStream(ctx, originalQuery, tokenCh)
-		}()
-
-		for token := range tokenCh {
-			progressCh <- &pb.SearchProgressEvent{
-				Stage: pb.SearchStage_SEARCH_STAGE_THINKING,
-				Payload: &pb.SearchProgressEvent_Thinking{
-					Thinking: &pb.ThinkingDelta{
-						Text:    token,
-						IsDelta: true,
-					},
-				},
-			}
-		}
-
-		<-expandDone
-
-		if expandErr != nil {
-			logger.CtxWarn(ctx, "Query expansion failed, using original query: query=%q, error=%v",
-				originalQuery, expandErr)
-			expandedQuery = ""
-		} else if expandedQuery != originalQuery && expandedQuery != "" {
-			logger.CtxInfo(ctx, "Query expanded: original=%q, expanded=%q", originalQuery, expandedQuery)
-			progressCh <- &pb.SearchProgressEvent{
-				Stage:   pb.SearchStage_SEARCH_STAGE_QUERY_EXPANSION_DONE,
-				Message: "理解完成",
-				Payload: &pb.SearchProgressEvent_Expansion{
-					Expansion: &pb.ExpansionDone{
-						ExpandedQuery: expandedQuery,
-					},
-				},
-			}
-		}
-	}
-
-	queryForEmbedding := originalQuery
-	if expandedQuery != "" {
-		queryForEmbedding = expandedQuery
-	}
-
-	progressCh <- &pb.SearchProgressEvent{
-		Stage:   pb.SearchStage_SEARCH_STAGE_EMBEDDING,
-		Message: "正在生成语义向量...",
-	}
+	agenticEnabled := s.agentic.IsEnabled()
 
 	if profile, profileName, ok, err := s.resolveRequestedProfile(req); err != nil {
 		return nil, err
 	} else if ok {
+		if agenticEnabled {
+			plan, planned, err := s.planAgenticProfileSearch(ctx, req, profileName, originalQuery)
+			if err != nil {
+				return nil, err
+			}
+			if planned {
+				progressCh <- &pb.SearchProgressEvent{
+					Stage:   pb.SearchStage_SEARCH_STAGE_EMBEDDING,
+					Message: "正在生成语义向量...",
+				}
+				progressCh <- &pb.SearchProgressEvent{
+					Stage:   pb.SearchStage_SEARCH_STAGE_SEARCHING,
+					Message: "在表情库中搜索...",
+				}
+				result, err := s.searchProfileWithPlan(ctx, req, topK, profileName, profile, originalQuery, plan)
+				if err != nil {
+					return nil, err
+				}
+				if len(result.GetResults()) > 0 {
+					progressCh <- &pb.SearchProgressEvent{
+						Stage:   pb.SearchStage_SEARCH_STAGE_ENRICHING,
+						Message: "加载表情包详情...",
+					}
+				}
+				return result, nil
+			}
+		}
+
+		queryForEmbedding, expandedQuery := s.prepareLegacyQueryWithProgress(ctx, originalQuery, route, progressCh)
+		progressCh <- &pb.SearchProgressEvent{
+			Stage:   pb.SearchStage_SEARCH_STAGE_EMBEDDING,
+			Message: "正在生成语义向量...",
+		}
 		progressCh <- &pb.SearchProgressEvent{
 			Stage:   pb.SearchStage_SEARCH_STAGE_SEARCHING,
 			Message: "在表情库中搜索...",
@@ -700,6 +988,12 @@ func (s *SearchService) TextSearchWithProgress(
 			}
 		}
 		return result, nil
+	}
+
+	queryForEmbedding, expandedQuery := s.prepareLegacyQueryWithProgress(ctx, originalQuery, route, progressCh)
+	progressCh <- &pb.SearchProgressEvent{
+		Stage:   pb.SearchStage_SEARCH_STAGE_EMBEDDING,
+		Message: "正在生成语义向量...",
 	}
 
 	qdrantRepo, embedding, collectionName, err := s.resolveCollection(req.GetCollection())
