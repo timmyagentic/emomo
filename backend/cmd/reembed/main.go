@@ -44,11 +44,8 @@ import (
 )
 
 func main() {
-	appLogger := logger.New(&logger.Config{
-		Level:       "info",
-		Format:      "text",
-		ServiceName: "emomo-reembed",
-	})
+	config.LoadDotEnv()
+	appLogger := logger.NewServiceFromEnv("emomo-reembed")
 	logger.SetDefaultLogger(appLogger)
 	defer logger.Sync()
 

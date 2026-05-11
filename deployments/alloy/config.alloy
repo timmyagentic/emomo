@@ -85,15 +85,20 @@ loki.process "parse_json" {
       level       = "level",
       message     = "message",
       service     = "service",
+      component   = "component",
       request_id  = "request_id",
+      search_id   = "search_id",
+      job_id      = "job_id",
       error_msg   = "error",
       path        = "path",
+      full_path   = "full_path",
+      query       = "query",
       method      = "method",
       status      = "status",
-      latency_ms  = "latency_ms",
+      duration_ms = "duration_ms",
+      size        = "size",
       client_ip   = "client_ip",
       source      = "source",
-      duration    = "duration",
     }
   }
 
@@ -106,21 +111,28 @@ loki.process "parse_json" {
   // Stage 3: Add labels from JSON fields
   stage.labels {
     values = {
-      service = "service",
-      level   = "level",
+      service   = "service",
+      level     = "level",
+      component = "component",
     }
   }
 
   // Stage 4: Add structured metadata (Loki 3.0+)
   stage.structured_metadata {
     values = {
-      request_id = "request_id",
-      path       = "path",
-      method     = "method",
-      status     = "status",
-      latency_ms = "latency_ms",
-      client_ip  = "client_ip",
-      error_msg  = "error_msg",
+      request_id  = "request_id",
+      search_id   = "search_id",
+      job_id      = "job_id",
+      path        = "path",
+      full_path   = "full_path",
+      query       = "query",
+      method      = "method",
+      status      = "status",
+      duration_ms = "duration_ms",
+      size        = "size",
+      client_ip   = "client_ip",
+      source      = "source",
+      error_msg   = "error_msg",
     }
   }
 }

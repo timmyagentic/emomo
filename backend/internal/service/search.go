@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/google/uuid"
 	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/domain"
 	"github.com/timmy/emomo/internal/logger"
@@ -317,6 +318,20 @@ func applyTopKDefaults(topK int32) int32 {
 	return topK
 }
 
+func withSearchLogFields(ctx context.Context) context.Context {
+	searchID := logger.GetSearchID(ctx)
+	if searchID == "" {
+		searchID = logger.GetRequestID(ctx)
+	}
+	if searchID == "" {
+		searchID = uuid.New().String()
+	}
+	return logger.WithFields(ctx, logger.Fields{
+		logger.FieldComponent: "search",
+		logger.FieldSearchID:  searchID,
+	})
+}
+
 func (s *SearchService) prepareLegacyQuery(ctx context.Context, originalQuery string, route QueryRoute) (string, string) {
 	expandedQuery := ""
 	if route != QueryRouteExact && s.queryExpansion != nil && s.queryExpansion.IsEnabled() {
@@ -406,10 +421,7 @@ func (s *SearchService) TextSearch(ctx context.Context, req *pb.SearchRequest) (
 	route := classifyQuery(originalQuery)
 	agenticEnabled := s.agentic.IsEnabled()
 
-	ctx = logger.WithFields(ctx, logger.Fields{
-		logger.FieldComponent: "search",
-		logger.FieldSearchID:  fmt.Sprintf("%d", ctx.Value("request_id")),
-	})
+	ctx = withSearchLogFields(ctx)
 
 	if profile, profileName, ok, err := s.resolveRequestedProfile(req); err != nil {
 		return nil, err
@@ -936,6 +948,7 @@ func (s *SearchService) TextSearchWithProgress(
 	originalQuery := req.GetQuery()
 	route := classifyQuery(originalQuery)
 	agenticEnabled := s.agentic.IsEnabled()
+	ctx = withSearchLogFields(ctx)
 
 	if profile, profileName, ok, err := s.resolveRequestedProfile(req); err != nil {
 		return nil, err

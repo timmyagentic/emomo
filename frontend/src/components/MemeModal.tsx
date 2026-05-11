@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { DisplayMeme } from '../types';
+import { logError } from '../utils/logger';
 import styles from './MemeModal.module.css';
 
 /**
@@ -172,7 +173,7 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
       }
       timeoutRefs.current.copied = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      logError('Failed to copy', { error: err });
     }
   };
 

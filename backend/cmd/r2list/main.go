@@ -6,7 +6,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/timmy/emomo/internal/config"
+	"github.com/timmy/emomo/internal/logger"
 )
 
 func main() {
@@ -23,9 +23,14 @@ func main() {
 	configPath := flag.String("config", "", "Config path")
 	flag.Parse()
 
+	config.LoadDotEnv()
+	appLogger := logger.NewServiceFromEnv("emomo-r2list")
+	logger.SetDefaultLogger(appLogger)
+	defer logger.Sync()
+
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		appLogger.WithError(err).Fatal("Failed to load config")
 	}
 	sc := cfg.GetStorageConfig()
 
@@ -50,7 +55,7 @@ func main() {
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(sc.AccessKey, sc.SecretKey, "")),
 	)
 	if err != nil {
-		log.Fatalf("load aws cfg: %v", err)
+		appLogger.WithError(err).Fatal("Failed to load AWS config")
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
@@ -66,7 +71,7 @@ func main() {
 		MaxKeys: aws.Int32(int32(*limit)),
 	})
 	if err != nil {
-		log.Fatalf("list: %v", err)
+		appLogger.WithError(err).Fatal("Failed to list objects")
 	}
 	fmt.Printf("KeyCount=%d truncated=%v\n", aws.ToInt32(out.KeyCount), aws.ToBool(out.IsTruncated))
 	for _, obj := range out.Contents {

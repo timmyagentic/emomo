@@ -16,6 +16,7 @@ import {
   pbMemeToDisplay,
   type DisplayMeme,
 } from '../types';
+import { logWarn } from '../utils/logger';
 
 /**
  * The base URL for the API, loaded from environment variables.
@@ -27,6 +28,26 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api/v1'
  * The API token for authentication, loaded from environment variables.
  */
 const API_TOKEN = import.meta.env.VITE_API_TOKEN || '';
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly requestId: string;
+
+  constructor(message: string, response: Response) {
+    const requestId = response.headers.get('X-Request-ID') ?? '';
+    const suffix = requestId ? ` (request_id=${requestId})` : '';
+    super(`${message}: ${response.status} ${response.statusText}${suffix}`);
+    this.name = 'ApiError';
+    this.status = response.status;
+    this.requestId = requestId;
+  }
+}
+
+function ensureOK(response: Response, message: string): void {
+  if (!response.ok) {
+    throw new ApiError(message, response);
+  }
+}
 
 function getHeaders(contentType?: string): HeadersInit {
   const headers: HeadersInit = {};
@@ -130,9 +151,7 @@ export async function searchMemes(
     body: JSON.stringify(toJson(SearchRequestSchema, request)),
   });
 
-  if (!response.ok) {
-    throw new Error(`Search failed: ${response.statusText}`);
-  }
+  ensureOK(response, 'Search failed');
 
   const body = await response.json();
   const decoded = fromJson(SearchResponseSchema, body);
@@ -147,9 +166,7 @@ export async function getCategories(): Promise<CategoryView[]> {
   const response = await fetch(`${API_BASE}/categories`, {
     headers: getHeaders(),
   });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch categories: ${response.statusText}`);
-  }
+  ensureOK(response, 'Failed to fetch categories');
   const decoded = fromJson(GetCategoriesResponseSchema, await response.json());
   return decoded.categories.map((name) => ({ name }));
 }
@@ -173,9 +190,7 @@ export async function getMemes(
     headers: getHeaders(),
     signal,
   });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch memes: ${response.statusText}`);
-  }
+  ensureOK(response, 'Failed to fetch memes');
 
   const decoded = fromJson(ListMemesResponseSchema, await response.json());
   return {
@@ -189,9 +204,7 @@ export async function getMeme(id: string): Promise<DisplayMeme> {
   const response = await fetch(`${API_BASE}/memes/${encodeURIComponent(id)}`, {
     headers: getHeaders(),
   });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch meme: ${response.statusText}`);
-  }
+  ensureOK(response, 'Failed to fetch meme');
   const decoded = fromJson(GetMemeResponseSchema, await response.json());
   if (!decoded.meme) {
     throw new Error('Empty meme response');
@@ -204,9 +217,7 @@ export async function getStats(): Promise<StatsView> {
   const response = await fetch(`${API_BASE}/stats`, {
     headers: getHeaders(),
   });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch stats: ${response.statusText}`);
-  }
+  ensureOK(response, 'Failed to fetch stats');
   const decoded = fromJson(GetStatsResponseSchema, await response.json());
   return {
     totalMemes: Number(decoded.totalMemes),
@@ -232,9 +243,7 @@ export async function searchMemesStream(
     signal,
   });
 
-  if (!response.ok) {
-    throw new Error(`Search failed: ${response.statusText}`);
-  }
+  ensureOK(response, 'Search failed');
 
   const reader = response.body?.getReader();
   if (!reader) {
@@ -262,7 +271,7 @@ export async function searchMemesStream(
         try {
           json = JSON.parse(dataPart);
         } catch (err) {
-          console.warn('Failed to parse SSE data line:', dataPart, err);
+          logWarn('Failed to parse SSE data line', { data: dataPart, error: err });
           continue;
         }
 
@@ -270,7 +279,7 @@ export async function searchMemesStream(
         try {
           event = fromJson(SearchProgressEventSchema, json as Parameters<typeof fromJson>[1]);
         } catch (err) {
-          console.warn('Failed to decode SearchProgressEvent:', err, json);
+          logWarn('Failed to decode SearchProgressEvent', { error: err, json });
           continue;
         }
 

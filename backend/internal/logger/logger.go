@@ -188,6 +188,16 @@ func NewDefault() *Logger {
 	return NewFromEnv(nil)
 }
 
+// NewServiceFromEnv creates a new Logger from environment configuration while
+// overriding the service field for a specific entry point.
+func NewServiceFromEnv(serviceName string) *Logger {
+	envCfg := LoadFromEnv()
+	if serviceName != "" {
+		envCfg.ServiceName = serviceName
+	}
+	return NewFromEnv(envCfg)
+}
+
 // OpenRotatingFile opens (creating any missing parent directories) a
 // lumberjack-backed rotating log file at path and returns it as an
 // io.WriteCloser. It is intended for CLI entry points (e.g. cmd/ingest) that
