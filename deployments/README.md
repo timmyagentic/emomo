@@ -94,6 +94,23 @@ docker compose --env-file ../backend/.env -f docker-compose.yml restart api
 docker compose --env-file ../backend/.env -f docker-compose.yml ps
 ```
 
+## 日志配置
+
+API 默认持续输出 JSON 日志到 stdout，适合通过运行平台原生日志或 Docker logs 排查。若后端部署在 Hugging Face Space 这类单容器环境，推荐开启 API 直写 Loki，而不是依赖 Alloy sidecar：
+
+```bash
+LOKI_ENABLED=true
+LOKI_URL=https://logs-prod-xxx.grafana.net/loki/api/v1/push
+LOKI_USERNAME=your-grafana-cloud-instance-id
+LOKI_PASSWORD=your-grafana-cloud-api-key
+APP_ENV=production
+CLUSTER_NAME=production
+```
+
+开启后，API 会保留 stdout，同时异步批量推送到 Loki。`project`、`service`、`environment`、`cluster`、`level`、`component` 会作为 Loki labels；`request_id`、`search_id`、`path`、`status`、`duration_ms` 等高基数字段会作为 structured metadata 和 JSON 日志内容发送。
+
+Compose 部署仍可使用本目录的 Alloy 采集 Docker stdout；这条链路不需要 `LOKI_ENABLED=true`。
+
 ## 故障排查
 
 ### API 无法连接 Qdrant

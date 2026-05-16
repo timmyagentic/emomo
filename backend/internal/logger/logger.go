@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,7 @@ import (
 // writerCloser holds a reference to closable writers for Sync()
 var (
 	writerCloser   io.Closer
+	lokiHookCloser io.Closer
 	writerCloserMu sync.Mutex
 )
 
@@ -176,6 +178,27 @@ func NewFromEnv(envCfg *EnvConfig) *Logger {
 		log.SetOutput(io.MultiWriter(writers...))
 	}
 
+	if envCfg.LokiEnabled && envCfg.LokiURL != "" {
+		hook := newLokiHook(lokiHookConfig{
+			URL:           envCfg.LokiURL,
+			Username:      envCfg.LokiUsername,
+			Password:      envCfg.LokiPassword,
+			Project:       envCfg.LokiProject,
+			Service:       envCfg.ServiceName,
+			Environment:   envCfg.Environment,
+			Cluster:       envCfg.ClusterName,
+			BatchSize:     envCfg.LokiBatchSize,
+			QueueSize:     envCfg.LokiQueueSize,
+			FlushInterval: envCfg.LokiFlushInterval,
+			Timeout:       envCfg.LokiTimeout,
+		})
+		log.AddHook(hook)
+
+		writerCloserMu.Lock()
+		lokiHookCloser = hook
+		writerCloserMu.Unlock()
+	}
+
 	// Create base entry with service name
 	entry := log.WithField("service", envCfg.ServiceName)
 
@@ -186,6 +209,16 @@ func NewFromEnv(envCfg *EnvConfig) *Logger {
 // This is the recommended way to create a logger in main().
 func NewDefault() *Logger {
 	return NewFromEnv(nil)
+}
+
+// NewServiceFromEnv creates a new Logger from environment configuration while
+// overriding the service field for a specific entry point.
+func NewServiceFromEnv(serviceName string) *Logger {
+	envCfg := LoadFromEnv()
+	if serviceName != "" {
+		envCfg.ServiceName = serviceName
+	}
+	return NewFromEnv(envCfg)
 }
 
 // OpenRotatingFile opens (creating any missing parent directories) a
@@ -229,12 +262,22 @@ func OpenRotatingFile(path string) (io.WriteCloser, error) {
 //	}
 func Sync() error {
 	writerCloserMu.Lock()
-	defer writerCloserMu.Unlock()
-
+	closers := make([]io.Closer, 0, 2)
 	if writerCloser != nil {
-		return writerCloser.Close()
+		closers = append(closers, writerCloser)
+		writerCloser = nil
 	}
-	return nil
+	if lokiHookCloser != nil {
+		closers = append(closers, lokiHookCloser)
+		lokiHookCloser = nil
+	}
+	writerCloserMu.Unlock()
+
+	var err error
+	for _, closer := range closers {
+		err = errors.Join(err, closer.Close())
+	}
+	return err
 }
 
 // WithFields returns a new Logger with additional fields.
