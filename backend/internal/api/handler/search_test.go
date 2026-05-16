@@ -5,10 +5,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/service"
 )
 
@@ -39,6 +41,45 @@ func TestSearchHandlersRejectBlankQuery(t *testing.T) {
 				t.Fatalf("EmbedQuery calls = %d, want 0", calls)
 			}
 		})
+	}
+}
+
+func TestNormalizeSearchRequestTrimsQueryAndCapsTopK(t *testing.T) {
+	req := &pb.SearchRequest{
+		Query: "  老板突然沉默  ",
+		TopK:  500,
+	}
+
+	if err := normalizeSearchRequest(req, publicRequestLimits{
+		SearchTopKMax:       30,
+		SearchQueryMaxRunes: 40,
+	}); err != nil {
+		t.Fatalf("normalizeSearchRequest() error = %v", err)
+	}
+	if req.Query != "老板突然沉默" {
+		t.Fatalf("query = %q, want trimmed query", req.Query)
+	}
+	if req.TopK != 30 {
+		t.Fatalf("top_k = %d, want cap 30", req.TopK)
+	}
+}
+
+func TestNormalizeSearchRequestRejectsOverlongQuery(t *testing.T) {
+	req := &pb.SearchRequest{
+		Query: strings.Repeat("长", 81),
+		TopK:  10,
+	}
+
+	err := normalizeSearchRequest(req, publicRequestLimits{
+		SearchTopKMax:       30,
+		SearchQueryMaxRunes: 80,
+	})
+
+	if err == nil {
+		t.Fatal("normalizeSearchRequest() error = nil, want overlong query error")
+	}
+	if calls := (&recordingEmbeddingProvider{}).queryCalls.Load(); calls != 0 {
+		t.Fatalf("EmbedQuery calls = %d, want 0", calls)
 	}
 }
 

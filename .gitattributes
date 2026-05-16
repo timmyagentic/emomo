@@ -1,2 +1,3 @@
 backend/gen/** linguist-generated=true
 frontend/gen/** linguist-generated=true
+mobile/gen/** linguist-generated=true

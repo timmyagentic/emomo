@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "emomo",
+    "slug": "emomo-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "scheme": "emomo",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.timmy.emomo"
+    },
+    "android": {
+      "package": "com.timmy.emomo",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow emomo to access photos only when saving memes.",
+          "savePhotosPermission": "Allow emomo to save memes to your photo library.",
+          "granularPermissions": [
+            "photo"
+          ]
+        }
+      ]
+    ]
+  }
+}

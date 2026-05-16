@@ -81,6 +81,7 @@ backend/.wrangler
 
 # Agent / local tooling
 .claude/
+.superpowers/
 .agents/
 .wrangler/
 skills-lock.json

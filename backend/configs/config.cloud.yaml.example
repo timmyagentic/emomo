@@ -1,6 +1,15 @@
 server:
   port: 8080
   mode: release
+  public_api:
+    enabled: true
+    rate_limit_enabled: true
+    requests_per_minute: 60
+    burst: 20
+    body_limit_bytes: 16384
+    search_top_k_max: 50
+    search_query_max_runes: 160
+    list_limit_max: 60
 
 database:
   driver: postgres  # 使用 PostgreSQL 数据库

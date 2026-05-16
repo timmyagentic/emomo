@@ -42,10 +42,16 @@ func SetupRouter(
 		AllowAllOrigins: cfg.Server.CORS.AllowAllOrigins,
 	}))
 
+	publicLimits := handler.PublicRequestLimits{
+		SearchTopKMax:       cfg.Server.PublicAPI.SearchTopKMax,
+		SearchQueryMaxRunes: cfg.Server.PublicAPI.SearchQueryMaxRunes,
+		ListLimitMax:        cfg.Server.PublicAPI.ListLimitMax,
+	}
+
 	// Create handlers
 	healthHandler := handler.NewHealthHandler()
-	searchHandler := handler.NewSearchHandler(searchService)
-	memeHandler := handler.NewMemeHandler(searchService)
+	searchHandler := handler.NewSearchHandler(searchService, publicLimits)
+	memeHandler := handler.NewMemeHandler(searchService, publicLimits)
 	adminHandler := handler.NewAdminHandler(log)
 
 	// Admin page (root)
@@ -56,6 +62,13 @@ func SetupRouter(
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
+	v1.Use(middleware.NewPublicGuard(middleware.PublicGuardConfig{
+		Enabled:           cfg.Server.PublicAPI.Enabled,
+		RateLimitEnabled:  cfg.Server.PublicAPI.RateLimitEnabled,
+		RequestsPerMinute: cfg.Server.PublicAPI.RequestsPerMinute,
+		Burst:             cfg.Server.PublicAPI.Burst,
+		BodyLimitBytes:    cfg.Server.PublicAPI.BodyLimitBytes,
+	}).Middleware())
 	{
 		// Search - register stream route first to avoid matching /search first
 		v1.POST("/search/stream", searchHandler.TextSearchStream)
