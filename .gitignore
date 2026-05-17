@@ -82,5 +82,9 @@ backend/.wrangler
 # Agent / local tooling
 .claude/
 .agents/
+.superpowers/
 .wrangler/
 skills-lock.json
+
+# Mobile local tooling
+/mobile/.expo/
