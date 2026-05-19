@@ -108,17 +108,14 @@ func buildAgenticSearchService(cfg *config.Config, appLogger *logger.Logger) *se
 }
 
 func main() {
-	// Initialize logger first (with defaults)
-	appLogger := logger.New(&logger.Config{
-		Level:       "info",
-		Format:      "json",
-		ServiceName: "emomo-api",
-	})
+	// Load .env before initializing the logger so LOG_* and LOKI_* are honored.
+	config.LoadDotEnv()
+
+	appLogger := logger.NewServiceFromEnv("emomo-api")
 	logger.SetDefaultLogger(appLogger)
 	defer logger.Sync() // Ensure logs are flushed on exit
 
 	// Load configuration
-	config.LoadDotEnv()
 	configPath := os.Getenv("CONFIG_PATH")
 	cfg, err := config.Load(configPath)
 	if err != nil {

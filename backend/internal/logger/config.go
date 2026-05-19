@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"time"
 )
 
 // EnvConfig holds extended logger configuration loaded from environment variables.
@@ -26,6 +27,18 @@ type EnvConfig struct {
 	MaxBackups int  // Number of backup files to keep
 	MaxAge     int  // Max days to keep backup files
 	Compress   bool // Compress rotated files
+
+	// Loki direct-write configuration
+	LokiEnabled       bool
+	LokiURL           string
+	LokiUsername      string
+	LokiPassword      string
+	LokiProject       string
+	ClusterName       string
+	LokiBatchSize     int
+	LokiQueueSize     int
+	LokiFlushInterval time.Duration
+	LokiTimeout       time.Duration
 }
 
 // LoadFromEnv loads configuration from environment variables.
@@ -34,7 +47,7 @@ func LoadFromEnv() *EnvConfig {
 		Level:       getEnv("LOG_LEVEL", "info"),
 		Format:      getEnv("LOG_FORMAT", "json"),
 		ServiceName: getEnv("SERVICE_NAME", "emomo"),
-		Environment: getEnv("APP_ENV", "local"),
+		Environment: getEnv("APP_ENV", getEnv("ENVIRONMENT", "local")),
 
 		LogFile:     getEnv("LOG_FILE", "/var/log/emomo/app.log"),
 		LogFileOnly: getEnvBool("LOG_FILE_ONLY", false),
@@ -43,6 +56,17 @@ func LoadFromEnv() *EnvConfig {
 		MaxBackups: getEnvInt("LOG_MAX_BACKUPS", 7),
 		MaxAge:     getEnvInt("LOG_MAX_AGE", 30),
 		Compress:   getEnvBool("LOG_COMPRESS", true),
+
+		LokiEnabled:       getEnvBool("LOKI_ENABLED", false),
+		LokiURL:           getEnv("LOKI_URL", ""),
+		LokiUsername:      getEnv("LOKI_USERNAME", ""),
+		LokiPassword:      getEnv("LOKI_PASSWORD", ""),
+		LokiProject:       getEnv("LOKI_PROJECT", "emomo"),
+		ClusterName:       getEnv("CLUSTER_NAME", ""),
+		LokiBatchSize:     getEnvInt("LOKI_BATCH_SIZE", 100),
+		LokiQueueSize:     getEnvInt("LOKI_QUEUE_SIZE", 5000),
+		LokiFlushInterval: getEnvDuration("LOKI_FLUSH_INTERVAL", 2*time.Second),
+		LokiTimeout:       getEnvDuration("LOKI_TIMEOUT", 3*time.Second),
 	}
 }
 
@@ -89,4 +113,16 @@ func getEnvInt(key string, defaultVal int) int {
 		return defaultVal
 	}
 	return i
+}
+
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return defaultVal
+	}
+	return d
 }
