@@ -140,6 +140,10 @@ func (h *lokiHook) Fire(entry *logrus.Entry) error {
 		return err
 	}
 
+	if entry.Level <= logrus.FatalLevel {
+		return h.push([]lokiRecord{record})
+	}
+
 	select {
 	case h.queue <- record:
 	default:

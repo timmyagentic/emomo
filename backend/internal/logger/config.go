@@ -49,7 +49,7 @@ func LoadFromEnv() *EnvConfig {
 		ServiceName: getEnv("SERVICE_NAME", "emomo"),
 		Environment: getEnv("APP_ENV", getEnv("ENVIRONMENT", "local")),
 
-		LogFile:     getEnv("LOG_FILE", "/var/log/emomo/app.log"),
+		LogFile:     getEnv("LOG_FILE", ""),
 		LogFileOnly: getEnvBool("LOG_FILE_ONLY", false),
 
 		MaxSize:    getEnvInt("LOG_MAX_SIZE", 100),

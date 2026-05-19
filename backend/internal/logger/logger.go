@@ -154,7 +154,7 @@ func NewFromEnv(envCfg *EnvConfig) *Logger {
 			writers = append(writers, os.Stdout)
 		}
 
-		// File output (for non-local environments)
+		// File output is opt-in via LOG_FILE for non-local environments.
 		if envCfg.Environment != "local" && envCfg.LogFile != "" {
 			fileWriter := &lumberjack.Logger{
 				Filename:   envCfg.LogFile,
