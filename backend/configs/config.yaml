@@ -10,7 +10,7 @@ server:
     requests_per_minute: 60
     burst: 20
     body_limit_bytes: 16384
-    search_top_k_max: 50
+    search_top_k_max: 100
     search_query_max_runes: 160
     list_limit_max: 60
 

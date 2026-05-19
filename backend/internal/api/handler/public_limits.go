@@ -11,7 +11,7 @@ type publicRequestLimits = PublicRequestLimits
 
 func normalizePublicRequestLimits(limits PublicRequestLimits) PublicRequestLimits {
 	if limits.SearchTopKMax <= 0 {
-		limits.SearchTopKMax = 50
+		limits.SearchTopKMax = 100
 	}
 	if limits.SearchQueryMaxRunes <= 0 {
 		limits.SearchQueryMaxRunes = 160

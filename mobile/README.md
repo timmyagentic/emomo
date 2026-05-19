@@ -27,7 +27,7 @@ Android preview APK packaging runs on pushes to `main` and can also be started m
 Required repository setup:
 
 - Add an Expo access token as the GitHub Actions secret `EXPO_TOKEN`.
-- Ensure the Expo project is linked for `mobile/` before the first non-interactive CI build.
+- Add the Expo project UUID as the GitHub Actions secret `EXPO_PROJECT_ID`; CI links `mobile/` with `eas init --id` before the non-interactive build.
 - Update `mobile/eas.json` if the preview build should point at a different public backend API than `https://tingjunn-emomo.hf.space/api/v1`.
 
 The finished APK is uploaded as a GitHub Actions artifact named `emomo-android-preview-apk-*`. EAS also keeps the build details and install URL.

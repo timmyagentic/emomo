@@ -257,7 +257,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.public_api.requests_per_minute", 60)
 	v.SetDefault("server.public_api.burst", 20)
 	v.SetDefault("server.public_api.body_limit_bytes", 16*1024)
-	v.SetDefault("server.public_api.search_top_k_max", 50)
+	v.SetDefault("server.public_api.search_top_k_max", 100)
 	v.SetDefault("server.public_api.search_query_max_runes", 160)
 	v.SetDefault("server.public_api.list_limit_max", 60)
 

@@ -64,6 +64,20 @@ func TestNormalizeSearchRequestTrimsQueryAndCapsTopK(t *testing.T) {
 	}
 }
 
+func TestNormalizeSearchRequestDefaultLimitsAllowWebTopK(t *testing.T) {
+	req := &pb.SearchRequest{
+		Query: "老板突然沉默",
+		TopK:  100,
+	}
+
+	if err := normalizeSearchRequest(req, publicRequestLimits{}); err != nil {
+		t.Fatalf("normalizeSearchRequest() error = %v", err)
+	}
+	if req.TopK != 100 {
+		t.Fatalf("top_k = %d, want existing web top_k 100 to be preserved", req.TopK)
+	}
+}
+
 func TestNormalizeSearchRequestRejectsOverlongQuery(t *testing.T) {
 	req := &pb.SearchRequest{
 		Query: strings.Repeat("长", 81),

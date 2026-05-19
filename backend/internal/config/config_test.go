@@ -85,8 +85,8 @@ func TestLoadDefaultsPublicAPIConfig(t *testing.T) {
 	if cfg.Server.PublicAPI.BodyLimitBytes != 16*1024 {
 		t.Fatalf("body_limit_bytes = %d, want 16384", cfg.Server.PublicAPI.BodyLimitBytes)
 	}
-	if cfg.Server.PublicAPI.SearchTopKMax != 50 {
-		t.Fatalf("search_top_k_max = %d, want 50", cfg.Server.PublicAPI.SearchTopKMax)
+	if cfg.Server.PublicAPI.SearchTopKMax != 100 {
+		t.Fatalf("search_top_k_max = %d, want 100", cfg.Server.PublicAPI.SearchTopKMax)
 	}
 	if cfg.Server.PublicAPI.SearchQueryMaxRunes != 160 {
 		t.Fatalf("search_query_max_runes = %d, want 160", cfg.Server.PublicAPI.SearchQueryMaxRunes)

@@ -76,12 +76,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Expo token
+      - name: Validate Expo configuration
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
             echo "::error title=Missing EXPO_TOKEN::Set the EXPO_TOKEN repository secret before running Android APK builds."
+            exit 1
+          fi
+          if [ -z "$EXPO_PROJECT_ID" ]; then
+            echo "::error title=Missing EXPO_PROJECT_ID::Set the EXPO_PROJECT_ID repository secret before running Android APK builds."
             exit 1
           fi
 
@@ -105,6 +110,12 @@ jobs:
       - name: Regenerate mobile protobuf DTOs
         working-directory: mobile
         run: npm run gen
+
+      - name: Link EAS project
+        working-directory: mobile
+        env:
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+        run: eas init --id "$EXPO_PROJECT_ID" --non-interactive
 
       - name: Build Android preview APK
         id: eas-build
