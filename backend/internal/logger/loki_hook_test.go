@@ -161,3 +161,60 @@ func TestLokiHookPushesStructuredLogEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestLokiHookPushesFatalEntriesSynchronously(t *testing.T) {
+	requests := make(chan lokiPushRequest, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		var payload lokiPushRequest
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("unmarshal payload: %v\n%s", err, body)
+		}
+		requests <- payload
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	hook := newLokiHook(lokiHookConfig{
+		URL:           server.URL,
+		Project:       "emomo",
+		Service:       "emomo-api",
+		Environment:   "production",
+		BatchSize:     100,
+		QueueSize:     100,
+		FlushInterval: time.Hour,
+		Timeout:       time.Second,
+		ErrorOutput:   io.Discard,
+	})
+	defer hook.Close()
+
+	err := hook.Fire(&logrus.Entry{
+		Time:    time.Now(),
+		Level:   logrus.FatalLevel,
+		Message: "Failed to load config",
+		Data: logrus.Fields{
+			"service":   "emomo-api",
+			"component": "api",
+			"error":     "missing config",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Fire() error = %v", err)
+	}
+
+	select {
+	case payload := <-requests:
+		if len(payload.Streams) != 1 || len(payload.Streams[0].Values) != 1 {
+			t.Fatalf("unexpected payload: %#v", payload)
+		}
+		if got := payload.Streams[0].Stream["level"]; got != "fatal" {
+			t.Fatalf("level label = %q, want fatal", got)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("fatal log was not pushed before hook close")
+	}
+}

@@ -20,3 +20,18 @@ func TestNewServiceFromEnvOverridesServiceName(t *testing.T) {
 		t.Fatalf("level = %s, want debug", got)
 	}
 }
+
+func TestLoadFromEnvDoesNotEnableDefaultFileLoggingForEnvironmentOnly(t *testing.T) {
+	t.Setenv("APP_ENV", "")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("LOG_FILE", "")
+
+	cfg := LoadFromEnv()
+
+	if cfg.Environment != "production" {
+		t.Fatalf("Environment = %q, want production", cfg.Environment)
+	}
+	if cfg.LogFile != "" {
+		t.Fatalf("LogFile = %q, want empty unless LOG_FILE is explicitly set", cfg.LogFile)
+	}
+}
