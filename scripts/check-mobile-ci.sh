@@ -25,7 +25,7 @@ require_file "mobile/eas.json"
 
 require_text ".github/workflows/mobile.yml" "expo/expo-github-action@v8"
 require_text ".github/workflows/mobile.yml" "eas build --platform android --profile preview"
-require_text ".github/workflows/mobile.yml" "actions/upload-artifact@v4"
+require_text ".github/workflows/mobile.yml" "actions/upload-artifact@v6"
 require_text ".github/workflows/mobile.yml" "EXPO_TOKEN"
 
 require_text "mobile/eas.json" '"distribution": "internal"'
