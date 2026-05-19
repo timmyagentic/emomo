@@ -17,7 +17,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -28,6 +27,7 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/timmy/emomo/internal/config"
+	"github.com/timmy/emomo/internal/logger"
 )
 
 func main() {
@@ -39,23 +39,27 @@ func main() {
 	sampleN := flag.Int("sample", 5, "Number of sample keys to print at the start")
 	flag.Parse()
 
+	config.LoadDotEnv()
+	appLogger := logger.NewServiceFromEnv("emomo-r2purge")
+	logger.SetDefaultLogger(appLogger)
+	defer logger.Sync()
+
 	if *batchSize < 1 || *batchSize > 1000 {
-		log.Fatalf("--batch-size must be 1..1000")
+		appLogger.WithField("batch_size", *batchSize).Fatal("Invalid batch size; must be 1..1000")
 	}
 
-	config.LoadDotEnv()
 	cfgPath := *configPath
 	if cfgPath == "" {
 		cfgPath = os.Getenv("CONFIG_PATH")
 	}
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		appLogger.WithError(err).Fatal("Failed to load config")
 	}
 	sc := cfg.GetStorageConfig()
 
 	if sc.Bucket == "" {
-		log.Fatalf("storage.bucket is empty; refusing to operate")
+		appLogger.Fatal("storage.bucket is empty; refusing to operate")
 	}
 
 	endpoint := sc.Endpoint
@@ -79,7 +83,7 @@ func main() {
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(sc.AccessKey, sc.SecretKey, "")),
 	)
 	if err != nil {
-		log.Fatalf("load aws cfg: %v", err)
+		appLogger.WithError(err).Fatal("Failed to load AWS config")
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
@@ -121,8 +125,10 @@ func main() {
 			},
 		})
 		if err != nil {
-			log.Fatalf("DeleteObjects failed (after %d listed, %d already deleted): %v",
-				totalListed, totalDeleted, err)
+			appLogger.WithError(err).WithFields(logger.Fields{
+				"listed":          totalListed,
+				"already_deleted": totalDeleted,
+			}).Fatal("DeleteObjects failed")
 		}
 		if out != nil {
 			totalDeleted += int64(len(batch) - len(out.Errors))
@@ -147,7 +153,7 @@ func main() {
 			MaxKeys:           aws.Int32(int32(*batchSize)),
 		})
 		if err != nil {
-			log.Fatalf("ListObjectsV2 failed (after %d listed): %v", totalListed, err)
+			appLogger.WithError(err).WithField("listed", totalListed).Fatal("ListObjectsV2 failed")
 		}
 
 		for _, obj := range out.Contents {

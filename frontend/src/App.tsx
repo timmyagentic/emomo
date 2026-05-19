@@ -11,6 +11,7 @@ import {
 } from './api';
 import { curatedMemes } from './data/curatedMemes';
 import type { DisplayMeme } from './types';
+import { logError } from './utils/logger';
 import './App.css';
 
 // Search state for streaming progress
@@ -85,7 +86,7 @@ function App() {
         return;
       }
 
-      console.error('Failed to load browse memes:', error);
+      logError('Failed to load browse memes', { error });
       setFeedError(offset === 0 ? '随便逛逛加载失败，正在显示本地兜底内容。' : '加载失败，可以点按钮重试。');
     } finally {
       if (feedAbortControllerRef.current === abortController) {
@@ -110,7 +111,7 @@ function App() {
           setFeedTotal(stats.totalMemes);
         }
       } catch (error) {
-        console.error('Failed to load stats:', error);
+        logError('Failed to load stats', { error });
       }
     };
 
@@ -188,7 +189,7 @@ function App() {
             setSearchState(null);
             setIsLoading(false);
           } else if (event.stage === 'error') {
-            console.error('Search error:', event.error);
+            logError('Search error', { error: event.error });
             setSearchState(null);
             setIsLoading(false);
             // Use curated data as fallback
@@ -220,7 +221,7 @@ function App() {
         // Search was cancelled - do nothing
         return;
       }
-      console.error('Search failed:', error);
+      logError('Search failed', { error });
       setSearchState(null);
       // Use curated data as fallback
       const filtered = curatedMemes.filter(

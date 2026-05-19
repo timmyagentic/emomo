@@ -15,6 +15,10 @@ import (
 // Returns:
 //   - gin.HandlerFunc: middleware handler.
 func LoggerMiddleware(log *logger.Logger) gin.HandlerFunc {
+	if log == nil {
+		log = logger.GetDefault()
+	}
+
 	return func(c *gin.Context) {
 		start := time.Now()
 		path := c.Request.URL.Path
@@ -25,21 +29,25 @@ func LoggerMiddleware(log *logger.Logger) gin.HandlerFunc {
 
 		// Inject tracing fields into context (using standard field constants)
 		ctx := c.Request.Context()
-		ctx = logger.WithFields(ctx, logger.Fields{
+		requestLogger := log.WithFields(logger.Fields{
 			logger.FieldRequestID: requestID,
 			logger.FieldComponent: "api",
+			"method":              c.Request.Method,
+			"path":                path,
+			"query":               query,
+			"client_ip":           c.ClientIP(),
 		})
+		ctx = requestLogger.WithContext(ctx)
 		c.Request = c.Request.WithContext(ctx)
 
 		// Also store logger in Gin's context for convenience
-		c.Set("logger", logger.FromContext(ctx))
+		c.Set("logger", requestLogger)
 
 		// Add request ID to response headers
 		c.Header("X-Request-ID", requestID)
 
 		// Log request start
-		logger.CtxInfo(ctx, "Request started: method=%s, path=%s, client_ip=%s",
-			c.Request.Method, path, c.ClientIP())
+		logger.CtxInfo(ctx, "Request started")
 
 		// Process request
 		c.Next()
@@ -59,7 +67,8 @@ func LoggerMiddleware(log *logger.Logger) gin.HandlerFunc {
 			logger.FieldStatus:     status,
 			logger.FieldDurationMs: latency.Milliseconds(),
 			logger.FieldSize:       c.Writer.Size(),
-		}).Info(ctx, "Request completed: method=%s, path=%s", c.Request.Method, fullPath)
+			"full_path":            fullPath,
+		}).Info(ctx, "Request completed")
 	}
 }
 

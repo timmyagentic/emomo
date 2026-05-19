@@ -1,10 +1,16 @@
 package service
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	pb "github.com/timmy/emomo/gen/emomo/v1"
+	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/repository"
 )
 
@@ -74,6 +80,42 @@ func TestApplyTopKDefaultsUses100WhenUnset(t *testing.T) {
 	}
 }
 
+func TestTextSearchUsesRequestIDAsSearchID(t *testing.T) {
+	var buf bytes.Buffer
+	log := logger.New(&logger.Config{
+		Level:       "info",
+		Format:      "json",
+		Output:      &buf,
+		ServiceName: "search-test",
+	})
+	ctx := log.WithContext(context.Background())
+	ctx = logger.SetRequestID(ctx, "req-123")
+
+	searchService := NewSearchService(
+		nil,
+		nil,
+		nil,
+		&failingEmbeddingProvider{},
+		nil,
+		nil,
+		log,
+		&SearchConfig{},
+	)
+
+	_, err := searchService.TextSearch(ctx, &pb.SearchRequest{Query: "hello", TopK: 1})
+	if err == nil {
+		t.Fatal("TextSearch() error = nil, want embedding error")
+	}
+
+	entry := findSearchLogEntry(t, buf.Bytes(), "Performing text search")
+	if got := entry[logger.FieldRequestID]; got != "req-123" {
+		t.Fatalf("request_id = %#v, want req-123", got)
+	}
+	if got := entry[logger.FieldSearchID]; got != "req-123" {
+		t.Fatalf("search_id = %#v, want req-123", got)
+	}
+}
+
 func TestFuseProfileResultsCombinesRoutesByMemeID(t *testing.T) {
 	t.Parallel()
 
@@ -104,4 +146,51 @@ func TestFuseProfileResultsCombinesRoutesByMemeID(t *testing.T) {
 	if results[0].GetScore() != 1 {
 		t.Fatalf("first result score = %v, want normalized score 1", results[0].GetScore())
 	}
+}
+
+type failingEmbeddingProvider struct{}
+
+func (p *failingEmbeddingProvider) Embed(context.Context, string) ([]float32, error) {
+	return nil, errors.New("unexpected Embed call")
+}
+
+func (p *failingEmbeddingProvider) EmbedBatch(context.Context, []string) ([][]float32, error) {
+	return nil, errors.New("unexpected EmbedBatch call")
+}
+
+func (p *failingEmbeddingProvider) EmbedQuery(context.Context, string) ([]float32, error) {
+	return nil, errors.New("embedding failed")
+}
+
+func (p *failingEmbeddingProvider) EmbedDocument(context.Context, EmbeddingDocument) ([]float32, error) {
+	return nil, errors.New("unexpected EmbedDocument call")
+}
+
+func (p *failingEmbeddingProvider) GetModel() string {
+	return "failing-test"
+}
+
+func (p *failingEmbeddingProvider) GetDimensions() int {
+	return 1
+}
+
+func findSearchLogEntry(t *testing.T, raw []byte, messagePrefix string) map[string]interface{} {
+	t.Helper()
+
+	lines := bytes.Split(bytes.TrimSpace(raw), []byte("\n"))
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		var entry map[string]interface{}
+		if err := json.Unmarshal(line, &entry); err != nil {
+			t.Fatalf("failed to decode log line %q: %v", string(line), err)
+		}
+		message, _ := entry["message"].(string)
+		if strings.HasPrefix(message, messagePrefix) {
+			return entry
+		}
+	}
+	t.Fatalf("log entry with prefix %q not found in %s", messagePrefix, raw)
+	return nil
 }

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,12 +10,13 @@ import (
 	pb "github.com/timmy/emomo/gen/emomo/v1"
 	"github.com/timmy/emomo/internal/config"
 	"github.com/timmy/emomo/internal/domain"
+	applogger "github.com/timmy/emomo/internal/logger"
 	_ "github.com/timmy/emomo/internal/persistence" // register protojson serializer
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // InitDB initializes the database connection based on configuration and runs migrations.
@@ -28,23 +28,24 @@ import (
 //   - error: non-nil if connection or migration fails.
 func InitDB(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 	gormConfig := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: newGormLogger(gormlogger.Warn),
 	}
+	dbLog := applogger.GetDefault().WithField(applogger.FieldComponent, "db")
 
 	var db *gorm.DB
 	var err error
 
-	log.Printf("[DB] Initializing database with driver: %q", cfg.Driver)
+	dbLog.Infof("Initializing database with driver: %q", cfg.Driver)
 
 	switch cfg.Driver {
 	case "postgres":
-		log.Printf("[DB] Using PostgreSQL driver")
+		dbLog.Info("Using PostgreSQL driver")
 		db, err = initPostgres(cfg, gormConfig)
 	case "sqlite":
-		log.Printf("[DB] Using SQLite driver")
+		dbLog.Info("Using SQLite driver")
 		db, err = initSQLite(cfg, gormConfig)
 	default:
-		log.Printf("[DB] Unknown driver %q, defaulting to SQLite", cfg.Driver)
+		dbLog.Warnf("Unknown driver %q, defaulting to SQLite", cfg.Driver)
 		db, err = initSQLite(cfg, gormConfig)
 	}
 
@@ -65,7 +66,7 @@ func InitDB(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
 	if cfg.AutoMigrate {
-		log.Printf("[DB] AutoMigrate enabled")
+		dbLog.Info("AutoMigrate enabled")
 		if err := prepareLegacyMemesForAutoMigrate(db); err != nil {
 			return nil, fmt.Errorf("failed to prepare legacy memes: %w", err)
 		}
@@ -100,7 +101,7 @@ func InitDB(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 			return nil, fmt.Errorf("failed to disable core table RLS: %w", err)
 		}
 	} else {
-		log.Printf("[DB] AutoMigrate disabled")
+		dbLog.Info("AutoMigrate disabled")
 	}
 
 	return db, nil
