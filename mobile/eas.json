@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "base": {
+      "node": "22.12.0",
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "https://tingjunn-emomo.hf.space/api/v1"
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}

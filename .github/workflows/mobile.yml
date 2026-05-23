@@ -1,0 +1,166 @@
+name: Mobile CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/proto/**'
+      - 'mobile/**'
+      - 'scripts/check-mobile-ci.sh'
+      - '.github/workflows/mobile.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/proto/**'
+      - 'mobile/**'
+      - 'scripts/check-mobile-ci.sh'
+      - '.github/workflows/mobile.yml'
+  workflow_dispatch:
+    inputs:
+      build_android_preview:
+        description: 'Build the Android preview APK with EAS'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-checks:
+    name: Mobile checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Regenerate mobile protobuf DTOs
+        working-directory: mobile
+        run: npm run gen
+
+      - name: Verify generated mobile DTOs are committed
+        working-directory: mobile
+        run: git diff --exit-code -- gen
+
+      - name: Run mobile tests
+        working-directory: mobile
+        run: npm test -- --runInBand
+
+      - name: Typecheck mobile app
+        working-directory: mobile
+        run: npm run typecheck
+
+      - name: Lint mobile app
+        working-directory: mobile
+        run: npm run lint
+
+      - name: Check mobile CI wiring
+        run: bash scripts/check-mobile-ci.sh
+
+  android-preview-apk:
+    name: Android preview APK
+    runs-on: ubuntu-latest
+    needs: mobile-checks
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_android_preview) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate Expo configuration
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error title=Missing EXPO_TOKEN::Set the EXPO_TOKEN repository secret before running Android APK builds."
+            exit 1
+          fi
+          if [ -z "$EXPO_PROJECT_ID" ]; then
+            echo "::error title=Missing EXPO_PROJECT_ID::Set the EXPO_PROJECT_ID repository secret before running Android APK builds."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Regenerate mobile protobuf DTOs
+        working-directory: mobile
+        run: npm run gen
+
+      - name: Link EAS project
+        working-directory: mobile
+        env:
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+        run: eas init --id "$EXPO_PROJECT_ID" --non-interactive
+
+      - name: Build Android preview APK
+        id: eas-build
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          mkdir -p ../artifacts
+          eas build --platform android --profile preview --non-interactive --wait --json > ../artifacts/eas-build.json
+          node <<'NODE'
+          const fs = require('fs');
+          const raw = fs.readFileSync('../artifacts/eas-build.json', 'utf8').trim();
+          const parsed = JSON.parse(raw);
+          const builds = Array.isArray(parsed) ? parsed : [parsed];
+          const build = builds.find((item) => String(item.platform).toUpperCase() === 'ANDROID') || builds[0];
+          if (!build?.id) {
+            throw new Error(`Could not find Android EAS build id in ${raw}`);
+          }
+          const buildUrl = build.artifacts?.buildUrl || build.artifactUrl || build.buildUrl || '';
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `build_id=${build.id}\n`);
+          if (buildUrl) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `build_url=${buildUrl}\n`);
+          }
+          NODE
+
+      - name: Download Android APK
+        working-directory: mobile
+        env:
+          BUILD_ID: ${{ steps.eas-build.outputs.build_id }}
+          BUILD_URL: ${{ steps.eas-build.outputs.build_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p ../artifacts/android
+          if [ -n "${BUILD_URL:-}" ]; then
+            curl --fail --location "$BUILD_URL" --output ../artifacts/android/emomo-preview.apk
+          else
+            eas build:download --build-id "$BUILD_ID" --non-interactive
+            find . -maxdepth 1 -type f -name '*.apk' -exec mv {} ../artifacts/android/ \;
+          fi
+          test -n "$(find ../artifacts/android -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          ls -lh ../artifacts/android
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: emomo-android-preview-apk-${{ github.run_number }}
+          path: artifacts/android/*.apk
+          if-no-files-found: error
+          retention-days: 14

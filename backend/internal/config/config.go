@@ -24,15 +24,28 @@ type Config struct {
 
 // ServerConfig defines HTTP server settings.
 type ServerConfig struct {
-	Port int        `mapstructure:"port"`
-	Mode string     `mapstructure:"mode"`
-	CORS CORSConfig `mapstructure:"cors"`
+	Port      int             `mapstructure:"port"`
+	Mode      string          `mapstructure:"mode"`
+	CORS      CORSConfig      `mapstructure:"cors"`
+	PublicAPI PublicAPIConfig `mapstructure:"public_api"`
 }
 
 // CORSConfig defines Cross-Origin Resource Sharing settings.
 type CORSConfig struct {
 	AllowedOrigins  []string `mapstructure:"allowed_origins"`
 	AllowAllOrigins bool     `mapstructure:"allow_all_origins"`
+}
+
+// PublicAPIConfig controls cost and abuse guardrails for public clients.
+type PublicAPIConfig struct {
+	Enabled             bool  `mapstructure:"enabled"`
+	RateLimitEnabled    bool  `mapstructure:"rate_limit_enabled"`
+	RequestsPerMinute   int   `mapstructure:"requests_per_minute"`
+	Burst               int   `mapstructure:"burst"`
+	BodyLimitBytes      int64 `mapstructure:"body_limit_bytes"`
+	SearchTopKMax       int32 `mapstructure:"search_top_k_max"`
+	SearchQueryMaxRunes int   `mapstructure:"search_query_max_runes"`
+	ListLimitMax        int32 `mapstructure:"list_limit_max"`
 }
 
 // DatabaseConfig defines database connection and pool settings.
@@ -239,6 +252,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.mode", "debug")
 	v.SetDefault("server.cors.allow_all_origins", true)
 	v.SetDefault("server.cors.allowed_origins", []string{})
+	v.SetDefault("server.public_api.enabled", true)
+	v.SetDefault("server.public_api.rate_limit_enabled", true)
+	v.SetDefault("server.public_api.requests_per_minute", 60)
+	v.SetDefault("server.public_api.burst", 20)
+	v.SetDefault("server.public_api.body_limit_bytes", 16*1024)
+	v.SetDefault("server.public_api.search_top_k_max", 100)
+	v.SetDefault("server.public_api.search_query_max_runes", 160)
+	v.SetDefault("server.public_api.list_limit_max", 60)
 
 	// Database defaults
 	v.SetDefault("database.driver", "sqlite")
@@ -305,6 +326,14 @@ func setDefaults(v *viper.Viper) {
 func bindEnvVars(v *viper.Viper) {
 	// Server
 	v.BindEnv("server.port", "PORT")
+	v.BindEnv("server.public_api.enabled", "PUBLIC_API_ENABLED")
+	v.BindEnv("server.public_api.rate_limit_enabled", "PUBLIC_API_RATE_LIMIT_ENABLED")
+	v.BindEnv("server.public_api.requests_per_minute", "PUBLIC_API_REQUESTS_PER_MINUTE")
+	v.BindEnv("server.public_api.burst", "PUBLIC_API_BURST")
+	v.BindEnv("server.public_api.body_limit_bytes", "PUBLIC_API_BODY_LIMIT_BYTES")
+	v.BindEnv("server.public_api.search_top_k_max", "PUBLIC_API_SEARCH_TOP_K_MAX")
+	v.BindEnv("server.public_api.search_query_max_runes", "PUBLIC_API_SEARCH_QUERY_MAX_RUNES")
+	v.BindEnv("server.public_api.list_limit_max", "PUBLIC_API_LIST_LIMIT_MAX")
 
 	// Database
 	v.BindEnv("database.driver", "DATABASE_DRIVER")

@@ -57,6 +57,45 @@ func TestLoadDefaultsAgenticSearchConfig(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsPublicAPIConfig(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("server: {}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if !cfg.Server.PublicAPI.Enabled {
+		t.Fatal("public_api.enabled = false, want true")
+	}
+	if !cfg.Server.PublicAPI.RateLimitEnabled {
+		t.Fatal("public_api.rate_limit_enabled = false, want true")
+	}
+	if cfg.Server.PublicAPI.RequestsPerMinute != 60 {
+		t.Fatalf("requests_per_minute = %d, want 60", cfg.Server.PublicAPI.RequestsPerMinute)
+	}
+	if cfg.Server.PublicAPI.Burst != 20 {
+		t.Fatalf("burst = %d, want 20", cfg.Server.PublicAPI.Burst)
+	}
+	if cfg.Server.PublicAPI.BodyLimitBytes != 16*1024 {
+		t.Fatalf("body_limit_bytes = %d, want 16384", cfg.Server.PublicAPI.BodyLimitBytes)
+	}
+	if cfg.Server.PublicAPI.SearchTopKMax != 100 {
+		t.Fatalf("search_top_k_max = %d, want 100", cfg.Server.PublicAPI.SearchTopKMax)
+	}
+	if cfg.Server.PublicAPI.SearchQueryMaxRunes != 160 {
+		t.Fatalf("search_query_max_runes = %d, want 160", cfg.Server.PublicAPI.SearchQueryMaxRunes)
+	}
+	if cfg.Server.PublicAPI.ListLimitMax != 60 {
+		t.Fatalf("list_limit_max = %d, want 60", cfg.Server.PublicAPI.ListLimitMax)
+	}
+}
+
 func TestConfigDefaultSearchProfileUsesExplicitDefault(t *testing.T) {
 	t.Parallel()
 

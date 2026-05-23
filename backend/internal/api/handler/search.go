@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	pb "github.com/timmy/emomo/gen/emomo/v1"
@@ -13,12 +14,18 @@ import (
 // SearchHandler handles search-related endpoints.
 type SearchHandler struct {
 	searchService *service.SearchService
+	limits        PublicRequestLimits
 }
 
 // NewSearchHandler creates a new search handler.
-func NewSearchHandler(searchService *service.SearchService) *SearchHandler {
+func NewSearchHandler(searchService *service.SearchService, limits ...PublicRequestLimits) *SearchHandler {
+	requestLimits := PublicRequestLimits{}
+	if len(limits) > 0 {
+		requestLimits = limits[0]
+	}
 	return &SearchHandler{
 		searchService: searchService,
+		limits:        normalizePublicRequestLimits(requestLimits),
 	}
 }
 
@@ -30,7 +37,7 @@ func (h *SearchHandler) TextSearch(c *gin.Context) {
 		return
 	}
 	overrideQueryParams(c, req)
-	if err := validateSearchRequest(req); err != nil {
+	if err := normalizeSearchRequest(req, h.limits); err != nil {
 		writeError(c, http.StatusBadRequest, err)
 		return
 	}
@@ -77,7 +84,7 @@ func (h *SearchHandler) TextSearchStream(c *gin.Context) {
 		return
 	}
 	overrideQueryParams(c, req)
-	if err := validateSearchRequest(req); err != nil {
+	if err := normalizeSearchRequest(req, h.limits); err != nil {
 		writeError(c, http.StatusBadRequest, err)
 		return
 	}
@@ -180,11 +187,18 @@ func overrideQueryParams(c *gin.Context, req *pb.SearchRequest) {
 	}
 }
 
-func validateSearchRequest(req *pb.SearchRequest) error {
+func normalizeSearchRequest(req *pb.SearchRequest, limits publicRequestLimits) error {
+	limits = normalizePublicRequestLimits(limits)
 	query := strings.TrimSpace(req.GetQuery())
 	if query == "" {
 		return fmt.Errorf("query is required")
 	}
+	if utf8.RuneCountInString(query) > limits.SearchQueryMaxRunes {
+		return fmt.Errorf("query is too long")
+	}
 	req.Query = query
+	if req.GetTopK() <= 0 || req.GetTopK() > limits.SearchTopKMax {
+		req.TopK = limits.SearchTopKMax
+	}
 	return nil
 }
