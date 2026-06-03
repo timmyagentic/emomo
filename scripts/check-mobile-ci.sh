@@ -24,7 +24,7 @@ require_file ".github/workflows/mobile.yml"
 require_file "mobile/eas.json"
 require_file "mobile/metro.config.js"
 
-require_text ".github/workflows/mobile.yml" "expo/expo-github-action@v8"
+require_text ".github/workflows/mobile.yml" "expo/expo-github-action@v9"
 require_text ".github/workflows/mobile.yml" "eas build --platform android --profile preview"
 require_text ".github/workflows/mobile.yml" "eas build --platform ios --profile ios-simulator"
 require_text ".github/workflows/mobile.yml" "actions/upload-artifact@v6"
