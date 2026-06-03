@@ -6,9 +6,11 @@ This checklist tracks the remaining work needed to move `mobile/` from simulator
 
 ## Current Release Identity
 
-- App name: `emomo`
+- App Store name: `emomo - Meme Search`
+- App display name: `emomo`
 - Expo owner: `timmy3956`
 - Bundle ID: `com.timmy.emomo`
+- App Store Connect Apple ID (`ascAppId`): `6776160506`
 - Version: `1.0.0`
 - Initial iOS build number: `1`
 - EAS project ID: `9550b08d-da2c-4075-8bbc-e4579773fc30`
@@ -17,11 +19,10 @@ This checklist tracks the remaining work needed to move `mobile/` from simulator
 ## Human-Owned Apple Setup
 
 1. Confirm Apple Developer Program membership is active.
-2. Create the app record in App Store Connect using bundle ID `com.timmy.emomo`.
-3. Record the App Store Connect Apple ID (`ascAppId`) from App Information.
+2. Created the App Store Connect app record using bundle ID `com.timmy.emomo`.
+3. Recorded the App Store Connect Apple ID (`ascAppId`) in `mobile/eas.json`.
 4. Run `cd mobile && npx eas-cli credentials --platform ios` and configure distribution credentials plus an App Store Connect API key.
 5. Run `cd mobile && npx eas-cli build:version:set` if you want to initialize EAS remote build numbers before the first production build.
-6. Add the `ascAppId` to `mobile/eas.json` under `submit.production.ios` after the app record exists.
 
 ## Repository Readiness
 
@@ -60,6 +61,5 @@ Before review, fill or verify:
 
 - Replace Expo placeholder icon and splash assets with final emomo brand assets.
 - Capture real iPhone screenshots after the final visual pass.
-- Add the real `ascAppId` once App Store Connect creates the app record.
 - Verify production backend stability, rate limits, and cost caps.
 - Complete a real-device TestFlight pass for search, detail, share, save, copy link, error states, and photo permission prompts.

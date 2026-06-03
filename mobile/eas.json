@@ -40,7 +40,8 @@
   "submit": {
     "production": {
       "ios": {
-        "appName": "emomo",
+        "appName": "emomo - Meme Search",
+        "ascAppId": "6776160506",
         "bundleIdentifier": "com.timmy.emomo",
         "language": "zh-Hans",
         "metadataPath": "./store.config.json",
