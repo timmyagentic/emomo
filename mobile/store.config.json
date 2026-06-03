@@ -1,0 +1,21 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "info": {
+      "zh-Hans": {
+        "title": "emomo",
+        "subtitle": "用自然语言搜表情包",
+        "description": "emomo 是一个无登录的表情包搜索 App。你可以用自然语言描述情绪、场景或想发送的话，App 会通过 emomo 后端检索匹配的表情图片，并提供分享、保存到相册和复制链接等常用操作。搜索历史仅保存在本机，可以随时清空。",
+        "keywords": [
+          "表情包",
+          "AI",
+          "搜索",
+          "聊天",
+          "图片"
+        ],
+        "supportUrl": "https://github.com/systemoutprintlnnnn/emomo/issues",
+        "privacyPolicyUrl": "https://github.com/systemoutprintlnnnn/emomo/blob/main/docs/PRIVACY.md"
+      }
+    }
+  }
+}

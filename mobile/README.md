@@ -42,6 +42,21 @@ Required repository setup:
 
 The finished APK is uploaded as a GitHub Actions artifact named `emomo-android-preview-apk-*`. The iOS simulator archive is uploaded as `emomo-ios-simulator-*`. EAS also keeps the build details and install URL.
 
+## iOS App Store readiness
+
+The iOS release identity is configured in `app.json` with bundle ID `com.timmy.emomo`, version `1.0.0`, build number `1`, and `usesNonExemptEncryption=false`. The `production` EAS profile builds the App Store archive, and `store.config.json` contains initial App Store metadata.
+
+Before submitting, create the App Store Connect app record, initialize remote build numbers if needed, and add its Apple ID (`ascAppId`) to `submit.production.ios` in `eas.json`.
+
+```bash
+npx eas-cli credentials --platform ios
+npx eas-cli build:version:set
+npx eas-cli build --platform ios --profile production
+npx eas-cli submit --platform ios --profile production --latest
+```
+
+See `../docs/mobile-app-store-release.md` for the full release checklist.
+
 Set the backend API base with:
 
 ```bash
