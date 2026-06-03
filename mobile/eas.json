@@ -10,17 +10,29 @@
         "EXPO_PUBLIC_API_BASE": "https://tingjunn-emomo.hf.space/api/v1"
       }
     },
+    "ios-simulator": {
+      "extends": "base",
+      "ios": {
+        "simulator": true
+      }
+    },
     "preview": {
       "extends": "base",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
       }
     },
     "production": {
       "extends": "base",
       "android": {
         "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false
       }
     }
   }
