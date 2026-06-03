@@ -19,6 +19,12 @@ npm run lint
 npx expo-doctor
 ```
 
+Regenerate the committed App Store/TestFlight icon, Android adaptive icon, splash image, and favicon after changing the mobile brand asset script:
+
+```bash
+npm run assets:generate
+```
+
 Local native runs require the platform SDKs:
 
 ```bash

@@ -29,6 +29,7 @@ This checklist tracks the remaining work needed to move `mobile/` from simulator
 - `mobile/app.json` sets `ios.bundleIdentifier`, `ios.buildNumber`, and `ios.config.usesNonExemptEncryption`.
 - `mobile/eas.json` has production EAS build and submit profiles.
 - `mobile/store.config.json` contains initial App Store metadata.
+- `mobile/assets/` contains generated emomo App Store/TestFlight icon, splash, Android adaptive icon, and favicon assets. Run `cd mobile && npm run assets:generate` after changing the asset script.
 - `docs/PRIVACY.md` is the initial privacy policy URL target.
 - The app exposes About/Privacy/Support information in-app.
 
@@ -59,7 +60,6 @@ Before review, fill or verify:
 
 ## Still Needed Before Public Release
 
-- Replace Expo placeholder icon and splash assets with final emomo brand assets.
 - Capture real iPhone screenshots after the final visual pass.
 - Verify production backend stability, rate limits, and cost caps.
 - Complete a real-device TestFlight pass for search, detail, share, save, copy link, error states, and photo permission prompts.
