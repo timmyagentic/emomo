@@ -16,13 +16,23 @@ Useful checks:
 npm run test
 npm run typecheck
 npm run lint
+npx expo-doctor
+```
+
+Local native runs require the platform SDKs:
+
+```bash
+npm run ios      # requires full Xcode with Simulator tools
+npm run android  # requires Java, Android SDK, and an emulator or USB device
 ```
 
 ## CI/CD builds
 
-The GitHub Actions `Mobile CI` workflow runs mobile tests, type checking, linting, protobuf generation checks, and CI wiring checks for mobile changes.
+The GitHub Actions `Mobile CI` workflow runs mobile tests, type checking, linting, protobuf generation checks, Expo doctor, and CI wiring checks for mobile changes.
 
-Android preview APK packaging runs on pushes to `main` and can also be started manually from GitHub Actions with `workflow_dispatch`. It uses the EAS `preview` profile in `eas.json`, which is configured for internal distribution and Android `apk` output.
+Android preview APK packaging runs on pushes to `main` when Expo secrets are configured, and can also be started manually from GitHub Actions with `workflow_dispatch`. It uses the EAS `preview` profile in `eas.json`, which is configured for internal distribution and Android `apk` output.
+
+iOS simulator packaging uses the EAS `ios-simulator` profile. It produces a simulator artifact that can be installed into an iOS Simulator, and does not require App Store signing credentials. Device/TestFlight builds should use the EAS `preview` or `production` profiles after Apple Developer credentials are configured.
 
 Required repository setup:
 
@@ -30,7 +40,7 @@ Required repository setup:
 - Add the Expo project UUID as the GitHub Actions secret `EXPO_PROJECT_ID`; CI links `mobile/` with `eas init --id` before the non-interactive build.
 - Update `mobile/eas.json` if the preview build should point at a different public backend API than `https://tingjunn-emomo.hf.space/api/v1`.
 
-The finished APK is uploaded as a GitHub Actions artifact named `emomo-android-preview-apk-*`. EAS also keeps the build details and install URL.
+The finished APK is uploaded as a GitHub Actions artifact named `emomo-android-preview-apk-*`. The iOS simulator archive is uploaded as `emomo-ios-simulator-*`. EAS also keeps the build details and install URL.
 
 Set the backend API base with:
 

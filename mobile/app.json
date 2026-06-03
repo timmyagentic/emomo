@@ -24,7 +24,13 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,6 +46,12 @@
           ]
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9550b08d-da2c-4075-8bbc-e4579773fc30"
+      }
+    },
+    "owner": "timmy3956"
   }
 }
