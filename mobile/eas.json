@@ -7,7 +7,7 @@
     "base": {
       "node": "22.12.0",
       "env": {
-        "EXPO_PUBLIC_API_BASE": "https://tingjunn-emomo.hf.space/api/v1"
+        "EXPO_PUBLIC_API_BASE": "https://api.emomo.net/api/v1"
       }
     },
     "ios-simulator": {

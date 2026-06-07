@@ -1,0 +1,20 @@
+{
+  "name": "emomo-api-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "types:generate": "wrangler types",
+    "typecheck": "npm run types:generate && tsc --noEmit",
+    "check": "npm run typecheck && wrangler deploy --dry-run",
+    "deploy:dry-run": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "secret:put:hf-token": "wrangler secret put HF_TOKEN"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.98.0"
+  }
+}

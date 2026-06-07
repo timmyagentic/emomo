@@ -14,7 +14,7 @@ This checklist tracks the remaining work needed to move `mobile/` from simulator
 - Version: `1.0.0`
 - Initial iOS build number: `1`
 - EAS project ID: `9550b08d-da2c-4075-8bbc-e4579773fc30`
-- Backend API base for EAS builds: `https://tingjunn-emomo.hf.space/api/v1`
+- Backend API base for EAS builds: `https://api.emomo.net/api/v1`
 
 ## Human-Owned Apple Setup
 
@@ -61,5 +61,5 @@ Before review, fill or verify:
 ## Still Needed Before Public Release
 
 - Capture real iPhone screenshots after the final visual pass.
-- Verify production backend stability, rate limits, and cost caps.
+- Verify production backend gateway stability, rate limits, and cost caps.
 - Complete a real-device TestFlight pass for search, detail, share, save, copy link, error states, and photo permission prompts.
