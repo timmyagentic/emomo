@@ -16,7 +16,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.timmy.emomo",
-      "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
       }
