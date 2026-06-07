@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Keyboard,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getMemes, getStats, searchMemesStream } from './src/api';
 import {
+  AboutModal,
   InlineState,
   MemeDetailModal,
   MemeMasonryList,
@@ -45,6 +47,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<SearchProgressView | null>(null);
   const [thinkingText, setThinkingText] = useState('');
+  const [isAboutVisible, setIsAboutVisible] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -209,7 +212,17 @@ export default function App() {
             <Text style={styles.brand}>emomo</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
-          <Text style={styles.modeLabel}>AI Search</Text>
+          <View style={styles.headerActions}>
+            <Text style={styles.modeLabel}>AI Search</Text>
+            <Pressable
+              accessibilityLabel="打开关于与隐私信息"
+              accessibilityRole="button"
+              onPress={() => setIsAboutVisible(true)}
+              style={styles.aboutButton}
+            >
+              <Text style={styles.aboutLabel}>i</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.hero}>
@@ -251,6 +264,7 @@ export default function App() {
         onSave={handleSave}
         onCopy={handleCopy}
       />
+      <AboutModal visible={isAboutVisible} onClose={() => setIsAboutVisible(false)} onClearHistory={clearHistory} />
     </SafeAreaView>
   );
 }
@@ -270,6 +284,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  headerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   brand: {
     color: '#111111',
@@ -291,6 +310,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingHorizontal: 10,
     paddingVertical: 7,
+  },
+  aboutButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#111111',
+  },
+  aboutLabel: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '900',
   },
   hero: {
     gap: 12,

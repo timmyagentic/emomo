@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "base": {
@@ -28,11 +28,24 @@
     },
     "production": {
       "extends": "base",
+      "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
       },
       "ios": {
         "simulator": false
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appName": "emomo - Meme Search",
+        "ascAppId": "6776160506",
+        "bundleIdentifier": "com.timmy.emomo",
+        "language": "zh-Hans",
+        "metadataPath": "./store.config.json",
+        "sku": "com.timmy.emomo"
       }
     }
   }

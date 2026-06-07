@@ -1,3 +1,4 @@
+export { AboutModal } from './AboutModal';
 export { ActionButton } from './ActionButton';
 export { InlineState } from './InlineState';
 export { MemeDetailModal } from './MemeDetailModal';
@@ -6,4 +7,3 @@ export { MemeTile } from './MemeTile';
 export { RecentSearchChips } from './RecentSearchChips';
 export { SearchComposer } from './SearchComposer';
 export { SearchProgressPanel } from './SearchProgressPanel';
-

@@ -19,6 +19,12 @@ npm run lint
 npx expo-doctor
 ```
 
+Regenerate the committed App Store/TestFlight icon, Android adaptive icon, splash image, and favicon after changing the mobile brand asset script:
+
+```bash
+npm run assets:generate
+```
+
 Local native runs require the platform SDKs:
 
 ```bash
@@ -41,6 +47,21 @@ Required repository setup:
 - Update `mobile/eas.json` if the preview build should point at a different public backend API than `https://tingjunn-emomo.hf.space/api/v1`.
 
 The finished APK is uploaded as a GitHub Actions artifact named `emomo-android-preview-apk-*`. The iOS simulator archive is uploaded as `emomo-ios-simulator-*`. EAS also keeps the build details and install URL.
+
+## iOS App Store readiness
+
+The iOS release identity is configured in `app.json` with bundle ID `com.timmy.emomo`, version `1.0.0`, build number `1`, and `usesNonExemptEncryption=false`. The `production` EAS profile builds the App Store archive, and `store.config.json` contains initial App Store metadata.
+
+Before submitting, initialize remote build numbers if needed and make sure iOS distribution credentials plus App Store Connect API access are configured. The App Store Connect app record is `emomo - Meme Search`, and its Apple ID (`ascAppId`) is already set in `submit.production.ios`.
+
+```bash
+npx eas-cli credentials --platform ios
+npx eas-cli build:version:set
+npx eas-cli build --platform ios --profile production
+npx eas-cli submit --platform ios --profile production --latest
+```
+
+See `../docs/mobile-app-store-release.md` for the full release checklist.
 
 Set the backend API base with:
 
