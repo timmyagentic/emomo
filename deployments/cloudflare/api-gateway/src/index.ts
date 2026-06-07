@@ -69,6 +69,11 @@ const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
   'upgrade',
 ]);
 
+const UPSTREAM_RESPONSE_HEADERS_TO_STRIP = [
+  /^access-control-/i,
+  /^x-proxied-/i,
+];
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const corsHeaders = getCorsHeaders(request, env);
@@ -214,6 +219,12 @@ function buildClientResponse(
 
   for (const header of HOP_BY_HOP_RESPONSE_HEADERS) {
     headers.delete(header);
+  }
+
+  for (const header of [...headers.keys()]) {
+    if (UPSTREAM_RESPONSE_HEADERS_TO_STRIP.some((pattern) => pattern.test(header))) {
+      headers.delete(header);
+    }
   }
 
   headers.delete('set-cookie');
