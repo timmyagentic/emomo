@@ -1,6 +1,5 @@
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  APP_BUILD_NUMBER,
   APP_PRIVACY_POLICY_URL,
   APP_SUPPORT_URL,
   APP_VERSION,
@@ -24,7 +23,7 @@ export function AboutModal({ visible, onClose, onClearHistory }: AboutModalProps
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>关于 emomo</Text>
-            <Text style={styles.version}>版本 {APP_VERSION} ({APP_BUILD_NUMBER})</Text>
+            <Text style={styles.version}>版本 {APP_VERSION}</Text>
           </View>
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.closeButton}>
             <Text style={styles.closeLabel}>关闭</Text>
