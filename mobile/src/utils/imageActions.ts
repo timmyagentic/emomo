@@ -18,7 +18,7 @@ function extensionFor(meme: DisplayMeme): string {
   }
 }
 
-async function downloadMeme(meme: DisplayMeme): Promise<{ uri: string }> {
+async function downloadMeme(meme: DisplayMeme) {
   const directory = new Directory(Paths.cache, 'emomo');
   if (!directory.exists) {
     directory.create({ idempotent: true, intermediates: true });
@@ -46,12 +46,9 @@ export async function saveMemeToLibrary(meme: DisplayMeme): Promise<void> {
   await MediaLibrary.saveToLibraryAsync(file.uri);
 }
 
-export async function copyMemeURL(meme: DisplayMeme): Promise<void> {
-  await Clipboard.setStringAsync(meme.url);
-}
-
-export async function openMemeURL(meme: DisplayMeme): Promise<void> {
-  await Linking.openURL(meme.url);
+export async function copyMemeImage(meme: DisplayMeme): Promise<void> {
+  const file = await downloadMeme(meme);
+  await Clipboard.setImageAsync(await file.base64());
 }
 
 function mimeTypeFor(meme: DisplayMeme): string {

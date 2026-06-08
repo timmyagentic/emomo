@@ -7,10 +7,10 @@ interface MemeDetailModalProps {
   onClose: () => void;
   onShare: (meme: DisplayMeme) => void;
   onSave: (meme: DisplayMeme) => void;
-  onCopy: (meme: DisplayMeme) => void;
+  onCopyImage: (meme: DisplayMeme) => void;
 }
 
-export function MemeDetailModal({ meme, onClose, onShare, onSave, onCopy }: MemeDetailModalProps) {
+export function MemeDetailModal({ meme, onClose, onShare, onSave, onCopyImage }: MemeDetailModalProps) {
   return (
     <Modal animationType="slide" visible={Boolean(meme)} onRequestClose={onClose}>
       <View style={styles.container}>
@@ -26,7 +26,7 @@ export function MemeDetailModal({ meme, onClose, onShare, onSave, onCopy }: Meme
             <View style={styles.actions}>
               <ActionButton label="分享" onPress={() => onShare(meme)} variant="primary" />
               <ActionButton label="保存" onPress={() => onSave(meme)} />
-              <ActionButton label="复制链接" onPress={() => onCopy(meme)} />
+              <ActionButton label="复制图片" onPress={() => onCopyImage(meme)} />
             </View>
             <View style={styles.meta}>
               <Text style={styles.description}>{meme.description || '暂无描述'}</Text>
@@ -105,4 +105,3 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 });
-
