@@ -28,7 +28,7 @@ import {
   type SearchHistoryEntry,
 } from './src/storage/searchHistory';
 import type { DisplayMeme, SearchProgressView } from './src/types';
-import { copyMemeURL, openMemeURL, saveMemeToLibrary, shareMeme } from './src/utils/imageActions';
+import { copyMemeImage, saveMemeToLibrary, shareMeme } from './src/utils/imageActions';
 
 const INITIAL_PAGE_SIZE = 20;
 const SEARCH_TOP_K = 50;
@@ -194,12 +194,12 @@ export default function App() {
     }
   }, []);
 
-  const handleCopy = useCallback(async (meme: DisplayMeme) => {
+  const handleCopyImage = useCallback(async (meme: DisplayMeme) => {
     try {
-      await copyMemeURL(meme);
-      Alert.alert('已复制', '图片链接已复制。');
+      await copyMemeImage(meme);
+      Alert.alert('已复制', '表情包图片已复制，可以直接粘贴到聊天应用。');
     } catch {
-      await openMemeURL(meme);
+      Alert.alert('复制失败', '当前系统暂时无法复制这张图片，可以先使用分享或保存。');
     }
   }, []);
 
@@ -262,7 +262,7 @@ export default function App() {
         onClose={() => setSelectedMeme(null)}
         onShare={handleShare}
         onSave={handleSave}
-        onCopy={handleCopy}
+        onCopyImage={handleCopyImage}
       />
       <AboutModal visible={isAboutVisible} onClose={() => setIsAboutVisible(false)} onClearHistory={clearHistory} />
     </SafeAreaView>
