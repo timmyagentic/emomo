@@ -27,11 +27,46 @@ import {
   normalizeSearchQuery,
   type SearchHistoryEntry,
 } from './src/storage/searchHistory';
-import type { DisplayMeme, SearchProgressView } from './src/types';
+import type { DisplayMeme, SearchProgressView, SearchStageSlug } from './src/types';
 import { copyMemeImage, saveMemeToLibrary, shareMeme } from './src/utils/imageActions';
 
 const INITIAL_PAGE_SIZE = 20;
 const SEARCH_TOP_K = 50;
+
+const SEARCH_STAGE_ORDER: Record<SearchStageSlug, number> = {
+  query_expansion_start: 0,
+  thinking: 0,
+  query_expansion_done: 0,
+  embedding: 1,
+  searching: 2,
+  enriching: 3,
+  complete: 4,
+  error: 4,
+};
+
+const SEARCH_PROGRESS_FALLBACKS: { delayMs: number; progress: SearchProgressView }[] = [
+  {
+    delayMs: 2200,
+    progress: {
+      stage: 'embedding',
+      message: '正在生成语义向量...',
+    },
+  },
+  {
+    delayMs: 5200,
+    progress: {
+      stage: 'searching',
+      message: '正在匹配表情库...',
+    },
+  },
+  {
+    delayMs: 8500,
+    progress: {
+      stage: 'enriching',
+      message: '正在整理最合适的结果...',
+    },
+  },
+];
 
 export default function App() {
   const [inputQuery, setInputQuery] = useState('');
@@ -49,6 +84,44 @@ export default function App() {
   const [thinkingText, setThinkingText] = useState('');
   const [isAboutVisible, setIsAboutVisible] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const progressStageRef = useRef<SearchStageSlug | null>(null);
+  const progressTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearProgressTimers = useCallback(() => {
+    progressTimersRef.current.forEach((timer) => clearTimeout(timer));
+    progressTimersRef.current = [];
+  }, []);
+
+  const setSearchProgress = useCallback((nextProgress: SearchProgressView | null) => {
+    progressStageRef.current = nextProgress?.stage ?? null;
+    setProgress(nextProgress);
+  }, []);
+
+  const updateSearchProgress = useCallback((nextProgress: SearchProgressView) => {
+    const currentStage = progressStageRef.current;
+    if (currentStage && SEARCH_STAGE_ORDER[currentStage] > SEARCH_STAGE_ORDER[nextProgress.stage]) {
+      setProgress((currentProgress) => currentProgress ? {
+        ...currentProgress,
+        thinkingText: nextProgress.thinkingText ?? currentProgress.thinkingText,
+        expandedQuery: nextProgress.expandedQuery ?? currentProgress.expandedQuery,
+      } : nextProgress);
+      return;
+    }
+
+    progressStageRef.current = nextProgress.stage;
+    setProgress(nextProgress);
+  }, []);
+
+  const startFallbackProgress = useCallback((abortController: AbortController) => {
+    clearProgressTimers();
+    progressTimersRef.current = SEARCH_PROGRESS_FALLBACKS.map(({ delayMs, progress: fallbackProgress }) =>
+      setTimeout(() => {
+        if (!abortController.signal.aborted) {
+          updateSearchProgress(fallbackProgress);
+        }
+      }, delayMs)
+    );
+  }, [clearProgressTimers, updateSearchProgress]);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -76,8 +149,9 @@ export default function App() {
     return () => {
       abortController.abort();
       abortRef.current?.abort();
+      clearProgressTimers();
     };
-  }, []);
+  }, [clearProgressTimers]);
 
   const visibleMemes = hasSearched ? results : feedMemes;
   const emptyTitle = hasSearched ? '没有找到合适的表情' : isInitialLoading ? '正在加载表情库' : '还没有可展示的表情';
@@ -93,9 +167,10 @@ export default function App() {
   const cancelSearch = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    clearProgressTimers();
     setIsSearching(false);
-    setProgress(null);
-  }, []);
+    setSearchProgress(null);
+  }, [clearProgressTimers, setSearchProgress]);
 
   const runSearch = useCallback(
     async (rawQuery?: string) => {
@@ -116,10 +191,11 @@ export default function App() {
       setError('');
       setThinkingText('');
       setIsSearching(true);
-      setProgress({
+      setSearchProgress({
         stage: 'query_expansion_start',
         message: 'AI 正在理解搜索意图...',
       });
+      startFallbackProgress(abortController);
 
       try {
         setHistory(await addSearchHistory(query));
@@ -134,36 +210,40 @@ export default function App() {
             if (event.stage === 'thinking' && event.thinkingText) {
               accumulatedThinking += event.thinkingText;
               setThinkingText(accumulatedThinking);
-              setProgress({ ...event, thinkingText: accumulatedThinking });
+              updateSearchProgress({ ...event, thinkingText: accumulatedThinking });
               return;
             }
             if (event.stage === 'complete') {
+              clearProgressTimers();
               setResults(event.results ?? []);
-              setProgress(null);
+              setSearchProgress(null);
               return;
             }
             if (event.stage === 'error') {
+              clearProgressTimers();
               setError(event.error ?? '搜索失败，请稍后再试。');
-              setProgress(null);
+              setSearchProgress(null);
               return;
             }
-            setProgress(event);
+            updateSearchProgress(event);
           },
           abortController.signal
         );
       } catch (searchError) {
         if ((searchError as Error).name !== 'AbortError') {
+          clearProgressTimers();
           setError('搜索失败，请检查网络后重试。');
-          setProgress(null);
+          setSearchProgress(null);
         }
       } finally {
         if (abortRef.current === abortController) {
           abortRef.current = null;
+          clearProgressTimers();
           setIsSearching(false);
         }
       }
     },
-    [inputQuery, isSearching]
+    [clearProgressTimers, inputQuery, isSearching, setSearchProgress, startFallbackProgress, updateSearchProgress]
   );
 
   const clearHistory = useCallback(async () => {
