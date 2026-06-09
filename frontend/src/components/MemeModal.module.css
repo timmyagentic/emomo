@@ -214,31 +214,6 @@
   margin: 0;
 }
 
-/* Meta info */
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-md);
-  margin-bottom: var(--space-md);
-}
-
-.metaItem {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.metaLabel {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-}
-
-.metaValue {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
 /* Tags */
 .tags {
   display: flex;

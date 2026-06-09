@@ -72,20 +72,29 @@ test.describe('Emomo 表情包搜索应用', () => {
         body: [
           'event: complete',
           `data: ${JSON.stringify({
-            stage: 'complete',
-            results: [
-              {
-                id: 'search-cat-1',
-                url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22 viewBox=%220 0 120 120%22%3E%3Crect width=%22120%22 height=%22120%22 fill=%22%23fff4dc%22/%3E%3Ctext x=%2260%22 y=%2268%22 text-anchor=%22middle%22 font-size=%2232%22%3Ecat%3C/text%3E%3C/svg%3E',
-                score: 0.04,
-                description: '猫咪测试表情',
-                category: '测试',
-                tags: ['猫咪'],
-                width: 120,
-                height: 120,
-              },
-            ],
-            total: 1,
+            stage: 7,
+            message: '搜索完成',
+            complete: {
+              results: [
+                {
+                  meme: {
+                    id: 'search-cat-1',
+                    url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22 viewBox=%220 0 120 120%22%3E%3Crect width=%22120%22 height=%22120%22 fill=%22%23fff4dc%22/%3E%3Ctext x=%2260%22 y=%2268%22 text-anchor=%22middle%22 font-size=%2232%22%3Ecat%3C/text%3E%3C/svg%3E',
+                    imageInfo: {
+                      width: 120,
+                      height: 120,
+                      format: 2,
+                    },
+                    tags: ['猫咪'],
+                    category: '测试',
+                  },
+                  score: 0.04,
+                  description: '猫咪测试表情',
+                },
+              ],
+              total: 1,
+              query: '猫咪',
+            },
           })}`,
           '',
         ].join('\n'),
@@ -96,14 +105,17 @@ test.describe('Emomo 表情包搜索应用', () => {
     await searchInput.fill('猫咪');
     await page.getByRole('button', { name: '搜索', exact: true }).click();
 
-    await expect(page.getByText('找到 1 个表情包')).toBeVisible({ timeout: 10000 });
+    const searchResult = page.getByRole('button', { name: /查看表情详情：猫咪测试表情/ });
+    await expect(searchResult).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('已展示全部相关结果')).toBeVisible();
     await expect(page.getByText('匹配度偏低')).toBeVisible();
 
     await page.getByRole('button', { name: '清空搜索' }).click();
 
     await expect(searchInput).toHaveValue('');
     await expect(page.getByRole('heading', { name: '随便逛逛' })).toBeVisible();
-    await expect(page.getByText('找到 1 个表情包')).toBeHidden();
+    await expect(searchResult).toBeHidden();
+    await expect(page.getByText('已展示全部相关结果')).toBeHidden();
     await expect(page.getByText('匹配度偏低')).toBeHidden();
   });
 
@@ -129,6 +141,20 @@ test.describe('Emomo 表情包搜索应用', () => {
       // 检查弹窗是否出现（如果实现了的话）
       await page.waitForTimeout(500);
     }
+  });
+
+  test('表情详情只保留必要操作', async ({ page }) => {
+    await page
+      .getByRole('button', { name: '查看表情详情：一只橘色的猫咪，眼神慵懒地看着镜头，非常可爱' })
+      .click();
+    const dialog = page.getByRole('dialog', { name: '表情详情' });
+
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '复制图片到剪贴板' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '下载表情图片' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '复制图片链接' })).toBeHidden();
+    await expect(dialog.getByText('格式:')).toBeHidden();
+    await expect(dialog.getByText('尺寸:')).toBeHidden();
   });
 
   test('响应式布局正常', async ({ page }) => {
