@@ -22,6 +22,21 @@ Allowed upstream routes:
 All other paths, methods, and unsupported query parameters are rejected at the
 gateway.
 
+## Anti-crawling Controls
+
+The gateway is the public boundary for web and mobile clients. It intentionally
+does not expose an unbounded meme catalog export:
+
+- `GET /api/v1/memes` is limited to the first `MAX_LIST_WINDOW` items
+  (`120` by default), so callers cannot page through the entire catalog by
+  increasing `offset`.
+- Search requests are capped by `MAX_SEARCH_TOP_K` (`100` by default).
+- POST bodies are read and rejected at `MAX_REQUEST_BODY_BYTES`, even when the
+  client omits `Content-Length`.
+- All public data routes use the `EMOMO_RATE_LIMITER` Cloudflare Rate Limiting
+  binding. The default `wrangler.jsonc` setting allows 120 requests per 60
+  seconds per route family and `CF-Connecting-IP`.
+
 ## Setup
 
 ```bash
@@ -42,6 +57,7 @@ The route in `wrangler.jsonc` uses a Cloudflare Workers Custom Domain for
 ## Validation
 
 ```bash
+npm test
 npm run typecheck
 npm run check
 curl https://api.emomo.net/api/v1/stats

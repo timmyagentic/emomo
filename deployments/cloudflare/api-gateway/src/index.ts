@@ -2,7 +2,17 @@ type Route = {
   method: 'GET' | 'POST';
   pattern: RegExp;
   queryParams: ReadonlySet<string>;
+  rateLimitKey?: string;
   cacheable?: boolean;
+};
+
+type ValidationResult = {
+  body?: Uint8Array;
+  error?: {
+    status: number;
+    code: string;
+    message: string;
+  };
 };
 
 const ALLOWED_ROUTES: readonly Route[] = [
@@ -15,33 +25,39 @@ const ALLOWED_ROUTES: readonly Route[] = [
     method: 'GET',
     pattern: /^\/api\/v1\/stats$/,
     queryParams: new Set(),
+    rateLimitKey: 'metadata',
     cacheable: true,
   },
   {
     method: 'GET',
     pattern: /^\/api\/v1\/categories$/,
     queryParams: new Set(),
+    rateLimitKey: 'metadata',
     cacheable: true,
   },
   {
     method: 'GET',
     pattern: /^\/api\/v1\/memes$/,
     queryParams: new Set(['category', 'limit', 'offset']),
+    rateLimitKey: 'list',
   },
   {
     method: 'GET',
     pattern: /^\/api\/v1\/memes\/[^/]+$/,
     queryParams: new Set(),
+    rateLimitKey: 'detail',
   },
   {
     method: 'POST',
     pattern: /^\/api\/v1\/search$/,
     queryParams: new Set(['collection', 'profile']),
+    rateLimitKey: 'search',
   },
   {
     method: 'POST',
     pattern: /^\/api\/v1\/search\/stream$/,
     queryParams: new Set(['collection', 'profile']),
+    rateLimitKey: 'search',
   },
 ];
 
@@ -91,9 +107,14 @@ export default {
       return jsonError(404, 'not_found', 'This API route is not exposed by the gateway.', corsHeaders);
     }
 
-    const validationError = validateRequest(request, route, env);
-    if (validationError) {
-      return jsonError(validationError.status, validationError.code, validationError.message, corsHeaders);
+    const validation = await validateRequest(request, route, env);
+    if (validation.error) {
+      return jsonError(validation.error.status, validation.error.code, validation.error.message, corsHeaders);
+    }
+
+    const rateLimitError = await enforceRateLimit(request, route, env);
+    if (rateLimitError) {
+      return jsonError(rateLimitError.status, rateLimitError.code, rateLimitError.message, corsHeaders);
     }
 
     if (route.cacheable) {
@@ -103,7 +124,7 @@ export default {
       }
     }
 
-    const upstreamRequest = buildUpstreamRequest(request, env);
+    const upstreamRequest = buildUpstreamRequest(request, env, validation.body);
     const upstreamResponse = await fetch(upstreamRequest);
     const response = buildClientResponse(
       upstreamResponse,
@@ -142,19 +163,36 @@ function matchRoute(request: Request): Route | undefined {
   return ALLOWED_ROUTES.find((route) => route.method === method && route.pattern.test(url.pathname));
 }
 
-function validateRequest(
+async function validateRequest(
   request: Request,
   route: Route,
   env: Env
-): { status: number; code: string; message: string } | undefined {
+): Promise<ValidationResult> {
   const url = new URL(request.url);
 
   for (const key of url.searchParams.keys()) {
     if (!route.queryParams.has(key)) {
       return {
-        status: 400,
-        code: 'unsupported_query_parameter',
-        message: `Query parameter "${key}" is not supported for this endpoint.`,
+        error: {
+          status: 400,
+          code: 'unsupported_query_parameter',
+          message: `Query parameter "${key}" is not supported for this endpoint.`,
+        },
+      };
+    }
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/v1/memes') {
+    const maxListWindow = parsePositiveInteger(env.MAX_LIST_WINDOW, 120);
+    const limit = parseNonNegativeInteger(url.searchParams.get('limit'), 20);
+    const offset = parseNonNegativeInteger(url.searchParams.get('offset'), 0);
+    if (offset + Math.max(limit, 1) > maxListWindow) {
+      return {
+        error: {
+          status: 403,
+          code: 'bulk_listing_blocked',
+          message: 'Meme listing is limited to the public browse window.',
+        },
       };
     }
   }
@@ -163,9 +201,11 @@ function validateRequest(
     const contentType = request.headers.get('content-type') || '';
     if (!contentType.toLowerCase().startsWith('application/json')) {
       return {
-        status: 415,
-        code: 'unsupported_media_type',
-        message: 'POST requests must use application/json.',
+        error: {
+          status: 415,
+          code: 'unsupported_media_type',
+          message: 'POST requests must use application/json.',
+        },
       };
     }
 
@@ -173,17 +213,61 @@ function validateRequest(
     const contentLength = request.headers.get('content-length');
     if (contentLength && Number(contentLength) > maxBodyBytes) {
       return {
-        status: 413,
-        code: 'request_too_large',
-        message: 'Request body exceeds the gateway limit.',
+        error: {
+          status: 413,
+          code: 'request_too_large',
+          message: 'Request body exceeds the gateway limit.',
+        },
       };
     }
+
+    const bodyResult = await readRequestBody(request, maxBodyBytes);
+    if (bodyResult.error) {
+      return { error: bodyResult.error };
+    }
+    const topKError = validateSearchBodyTopK(url.pathname, bodyResult.body, env);
+    if (topKError) {
+      return { error: topKError };
+    }
+    return { body: bodyResult.body };
   }
 
-  return undefined;
+  return {};
 }
 
-function buildUpstreamRequest(request: Request, env: Env): Request {
+async function enforceRateLimit(
+  request: Request,
+  route: Route,
+  env: Env
+): Promise<{ status: number; code: string; message: string } | undefined> {
+  if (!route.rateLimitKey) {
+    return undefined;
+  }
+
+  const limiter = env.EMOMO_RATE_LIMITER;
+  if (!limiter) {
+    return {
+      status: 500,
+      code: 'missing_rate_limiter',
+      message: 'Gateway is missing its rate limiter binding.',
+    };
+  }
+
+  const { success } = await limiter.limit({
+    key: `${route.rateLimitKey}:${clientRateLimitKey(request)}`,
+  });
+  if (success) {
+    return undefined;
+  }
+
+  return {
+    status: 429,
+    code: 'rate_limited',
+    message: 'Too many requests. Please slow down.',
+  };
+}
+
+function buildUpstreamRequest(request: Request, env: Env, body?: Uint8Array): Request {
   const incomingUrl = new URL(request.url);
   const upstreamUrl = new URL(incomingUrl.pathname + incomingUrl.search, env.UPSTREAM_ORIGIN);
   const headers = new Headers();
@@ -204,7 +288,7 @@ function buildUpstreamRequest(request: Request, env: Env): Request {
   return new Request(upstreamUrl.toString(), {
     method: request.method,
     headers,
-    body: request.method === 'GET' || request.method === 'HEAD' ? null : request.body,
+    body: request.method === 'GET' || request.method === 'HEAD' ? null : body,
     redirect: 'manual',
   });
 }
@@ -318,4 +402,103 @@ function parsePositiveInteger(value: string | undefined, fallback: number): numb
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseNonNegativeInteger(value: string | null, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+async function readRequestBody(
+  request: Request,
+  maxBodyBytes: number
+): Promise<{
+  body: Uint8Array;
+  error?: { status: number; code: string; message: string };
+}> {
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return { body: new Uint8Array() };
+  }
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBodyBytes) {
+      await reader.cancel();
+      return {
+        body: new Uint8Array(),
+        error: {
+          status: 413,
+          code: 'request_too_large',
+          message: 'Request body exceeds the gateway limit.',
+        },
+      };
+    }
+    chunks.push(value);
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { body };
+}
+
+function validateSearchBodyTopK(
+  pathname: string,
+  body: Uint8Array,
+  env: Env
+): { status: number; code: string; message: string } | undefined {
+  if (pathname !== '/api/v1/search' && pathname !== '/api/v1/search/stream') {
+    return undefined;
+  }
+  if (body.byteLength === 0) {
+    return undefined;
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    return {
+      status: 400,
+      code: 'invalid_json',
+      message: 'POST body must be valid JSON.',
+    };
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+  const record = payload as Record<string, unknown>;
+  const rawTopK = record.topK ?? record.top_k;
+  if (rawTopK === undefined) {
+    return undefined;
+  }
+  const topK = typeof rawTopK === 'number' ? rawTopK : Number(rawTopK);
+  const maxTopK = parsePositiveInteger(env.MAX_SEARCH_TOP_K, 100);
+  if (Number.isFinite(topK) && topK > maxTopK) {
+    return {
+      status: 400,
+      code: 'search_top_k_too_large',
+      message: `Search topK is limited to ${maxTopK}.`,
+    };
+  }
+  return undefined;
+}
+
+function clientRateLimitKey(request: Request): string {
+  return request.headers.get('CF-Connecting-IP') || 'unknown-client';
 }
