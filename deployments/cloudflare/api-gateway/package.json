@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --local",
+    "test": "tsx --test src/**/*.test.ts",
     "types:generate": "wrangler types",
     "typecheck": "npm run types:generate && tsc --noEmit",
     "check": "npm run typecheck && wrangler deploy --dry-run",
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.2",
     "wrangler": "^4.98.0"
   }
