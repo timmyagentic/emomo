@@ -90,7 +90,7 @@ function formatTags(tags: string[] | undefined): string[] {
 
 /**
  * A modal component that displays a meme in detail.
- * Allows downloading, copying image/link, and viewing metadata.
+ * Allows downloading and copying the image.
  *
  * @param props - The component props.
  * @param props.meme - The meme object to display.
@@ -336,19 +336,6 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
                   )}
                 </motion.button>
 
-                <motion.button
-                  className={styles.actionBtn}
-                  onClick={handleCopyLink}
-                  aria-label="复制图片链接"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
-                  </svg>
-                  复制链接
-                </motion.button>
               </div>
 
               {/* Description */}
@@ -365,22 +352,6 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
                   <p className={styles.description}>{description}</p>
                 </div>
               )}
-
-              {/* Meta info */}
-              <div className={styles.meta}>
-                {meme.format && (
-                  <span className={styles.metaItem}>
-                    <span className={styles.metaLabel}>格式:</span>
-                    <span className={styles.metaValue}>{meme.format.toUpperCase()}</span>
-                  </span>
-                )}
-                {meme.width && meme.height && (
-                  <span className={styles.metaItem}>
-                    <span className={styles.metaLabel}>尺寸:</span>
-                    <span className={styles.metaValue}>{meme.width} × {meme.height}</span>
-                  </span>
-                )}
-              </div>
 
               {/* Tags */}
               {displayTags.length > 0 && (
