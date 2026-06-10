@@ -13,6 +13,7 @@ import (
 	_ "image/png"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -62,6 +63,7 @@ type IngestVectorIndex struct {
 	Embedding  EmbeddingProvider
 	QdrantRepo *repository.QdrantRepository
 	UseSparse  bool
+	SparseOnly bool
 }
 
 // NewIngestService creates a new ingest service.
@@ -700,7 +702,7 @@ func (s *IngestService) missingVectorIndexes(ctx context.Context, memeID string,
 
 	missing := make([]IngestVectorIndex, 0, len(s.indexes))
 	for _, index := range s.indexes {
-		exists, err := s.vectorRepo.ExistsByMemeIDCollectionAndVectorType(ctx, memeID, index.Collection, normalizeIngestVectorType(index.VectorType))
+		exists, err := s.vectorIndexExists(ctx, memeID, index)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check vector existence: %w", err)
 		}
@@ -709,6 +711,18 @@ func (s *IngestService) missingVectorIndexes(ctx context.Context, memeID string,
 		}
 	}
 	return missing, nil
+}
+
+func (s *IngestService) vectorIndexExists(ctx context.Context, memeID string, index IngestVectorIndex) (bool, error) {
+	vectorType := normalizeIngestVectorType(index.VectorType)
+	exists, err := s.vectorRepo.ExistsByMemeIDCollectionAndVectorType(ctx, memeID, index.Collection, vectorType)
+	if err != nil || exists {
+		return exists, err
+	}
+	if index.SparseOnly && vectorType == pb.VectorType_VECTOR_TYPE_KEYWORD {
+		return s.vectorRepo.ExistsByMemeIDCollectionAndVectorType(ctx, memeID, index.Collection, pb.VectorType_VECTOR_TYPE_CAPTION)
+	}
+	return false, nil
 }
 
 func (s *IngestService) upsertVectorIndexes(ctx context.Context, indexes []IngestVectorIndex, input vectorUpsertInput) error {
@@ -783,14 +797,41 @@ func (s *IngestService) rollbackVectorIndexes(ctx context.Context, memeID string
 }
 
 func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVectorIndex, input vectorUpsertInput) error {
-	if index.Embedding == nil {
-		return fmt.Errorf("embedding provider is nil for collection %s", index.Collection)
-	}
 	if index.QdrantRepo == nil {
 		return fmt.Errorf("qdrant repo is nil for collection %s", index.Collection)
 	}
 
 	vectorType := normalizeIngestVectorType(index.VectorType)
+	if index.SparseOnly {
+		if vectorType != pb.VectorType_VECTOR_TYPE_KEYWORD {
+			return fmt.Errorf("sparse-only index requires keyword vector type, got %s", persistence.VectorTypeShortName(vectorType))
+		}
+		bm25Text := strings.TrimSpace(input.BM25Text)
+		if bm25Text == "" {
+			return fmt.Errorf("%w: keyword vector requires bm25 text", errSkipOptionalVectorIndex)
+		}
+		var existing *domain.MemeVector
+		if input.Force && s.vectorRepo != nil {
+			current, err := s.vectorRepo.GetByMemeIDCollectionAndVectorType(ctx, input.MemeID, index.Collection, vectorType)
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("failed to load existing vector before force replacement: %w", err)
+			}
+			if err == nil {
+				existing = current
+			}
+		}
+
+		pointID := uuid.New().String()
+		if err := index.QdrantRepo.UpsertSparse(ctx, pointID, bm25Text, input.Payload); err != nil {
+			return fmt.Errorf("failed to upsert sparse vector: %w", err)
+		}
+		return s.upsertVectorRecord(ctx, index, input, vectorType, repository.SparseVectorModel, calculateSHA256(bm25Text), pointID, existing)
+	}
+
+	if index.Embedding == nil {
+		return fmt.Errorf("embedding provider is nil for collection %s", index.Collection)
+	}
+
 	doc := EmbeddingDocument{}
 	inputHash := input.ContentHash
 	switch vectorType {
@@ -838,6 +879,19 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 		}
 	}
 
+	return s.upsertVectorRecord(ctx, index, input, vectorType, index.Embedding.GetModel(), inputHash, pointID, existing)
+}
+
+func (s *IngestService) upsertVectorRecord(
+	ctx context.Context,
+	index IngestVectorIndex,
+	input vectorUpsertInput,
+	vectorType pb.VectorType,
+	embeddingModel string,
+	inputHash string,
+	pointID string,
+	existing *domain.MemeVector,
+) error {
 	if s.vectorRepo == nil {
 		return nil
 	}
@@ -847,7 +901,7 @@ func (s *IngestService) upsertVectorIndex(ctx context.Context, index IngestVecto
 		MemeID:         input.MemeID,
 		Collection:     index.Collection,
 		VectorType:     vectorType,
-		EmbeddingModel: index.Embedding.GetModel(),
+		EmbeddingModel: embeddingModel,
 		InputHash:      inputHash,
 		AnnotationID:   input.AnnotationID,
 		QdrantPointID:  pointID,
@@ -889,7 +943,7 @@ func vectorRouteKey(collection string, vectorType pb.VectorType) string {
 
 func normalizeIngestVectorType(vectorType pb.VectorType) pb.VectorType {
 	switch vectorType {
-	case pb.VectorType_VECTOR_TYPE_CAPTION:
+	case pb.VectorType_VECTOR_TYPE_CAPTION, pb.VectorType_VECTOR_TYPE_KEYWORD:
 		return vectorType
 	default:
 		return pb.VectorType_VECTOR_TYPE_IMAGE

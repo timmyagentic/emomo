@@ -116,7 +116,7 @@
 负责编排数据从各数据源到存储层的完整流程：
 
 ```
-数据源 → 读取/校验图片 → 去重检查 → 存储图片 → 生成 image/caption 向量 → 写入 Qdrant → 写入元数据
+数据源 → 读取/校验图片 → 去重检查 → 存储图片 → 生成 image/keyword/caption 向量 → 写入 Qdrant → 写入元数据
 ```
 
 **关键设计**：
@@ -251,7 +251,7 @@ CREATE INDEX idx_memes_category ON memes(category);
 | id | TEXT (UUID) | 主键 |
 | meme_id | TEXT | 关联 memes.id |
 | collection | TEXT | Qdrant collection |
-| vector_type | INTEGER | protobuf `VectorType`：1=image，2=caption |
+| vector_type | INTEGER | protobuf `VectorType`：1=image，2=caption，3=keyword |
 | embedding_model | TEXT | Embedding 模型 |
 | input_hash | TEXT | 向量输入哈希 |
 | annotation_id | TEXT | 关联 meme_annotations.id |
@@ -614,12 +614,12 @@ meme-library/
 | 实现 LocalDir Adapter | 递归扫描本地静态图片目录 | P0 |
 | 实现多模态 Embedding 服务 | 支持 image/text document mode 与 query embedding | P0 |
 | 实现 VLM/OCR 辅助服务 | 生成 caption、OCR 和可展示分析结果 | P0 |
-| 实现摄入流程 | 读取/存储图片 → image/caption 向量 → 写入 Qdrant | P0 |
+| 实现摄入流程 | 读取/存储图片 → image/keyword/caption 向量 → 写入 Qdrant | P0 |
 | 实现文本搜索 API | POST /api/v1/search 接口 | P0 |
 | 基础去重 | content_hash 精确去重 | P1 |
 
 **MVP 里程碑验收**：
-- [ ] 成功导入本地静态图片目录中的表情包（含 image/caption 向量）
+- [ ] 成功导入本地静态图片目录中的表情包（含 image/keyword/caption 向量）
 - [ ] 输入「无语」返回相关表情包
 - [ ] 输入「开心猫猫」返回相关表情包
 - [ ] 文本搜索延迟 < 200ms

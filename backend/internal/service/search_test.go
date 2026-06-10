@@ -38,14 +38,64 @@ func TestSearchServiceGetAvailableProfilesUsesConfiguredDefault(t *testing.T) {
 	searchService := NewSearchService(nil, nil, nil, nil, nil, nil, nil, &SearchConfig{
 		DefaultProfile: "qwen3vl",
 	})
-	searchService.RegisterProfile("legacy", nil, nil, nil, nil)
-	searchService.RegisterProfile("qwen3vl", nil, nil, nil, nil)
-	searchService.RegisterProfile("alpha", nil, nil, nil, nil)
+	searchService.RegisterProfile("legacy", nil, nil, nil, nil, nil)
+	searchService.RegisterProfile("qwen3vl", nil, nil, nil, nil, nil)
+	searchService.RegisterProfile("alpha", nil, nil, nil, nil, nil)
 
 	got := searchService.GetAvailableProfiles()
 	want := []string{"qwen3vl", "alpha", "legacy"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("GetAvailableProfiles() = %v, want %v", got, want)
+	}
+}
+
+func TestRegisterProfileAllowsImageOnlyProfile(t *testing.T) {
+	t.Parallel()
+
+	searchService := NewSearchService(nil, nil, nil, nil, nil, nil, nil, &SearchConfig{
+		DefaultProfile: "qwen3vl",
+	})
+	searchService.RegisterProfile("qwen3vl", nil, &fixedEmbeddingProvider{}, nil, nil, nil)
+
+	profile, _, ok := searchService.resolveProfile("qwen3vl")
+	if !ok {
+		t.Fatal("resolveProfile() ok = false, want true")
+	}
+	if profile.Image == nil || profile.Image.Embedding == nil {
+		t.Fatal("image route was not registered")
+	}
+	if profile.Caption != nil {
+		t.Fatalf("caption route = %#v, want nil for image-only profile", profile.Caption)
+	}
+	if profile.Keyword != nil {
+		t.Fatalf("keyword route = %#v, want nil for image-only profile", profile.Keyword)
+	}
+}
+
+func TestRegisterProfileAllowsKeywordRouteWithoutCaptionRoute(t *testing.T) {
+	t.Parallel()
+
+	searchService := NewSearchService(nil, nil, nil, nil, nil, nil, nil, &SearchConfig{
+		DefaultProfile: "qwen3vl",
+	})
+	keywordRepo := &repository.QdrantRepository{}
+	searchService.RegisterProfile("qwen3vl", nil, &fixedEmbeddingProvider{}, nil, nil, keywordRepo)
+
+	profile, _, ok := searchService.resolveProfile("qwen3vl")
+	if !ok {
+		t.Fatal("resolveProfile() ok = false, want true")
+	}
+	if profile.Caption != nil {
+		t.Fatalf("caption route = %#v, want nil when dense caption is disabled", profile.Caption)
+	}
+	if profile.Keyword == nil || profile.Keyword.QdrantRepo != keywordRepo {
+		t.Fatalf("keyword route = %#v, want configured sparse repo", profile.Keyword)
+	}
+	if profile.Keyword.Embedding != nil {
+		t.Fatalf("keyword embedding = %#v, want nil because sparse search does not embed dense captions", profile.Keyword.Embedding)
+	}
+	if got := keywordRoute(profile); got != profile.Keyword {
+		t.Fatalf("keywordRoute() = %#v, want profile keyword route", got)
 	}
 }
 
@@ -145,6 +195,43 @@ func TestFuseProfileResultsCombinesRoutesByMemeID(t *testing.T) {
 	}
 	if results[0].GetScore() != 1 {
 		t.Fatalf("first result score = %v, want normalized score 1", results[0].GetScore())
+	}
+}
+
+func TestFuseProfileResultsIgnoresDuplicateMemeWithinSameRoute(t *testing.T) {
+	t.Parallel()
+
+	keywordResults := []repository.SearchResult{
+		{ID: "point-keyword-1", Payload: &repository.MemePayload{MemeID: "meme-a", StorageURL: "a.jpg"}},
+		{ID: "point-keyword-duplicate", Payload: &repository.MemePayload{MemeID: "meme-a", StorageURL: "a.jpg"}},
+	}
+	imageResults := []repository.SearchResult{
+		{ID: "point-image-1", Payload: &repository.MemePayload{MemeID: "meme-b", StorageURL: "b.jpg"}},
+	}
+
+	candidates := fuseProfileCandidates(imageResults, nil, keywordResults, RetrievalWeights{
+		Image:   0.7,
+		Keyword: 0.3,
+	}, 20)
+
+	if len(candidates) != 2 {
+		t.Fatalf("candidate count = %d, want 2", len(candidates))
+	}
+	var memeA *SearchCandidate
+	for i := range candidates {
+		if candidates[i].Result.GetMeme().GetId() == "meme-a" {
+			memeA = &candidates[i]
+			break
+		}
+	}
+	if memeA == nil {
+		t.Fatal("meme-a candidate not found")
+	}
+	if memeA.Evidence.KeywordRank != 1 {
+		t.Fatalf("keyword rank = %d, want first duplicate rank only", memeA.Evidence.KeywordRank)
+	}
+	if memeA.Result.GetScore() >= 1 {
+		t.Fatalf("duplicate keyword point inflated score to %v, want below image top score", memeA.Result.GetScore())
 	}
 }
 

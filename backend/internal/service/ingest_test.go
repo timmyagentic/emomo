@@ -16,6 +16,7 @@ import (
 
 	"github.com/qdrant/go-client/qdrant"
 	pb "github.com/timmy/emomo/gen/emomo/v1"
+	"github.com/timmy/emomo/internal/config"
 	"github.com/timmy/emomo/internal/domain"
 	_ "github.com/timmy/emomo/internal/persistence" // register protojson serializer
 	"github.com/timmy/emomo/internal/repository"
@@ -459,6 +460,160 @@ func TestNewIngestServiceFallbackIndexUsesConfiguredVectorType(t *testing.T) {
 	}
 }
 
+func TestBuildProfileIngestIndexesAddsKeywordSparseOnlyRoute(t *testing.T) {
+	t.Parallel()
+
+	imageRepo, _ := newTestQdrantRepository(t)
+	keywordRepo, _ := newTestQdrantRepository(t)
+	registry := &EmbeddingRegistry{
+		providers: map[string]EmbeddingProvider{
+			"qwen3vl_image": fixedEmbeddingProvider{},
+		},
+		qdrantRepos: map[string]*repository.QdrantRepository{
+			"qwen3vl_image":   imageRepo,
+			"qwen3vl_caption": keywordRepo,
+		},
+	}
+
+	indexes, err := registry.BuildProfileIngestIndexes(&config.SearchProfileConfig{
+		Name:             "qwen3vl",
+		ImageEmbedding:   "qwen3vl_image",
+		KeywordEmbedding: "qwen3vl_caption",
+	})
+	if err != nil {
+		t.Fatalf("BuildProfileIngestIndexes() error = %v", err)
+	}
+	if len(indexes) != 2 {
+		t.Fatalf("index count = %d, want image + keyword", len(indexes))
+	}
+
+	keyword := indexes[1]
+	if keyword.VectorType != pb.VectorType_VECTOR_TYPE_KEYWORD {
+		t.Fatalf("keyword vector type = %s, want VECTOR_TYPE_KEYWORD", keyword.VectorType)
+	}
+	if !keyword.SparseOnly {
+		t.Fatal("keyword SparseOnly = false, want true")
+	}
+	if !keyword.UseSparse {
+		t.Fatal("keyword UseSparse = false, want true")
+	}
+	if keyword.Embedding != nil {
+		t.Fatalf("keyword embedding = %#v, want nil for sparse-only route", keyword.Embedding)
+	}
+	if keyword.QdrantRepo != keywordRepo {
+		t.Fatalf("keyword repo = %#v, want configured keyword repo", keyword.QdrantRepo)
+	}
+}
+
+func TestProcessItemWritesKeywordSparseOnlyVectorWithoutCaptionDense(t *testing.T) {
+	t.Parallel()
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&domain.Meme{}, &domain.MemeVector{}, &domain.MemeAnnotation{}); err != nil {
+		t.Fatalf("failed to migrate test database: %v", err)
+	}
+
+	imagePath := filepath.Join(t.TempDir(), "meme.png")
+	if err := os.WriteFile(imagePath, testPNG1x1, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	qdrantRepo, fakeQdrant := newTestQdrantRepository(t)
+	store := newMemoryObjectStorage()
+	vlm := NewVLMService(&VLMConfig{
+		Model:   "test-vlm",
+		APIKey:  "test-key",
+		BaseURL: "https://vlm.test/v1",
+	})
+	vlm.client.SetTransport(roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(t, http.StatusOK, openAIResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{
+				{Message: struct {
+					Content string `json:"content"`
+				}{Content: `{"description":"白底黑字写着收到","ocr_text":"收到","has_text":true}`}},
+			},
+		}), nil
+	}))
+
+	ingest := NewIngestService(
+		repository.NewMemeRepository(db),
+		repository.NewMemeVectorRepository(db),
+		repository.NewMemeAnnotationRepository(db),
+		nil,
+		qdrantRepo,
+		store,
+		vlm,
+		fixedEmbeddingProvider{},
+		nil,
+		&IngestConfig{
+			Workers:   1,
+			BatchSize: 1,
+			VectorIndexes: []IngestVectorIndex{
+				{
+					VectorType: pb.VectorType_VECTOR_TYPE_IMAGE,
+					Collection: "image_collection",
+					Embedding:  fixedEmbeddingProvider{},
+					QdrantRepo: qdrantRepo,
+				},
+				{
+					VectorType: pb.VectorType_VECTOR_TYPE_KEYWORD,
+					Collection: "caption_collection",
+					QdrantRepo: qdrantRepo,
+					UseSparse:  true,
+					SparseOnly: true,
+				},
+			},
+		},
+	)
+
+	err = ingest.processItem(context.Background(), "test", &source.MemeItem{
+		SourceID:  "new-meme",
+		LocalPath: imagePath,
+		Format:    "png",
+		Tags:      []string{"收到"},
+	}, &IngestOptions{})
+	if err != nil {
+		t.Fatalf("processItem() error = %v, want nil", err)
+	}
+
+	var vectors []domain.MemeVector
+	if err := db.Order("vector_type").Find(&vectors).Error; err != nil {
+		t.Fatalf("failed to load vectors: %v", err)
+	}
+	if len(vectors) != 2 {
+		t.Fatalf("vector count = %d, want image + keyword", len(vectors))
+	}
+	gotTypes := map[pb.VectorType]bool{}
+	for _, vector := range vectors {
+		gotTypes[vector.VectorType] = true
+		if vector.VectorType == pb.VectorType_VECTOR_TYPE_KEYWORD && vector.EmbeddingModel != repository.SparseVectorModel {
+			t.Fatalf("keyword embedding model = %q, want %q", vector.EmbeddingModel, repository.SparseVectorModel)
+		}
+	}
+	if !gotTypes[pb.VectorType_VECTOR_TYPE_IMAGE] {
+		t.Fatal("missing image vector record")
+	}
+	if !gotTypes[pb.VectorType_VECTOR_TYPE_KEYWORD] {
+		t.Fatal("missing keyword vector record")
+	}
+	if gotTypes[pb.VectorType_VECTOR_TYPE_CAPTION] {
+		t.Fatal("caption dense vector was written, want keyword sparse-only without caption dense")
+	}
+	if fakeQdrant.upserts != 2 {
+		t.Fatalf("qdrant upserts = %d, want image + keyword upserts", fakeQdrant.upserts)
+	}
+	if fakeQdrant.sparseOnlyUpserts != 1 {
+		t.Fatalf("sparse-only upserts = %d, want 1", fakeQdrant.sparseOnlyUpserts)
+	}
+}
+
 func TestMissingVectorIndexesForceKeepsExistingVectorRecords(t *testing.T) {
 	t.Parallel()
 
@@ -511,6 +666,54 @@ func TestMissingVectorIndexesForceKeepsExistingVectorRecords(t *testing.T) {
 	}
 	if !exists {
 		t.Fatal("existing vector record was removed before replacement")
+	}
+}
+
+func TestMissingVectorIndexesTreatsCaptionHybridAsExistingKeywordSparse(t *testing.T) {
+	t.Parallel()
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&domain.MemeVector{}); err != nil {
+		t.Fatalf("failed to migrate meme_vectors: %v", err)
+	}
+
+	repo := repository.NewMemeVectorRepository(db)
+	ctx := context.Background()
+	if err := repo.Create(ctx, &domain.MemeVector{
+		ID:             "vector-caption",
+		MemeID:         "meme-1",
+		Collection:     "caption_collection",
+		VectorType:     pb.VectorType_VECTOR_TYPE_CAPTION,
+		EmbeddingModel: "fixed-test-embedding",
+		InputHash:      "caption-hash",
+		QdrantPointID:  "00000000-0000-0000-0000-000000000001",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to create existing caption vector: %v", err)
+	}
+
+	ingest := &IngestService{
+		vectorRepo: repo,
+		indexes: []IngestVectorIndex{
+			{
+				VectorType: pb.VectorType_VECTOR_TYPE_KEYWORD,
+				Collection: "caption_collection",
+				UseSparse:  true,
+				SparseOnly: true,
+			},
+		},
+	}
+
+	missing, err := ingest.missingVectorIndexes(ctx, "meme-1", false)
+	if err != nil {
+		t.Fatalf("missingVectorIndexes() error = %v", err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("missingVectorIndexes() returned %d indexes, want 0 because caption hybrid already carries sparse vector", len(missing))
 	}
 }
 
@@ -734,12 +937,25 @@ func (s *memoryObjectStorage) Exists(_ context.Context, key string) (bool, error
 
 type testQdrantServer struct {
 	qdrant.UnimplementedPointsServer
-	upserts int
-	deletes int
+	upserts           int
+	sparseOnlyUpserts int
+	deletes           int
 }
 
-func (s *testQdrantServer) Upsert(context.Context, *qdrant.UpsertPoints) (*qdrant.PointsOperationResponse, error) {
+func (s *testQdrantServer) Upsert(_ context.Context, req *qdrant.UpsertPoints) (*qdrant.PointsOperationResponse, error) {
 	s.upserts++
+	for _, point := range req.GetPoints() {
+		named := point.GetVectors().GetVectors()
+		if named == nil {
+			continue
+		}
+		vectors := named.GetVectors()
+		_, hasDense := vectors[repository.DenseVectorName]
+		_, hasSparse := vectors[repository.SparseVectorName]
+		if hasSparse && !hasDense {
+			s.sparseOnlyUpserts++
+		}
+	}
 	return &qdrant.PointsOperationResponse{}, nil
 }
 

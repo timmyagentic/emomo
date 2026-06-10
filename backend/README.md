@@ -15,7 +15,7 @@ license: mit
 > 本目录是 emomo monorepo 的后端子项目。仓库总览见 [../README.md](../README.md)。
 > Hugging Face Space 通过 GitHub Actions 仅同步本目录（见仓库 `.github/workflows/sync_to_hf.yml`），所以 Space 看到的根就是这里。
 
-Emomo 是一个基于 Go + Qdrant + 多模态 Embedding 的表情包语义搜索系统，支持本地静态图片目录摄入、图片向量检索、caption/keyword 辅助检索和元数据管理。当前默认链路使用 Qwen3-VL：导入时直接为图片生成 image 向量，搜索时将用户文本嵌入到同一语义空间并与图片向量匹配；VLM 描述和 OCR 仍会生成，但主要作为 caption/BM25 辅助信号和展示元数据。表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
+Emomo 是一个基于 Go + Qdrant + 多模态 Embedding 的表情包语义搜索系统，支持本地静态图片目录摄入、图片向量检索、可选 caption/keyword 辅助检索和元数据管理。当前默认链路使用 Qwen3-VL：导入时直接为图片生成 image 向量，并为 OCR/描述/tags 写入 keyword/BM25 sparse-only 向量；搜索时 image route 权重 0.7，keyword route 权重 0.3。VLM 描述和 OCR 仍会生成，作为展示元数据与 keyword 辅助信号。dense caption embedding 路线保留为显式实验配置，默认关闭。表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
 
 关系库当前收敛为三张核心表：`memes`、`meme_annotations`、`meme_vectors`。protobuf message schema 定义在 `proto/emomo/v1/{types,meme,api}.proto`，生成代码在 `gen/emomo/v1/`（导入为 `pb`）。本项目把 protobuf 限定在 API DTO、前后端生成类型、跨边界封闭枚举，以及少量结构化 DB JSON 值（当前仅 `memes.image_info` / `meme_annotations.labels`，通过 `protojson` + `UseEnumNumbers=true` 序列化）。关系表结构、索引、迁移、运行时配置、开放业务集合和 UI 状态不由 protobuf 管。它**不是** RPC 协议——HTTP API 仍是 RESTful（POST `/api/v1/search` 等），handler 直接对 protobuf message 做 `protojson.Marshal/Unmarshal`。
 
@@ -25,9 +25,9 @@ Emomo 是一个基于 Go + Qdrant + 多模态 Embedding 的表情包语义搜索
 
 ## 功能概览
 
-- 多模态语义搜索：输入文字即可直接检索图片向量，默认融合 image、caption 和 keyword 三路结果。
+- 多模态语义搜索：输入文字即可直接检索图片向量；keyword/BM25 sparse route 默认以 0.3 权重辅助，dense caption route 默认关闭。
 - 数据摄入：支持本地静态图片目录分批摄入，仅接收静态图片并跳过 GIF 文件。
-- 向量管理：支持多 Embedding 模型、多集合和 image/caption 多路向量管理。
+- 向量管理：支持多 Embedding 模型、多集合和 image/keyword/caption 多路向量管理。
 - 存储抽象：兼容 Cloudflare R2、AWS S3 与其他 S3 兼容服务。
 - 可扩展：查询扩展、VLM/OCR 辅助分析与多模型配置均可开关。
 

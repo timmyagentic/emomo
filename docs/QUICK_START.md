@@ -162,11 +162,12 @@ cd backend
 ./scripts/import-data.sh -p ./data/memes
 ```
 
-如需补齐已有图片缺失的 image/caption 向量，可在 `backend/` 下执行：
+如需补齐已有图片缺失的 image/keyword/caption 向量，可在 `backend/` 下执行：
 
 ```bash
 ./scripts/import-data.sh -r -l 100
 go run ./cmd/reembed --profile qwen3vl --vector-type all
+go run ./cmd/reembed --profile qwen3vl --vector-type keyword
 ```
 
 `cmd/reembed` 只用于已有数据的向量维护，不是数据导入入口。

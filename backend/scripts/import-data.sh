@@ -81,7 +81,7 @@ usage() {
     # 只抽样导入 50 条数据
     $0 -p ./data/memes -l 50
 
-    # 使用 qwen3vl profile 导入 image + caption 两路向量
+    # 使用 qwen3vl profile 导入 image + keyword sparse-only 两路向量
     $0 -p ./data/memes --profile qwen3vl
 
     # 强制重新处理（跳过重复检查）
