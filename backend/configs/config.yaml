@@ -57,7 +57,10 @@ embeddings:
     document_mode: image
     dimensions: 1024
     collection: meme_image_qwen3vl_1024
+    is_default: true
 
+  # Used by the default qwen3vl profile as keyword/BM25 sparse-only storage.
+  # Dense caption embedding remains opt-in via caption_embedding or -e.
   - name: qwen3vl_caption
     provider: siliconflow
     model: Qwen/Qwen3-VL-Embedding-8B
@@ -66,7 +69,6 @@ embeddings:
     document_mode: text
     dimensions: 1024
     collection: meme_caption_qwen3vl_1024
-    is_default: true
 
 ingest:
   workers: 5
@@ -79,16 +81,16 @@ search:
   profiles:
     - name: qwen3vl
       image_embedding: qwen3vl_image
-      caption_embedding: qwen3vl_caption
+      keyword_embedding: qwen3vl_caption
       is_default: true
   retrieval:
     image_top_k: 100
     caption_top_k: 100
     final_top_k: 100
     weights:
-      image: 0.60
-      caption: 0.30
-      keyword: 0.10
+      image: 0.70
+      caption: 0.00
+      keyword: 0.30
   query_expansion:
     enabled: true
     # model: set via QUERY_EXPANSION_MODEL env var

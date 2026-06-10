@@ -33,13 +33,35 @@ func serviceRetrievalConfig(cfg config.RetrievalConfig) service.RetrievalConfig 
 func registerSearchProfiles(searchService *service.SearchService, registry *service.EmbeddingRegistry, profiles []config.SearchProfileConfig) {
 	for _, profile := range profiles {
 		imageProvider, imageRepo, hasImage := registry.Get(profile.ImageEmbedding)
-		captionProvider, captionRepo, hasCaption := registry.Get(profile.CaptionEmbedding)
-		if !hasImage || !hasCaption {
-			logger.Warn("Skipping search profile with missing embeddings: profile=%s, image=%s, caption=%s",
-				profile.Name, profile.ImageEmbedding, profile.CaptionEmbedding)
+		if !hasImage {
+			logger.Warn("Skipping search profile with missing image embedding: profile=%s, image=%s",
+				profile.Name, profile.ImageEmbedding)
 			continue
 		}
-		searchService.RegisterProfile(profile.Name, imageRepo, imageProvider, captionRepo, captionProvider)
+		var captionProvider service.EmbeddingProvider
+		var captionRepo *repository.QdrantRepository
+		if profile.CaptionEmbedding != "" {
+			var hasCaption bool
+			captionProvider, captionRepo, hasCaption = registry.Get(profile.CaptionEmbedding)
+			if !hasCaption {
+				logger.Warn("Skipping search profile with missing caption embedding: profile=%s, caption=%s",
+					profile.Name, profile.CaptionEmbedding)
+				continue
+			}
+		}
+		var keywordRepo *repository.QdrantRepository
+		if profile.KeywordEmbedding != "" {
+			var hasKeyword bool
+			_, keywordRepo, hasKeyword = registry.Get(profile.KeywordEmbedding)
+			if !hasKeyword {
+				logger.Warn("Skipping search profile with missing keyword embedding: profile=%s, keyword=%s",
+					profile.Name, profile.KeywordEmbedding)
+				continue
+			}
+		} else if captionRepo != nil {
+			keywordRepo = captionRepo
+		}
+		searchService.RegisterProfile(profile.Name, imageRepo, imageProvider, captionRepo, captionProvider, keywordRepo)
 	}
 }
 

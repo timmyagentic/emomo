@@ -308,7 +308,7 @@ func (r *EmbeddingRegistry) BuildProfileIngestIndexes(profile *config.SearchProf
 		return nil, fmt.Errorf("search profile is nil")
 	}
 
-	indexes := make([]IngestVectorIndex, 0, 2)
+	indexes := make([]IngestVectorIndex, 0, 3)
 	if profile.ImageEmbedding != "" {
 		provider, repo, ok := r.Get(profile.ImageEmbedding)
 		if !ok {
@@ -320,6 +320,20 @@ func (r *EmbeddingRegistry) BuildProfileIngestIndexes(profile *config.SearchProf
 			Embedding:  provider,
 			QdrantRepo: repo,
 			UseSparse:  false,
+		})
+	}
+
+	if profile.KeywordEmbedding != "" {
+		repo, ok := r.GetQdrantRepo(profile.KeywordEmbedding)
+		if !ok {
+			return nil, fmt.Errorf("unknown keyword embedding %q for profile %q", profile.KeywordEmbedding, profile.Name)
+		}
+		indexes = append(indexes, IngestVectorIndex{
+			VectorType: pb.VectorType_VECTOR_TYPE_KEYWORD,
+			Collection: repo.GetCollectionName(),
+			QdrantRepo: repo,
+			UseSparse:  true,
+			SparseOnly: true,
 		})
 	}
 

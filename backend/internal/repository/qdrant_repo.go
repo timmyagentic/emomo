@@ -233,6 +233,18 @@ type MemePayload struct {
 	StorageURL     string   `json:"storage_url"`
 }
 
+func memePayloadToQdrant(payload *MemePayload) map[string]*pb.Value {
+	return map[string]*pb.Value{
+		"meme_id":         {Kind: &pb.Value_StringValue{StringValue: payload.MemeID}},
+		"category":        {Kind: &pb.Value_StringValue{StringValue: payload.Category}},
+		"vlm_description": {Kind: &pb.Value_StringValue{StringValue: payload.VLMDescription}},
+		"ocr_text":        {Kind: &pb.Value_StringValue{StringValue: payload.OCRText}},
+		"text_presence":   {Kind: &pb.Value_StringValue{StringValue: payload.TextPresence}},
+		"storage_url":     {Kind: &pb.Value_StringValue{StringValue: payload.StorageURL}},
+		"tags":            tagsToValue(payload.Tags),
+	}
+}
+
 // Upsert inserts or updates a vector with payload.
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
@@ -259,15 +271,7 @@ func (r *QdrantRepository) Upsert(ctx context.Context, pointID string, vector []
 			Vectors: pb.NewVectorsMap(map[string]*pb.Vector{
 				DenseVectorName: pb.NewVectorDense(vector),
 			}),
-			Payload: map[string]*pb.Value{
-				"meme_id":         {Kind: &pb.Value_StringValue{StringValue: payload.MemeID}},
-				"category":        {Kind: &pb.Value_StringValue{StringValue: payload.Category}},
-				"vlm_description": {Kind: &pb.Value_StringValue{StringValue: payload.VLMDescription}},
-				"ocr_text":        {Kind: &pb.Value_StringValue{StringValue: payload.OCRText}},
-				"text_presence":   {Kind: &pb.Value_StringValue{StringValue: payload.TextPresence}},
-				"storage_url":     {Kind: &pb.Value_StringValue{StringValue: payload.StorageURL}},
-				"tags":            tagsToValue(payload.Tags),
-			},
+			Payload: memePayloadToQdrant(payload),
 		},
 	}
 
@@ -321,15 +325,7 @@ func (r *QdrantRepository) UpsertHybrid(ctx context.Context, pointID string, vec
 				},
 			},
 			Vectors: pb.NewVectorsMap(vectorsMap),
-			Payload: map[string]*pb.Value{
-				"meme_id":         {Kind: &pb.Value_StringValue{StringValue: payload.MemeID}},
-				"category":        {Kind: &pb.Value_StringValue{StringValue: payload.Category}},
-				"vlm_description": {Kind: &pb.Value_StringValue{StringValue: payload.VLMDescription}},
-				"ocr_text":        {Kind: &pb.Value_StringValue{StringValue: payload.OCRText}},
-				"text_presence":   {Kind: &pb.Value_StringValue{StringValue: payload.TextPresence}},
-				"storage_url":     {Kind: &pb.Value_StringValue{StringValue: payload.StorageURL}},
-				"tags":            tagsToValue(payload.Tags),
-			},
+			Payload: memePayloadToQdrant(payload),
 		},
 	}
 
@@ -339,6 +335,47 @@ func (r *QdrantRepository) UpsertHybrid(ctx context.Context, pointID string, vec
 	})
 	if err != nil {
 		return fmt.Errorf("failed to upsert point: %w", err)
+	}
+
+	return nil
+}
+
+// UpsertSparse inserts or updates a sparse BM25-only point with payload.
+func (r *QdrantRepository) UpsertSparse(ctx context.Context, pointID string, bm25Text string, payload *MemePayload) error {
+	uid, err := uuid.Parse(pointID)
+	if err != nil {
+		return fmt.Errorf("invalid point ID: %w", err)
+	}
+
+	bm25Text = strings.TrimSpace(bm25Text)
+	if bm25Text == "" {
+		return fmt.Errorf("sparse vector text is empty")
+	}
+
+	doc := &pb.Document{
+		Text:  bm25Text,
+		Model: SparseVectorModel,
+	}
+	points := []*pb.PointStruct{
+		{
+			Id: &pb.PointId{
+				PointIdOptions: &pb.PointId_Uuid{
+					Uuid: uid.String(),
+				},
+			},
+			Vectors: pb.NewVectorsMap(map[string]*pb.Vector{
+				SparseVectorName: pb.NewVectorDocument(doc),
+			}),
+			Payload: memePayloadToQdrant(payload),
+		},
+	}
+
+	_, err = r.pointsClient.Upsert(ctx, &pb.UpsertPoints{
+		CollectionName: r.collectionName,
+		Points:         points,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to upsert sparse point: %w", err)
 	}
 
 	return nil

@@ -52,7 +52,7 @@ func main() {
 	configPath := flag.String("config", "", "Path to config file (defaults to ./configs/config.yaml)")
 	embeddingName := flag.String("embedding", "", "Embedding config name (e.g. 'jina'). Defaults to the config's default embedding")
 	profileName := flag.String("profile", "", "Search profile name for multi-vector backfill (e.g. 'qwen3vl')")
-	vectorType := flag.String("vector-type", "all", "Vector type to backfill when using --profile: image, caption, or all")
+	vectorType := flag.String("vector-type", "all", "Vector type to backfill when using --profile: image, keyword, caption, or all")
 	limit := flag.Int("limit", 0, "Maximum memes to (re)embed; 0 = no limit")
 	workers := flag.Int("workers", 4, "Number of concurrent workers")
 	dryRun := flag.Bool("dry-run", false, "Plan only: count memes that would be embedded but do not call any APIs")
@@ -228,10 +228,10 @@ func filterVectorIndexes(indexes []service.IngestVectorIndex, vectorType string,
 	switch vectorType {
 	case "", "all":
 		return indexes
-	case "image", "caption":
+	case "image", "caption", "keyword":
 		requestedType, err := persistence.ParseVectorType(vectorType)
 		if err != nil {
-			log.WithError(err).WithField("vector_type", vectorType).Fatal("Unsupported vector type; use image, caption, or all")
+			log.WithError(err).WithField("vector_type", vectorType).Fatal("Unsupported vector type; use image, caption, keyword, or all")
 		}
 		filtered := make([]service.IngestVectorIndex, 0, len(indexes))
 		for _, index := range indexes {
@@ -244,7 +244,7 @@ func filterVectorIndexes(indexes []service.IngestVectorIndex, vectorType string,
 		}
 		return filtered
 	default:
-		log.WithField("vector_type", vectorType).Fatal("Unsupported vector type; use image, caption, or all")
+		log.WithField("vector_type", vectorType).Fatal("Unsupported vector type; use image, caption, keyword, or all")
 		return nil
 	}
 }
@@ -404,7 +404,7 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 	if w.dryRun {
 		planned := 0
 		for _, index := range w.vectorIndexes {
-			if w.shouldProcessIndex(ctx, meme, index, captionText, stats) {
+			if w.shouldProcessIndex(ctx, meme, index, captionText, bm25Text, stats) {
 				planned++
 			}
 		}
@@ -422,7 +422,7 @@ func (w *worker) processOne(ctx context.Context, meme domain.Meme, stats *runSta
 	embedStart := time.Now()
 	wrote := 0
 	for _, index := range w.vectorIndexes {
-		if !w.shouldProcessIndex(ctx, meme, index, captionText, stats) {
+		if !w.shouldProcessIndex(ctx, meme, index, captionText, bm25Text, stats) {
 			continue
 		}
 		if err := w.processVectorIndex(ctx, meme, index, vectorPayloadInput{
@@ -463,7 +463,7 @@ type vectorPayloadInput struct {
 	Payload      *repository.MemePayload
 }
 
-func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index service.IngestVectorIndex, captionText string, stats *runStats) bool {
+func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index service.IngestVectorIndex, captionText string, bm25Text string, stats *runStats) bool {
 	if index.VectorType == pb.VectorType_VECTOR_TYPE_CAPTION && captionText == "" {
 		atomic.AddInt64(&stats.SkippedNoURL, 1)
 		w.log.WithFields(logger.Fields{
@@ -473,8 +473,17 @@ func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index
 		}).Warn("Skipping caption vector because caption text is empty")
 		return false
 	}
+	if index.VectorType == pb.VectorType_VECTOR_TYPE_KEYWORD && bm25Text == "" {
+		atomic.AddInt64(&stats.SkippedNoURL, 1)
+		w.log.WithFields(logger.Fields{
+			"meme_id":     meme.ID,
+			"collection":  index.Collection,
+			"vector_type": persistence.VectorTypeShortName(index.VectorType),
+		}).Warn("Skipping keyword vector because BM25 text is empty")
+		return false
+	}
 	if !w.force {
-		exists, err := w.vectorRepo.ExistsByMemeIDCollectionAndVectorType(ctx, meme.ID, index.Collection, index.VectorType)
+		exists, err := w.vectorIndexExists(ctx, meme.ID, index)
 		if err != nil {
 			atomic.AddInt64(&stats.Failed, 1)
 			w.log.WithError(err).WithFields(logger.Fields{
@@ -489,6 +498,17 @@ func (w *worker) shouldProcessIndex(ctx context.Context, meme domain.Meme, index
 		}
 	}
 	return true
+}
+
+func (w *worker) vectorIndexExists(ctx context.Context, memeID string, index service.IngestVectorIndex) (bool, error) {
+	exists, err := w.vectorRepo.ExistsByMemeIDCollectionAndVectorType(ctx, memeID, index.Collection, index.VectorType)
+	if err != nil || exists {
+		return exists, err
+	}
+	if index.SparseOnly && index.VectorType == pb.VectorType_VECTOR_TYPE_KEYWORD {
+		return w.vectorRepo.ExistsByMemeIDCollectionAndVectorType(ctx, memeID, index.Collection, pb.VectorType_VECTOR_TYPE_CAPTION)
+	}
+	return false, nil
 }
 
 func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index service.IngestVectorIndex, input vectorPayloadInput) error {
@@ -509,6 +529,8 @@ func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index
 	doc := service.EmbeddingDocument{}
 	inputHash := meme.ContentHash
 	switch index.VectorType {
+	case pb.VectorType_VECTOR_TYPE_KEYWORD:
+		inputHash = calculateTextSHA256(input.BM25Text)
 	case pb.VectorType_VECTOR_TYPE_CAPTION:
 		doc.Text = input.CaptionText
 		inputHash = calculateTextSHA256(input.CaptionText)
@@ -518,19 +540,26 @@ func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index
 		return fmt.Errorf("unsupported vector type: %s", persistence.VectorTypeShortName(index.VectorType))
 	}
 
-	embedding, err := w.embedWithRetry(ctx, index.Embedding, doc, meme.ID)
-	if err != nil {
-		return fmt.Errorf("EmbedDocument failed after retries: %w", err)
-	}
-
 	pointID := uuid.New().String()
-	if index.UseSparse {
-		if err := index.QdrantRepo.UpsertHybrid(ctx, pointID, embedding, input.BM25Text, input.Payload); err != nil {
-			return fmt.Errorf("UpsertHybrid failed: %w", err)
+	embeddingModel := repository.SparseVectorModel
+	if index.SparseOnly {
+		if err := index.QdrantRepo.UpsertSparse(ctx, pointID, input.BM25Text, input.Payload); err != nil {
+			return fmt.Errorf("UpsertSparse failed: %w", err)
 		}
 	} else {
-		if err := index.QdrantRepo.Upsert(ctx, pointID, embedding, input.Payload); err != nil {
-			return fmt.Errorf("Upsert failed: %w", err)
+		embedding, err := w.embedWithRetry(ctx, index.Embedding, doc, meme.ID)
+		if err != nil {
+			return fmt.Errorf("EmbedDocument failed after retries: %w", err)
+		}
+		embeddingModel = index.Embedding.GetModel()
+		if index.UseSparse {
+			if err := index.QdrantRepo.UpsertHybrid(ctx, pointID, embedding, input.BM25Text, input.Payload); err != nil {
+				return fmt.Errorf("UpsertHybrid failed: %w", err)
+			}
+		} else {
+			if err := index.QdrantRepo.Upsert(ctx, pointID, embedding, input.Payload); err != nil {
+				return fmt.Errorf("Upsert failed: %w", err)
+			}
 		}
 	}
 
@@ -539,7 +568,7 @@ func (w *worker) processVectorIndex(ctx context.Context, meme domain.Meme, index
 		MemeID:         meme.ID,
 		Collection:     index.Collection,
 		VectorType:     index.VectorType,
-		EmbeddingModel: index.Embedding.GetModel(),
+		EmbeddingModel: embeddingModel,
 		InputHash:      inputHash,
 		AnnotationID:   input.AnnotationID,
 		QdrantPointID:  pointID,

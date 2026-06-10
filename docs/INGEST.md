@@ -2,12 +2,13 @@
 
 Emomo ingests meme resources from a local static image directory. GIF is not supported; only static `.jpg`, `.jpeg`, `.png`, and `.webp` files are scanned.
 
-The default ingest profile is `qwen3vl`. It writes two vector routes:
+The default ingest profile is `qwen3vl`. It writes the image vector route and a keyword sparse-only route:
 
 - `image`: the image itself is embedded by the multimodal embedding model and stored in Qdrant. Text queries are embedded into the same space and can directly match these image vectors.
-- `caption`: OCR/VLM-derived text, category, tags, and emotion words are embedded as an auxiliary caption vector. The same text also feeds the BM25 sparse route for keyword/exact-text recall.
+- `keyword`: OCR/VLM-derived text and tags are written to the `qwen3vl_caption` collection as BM25 sparse-only points and searched with weight `0.30`.
+- `caption`: OCR/VLM-derived text, category, tags, and emotion words can still be embedded explicitly with `-e qwen3vl_caption`, but dense caption embedding is not part of the default ingest profile while the caption strategy is being evaluated.
 
-VLM description and OCR are still generated and stored in `meme_annotations`, but they are auxiliary analysis signals; the default retrieval path no longer depends on converting every image into a text description before vector search.
+VLM description and OCR are still generated and stored in `meme_annotations`; they are display metadata and the text source for the keyword/BM25 sparse-only route. The default ingest path does not depend on dense caption embedding.
 
 The relational schema is intentionally small:
 

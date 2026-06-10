@@ -74,7 +74,7 @@ func ImageFormatToExt(f pb.ImageFormat) string {
 	}
 }
 
-// VectorTypeShortName returns the canonical lowercase slug ("image"/"caption")
+// VectorTypeShortName returns the canonical lowercase slug ("image"/"caption"/"keyword")
 // emomo uses on CLI flags, log fields, and Qdrant collection composite keys.
 // Falls back to "unspecified" for the zero enum.
 func VectorTypeShortName(v pb.VectorType) string {
@@ -83,13 +83,15 @@ func VectorTypeShortName(v pb.VectorType) string {
 		return "image"
 	case pb.VectorType_VECTOR_TYPE_CAPTION:
 		return "caption"
+	case pb.VectorType_VECTOR_TYPE_KEYWORD:
+		return "keyword"
 	default:
 		return "unspecified"
 	}
 }
 
 // ParseVectorType parses a free-form CLI / config string into the enum. It
-// accepts both the short slug ("image", "caption") and the protobuf-style
+// accepts both the short slug ("image", "caption", "keyword") and the protobuf-style
 // fully-qualified name ("VECTOR_TYPE_IMAGE"). Returns an error on unknown
 // inputs so callers can distinguish "not provided" from "garbled" — the old
 // bug where ParseMemeVectorType silently fell back to image is intentionally

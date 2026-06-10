@@ -45,10 +45,13 @@ type RetrievalWeights struct {
 	Keyword float32
 }
 
-// SearchProfileConfig binds image and caption vector collections into one profile.
+// SearchProfileConfig binds vector collections into one profile. Caption and
+// keyword are optional so deployments can run image-first search while the
+// caption dense embedding strategy is being evaluated.
 type SearchProfileConfig struct {
 	Image   *CollectionConfig
 	Caption *CollectionConfig
+	Keyword *CollectionConfig
 }
 
 // SearchService handles meme search operations.
@@ -125,24 +128,33 @@ func (s *SearchService) RegisterCollection(name string, qdrantRepo *repository.Q
 	}
 }
 
-// RegisterProfile registers a multi-route search profile.
+// RegisterProfile registers a search profile. The caption route is optional.
 func (s *SearchService) RegisterProfile(
 	name string,
 	imageRepo *repository.QdrantRepository,
 	imageEmbedding EmbeddingProvider,
 	captionRepo *repository.QdrantRepository,
 	captionEmbedding EmbeddingProvider,
+	keywordRepo *repository.QdrantRepository,
 ) {
-	s.profiles[name] = &SearchProfileConfig{
+	profile := &SearchProfileConfig{
 		Image: &CollectionConfig{
 			QdrantRepo: imageRepo,
 			Embedding:  imageEmbedding,
 		},
-		Caption: &CollectionConfig{
+	}
+	if captionRepo != nil && captionEmbedding != nil {
+		profile.Caption = &CollectionConfig{
 			QdrantRepo: captionRepo,
 			Embedding:  captionEmbedding,
-		},
+		}
 	}
+	if keywordRepo != nil {
+		profile.Keyword = &CollectionConfig{
+			QdrantRepo: keywordRepo,
+		}
+	}
+	s.profiles[name] = profile
 }
 
 // GetAvailableCollections returns the list of available collection keys.
@@ -209,15 +221,42 @@ func (s *SearchService) resolveProfile(name string) (*SearchProfileConfig, strin
 	return cfg, name, ok
 }
 
+func hasUsableImageRoute(profile *SearchProfileConfig) bool {
+	return profile != nil &&
+		profile.Image != nil &&
+		profile.Image.QdrantRepo != nil &&
+		profile.Image.Embedding != nil
+}
+
+func hasUsableCaptionRoute(profile *SearchProfileConfig) bool {
+	return profile != nil &&
+		profile.Caption != nil &&
+		profile.Caption.QdrantRepo != nil &&
+		profile.Caption.Embedding != nil
+}
+
+func keywordRoute(profile *SearchProfileConfig) *CollectionConfig {
+	if profile == nil {
+		return nil
+	}
+	if profile.Keyword != nil && profile.Keyword.QdrantRepo != nil {
+		return profile.Keyword
+	}
+	if profile.Caption != nil && profile.Caption.QdrantRepo != nil {
+		return profile.Caption
+	}
+	return nil
+}
+
 func defaultRetrievalConfig() RetrievalConfig {
 	return RetrievalConfig{
 		ImageTopK:   100,
 		CaptionTopK: 100,
 		FinalTopK:   100,
 		Weights: RetrievalWeights{
-			Image:   0.60,
-			Caption: 0.30,
-			Keyword: 0.10,
+			Image:   0.70,
+			Caption: 0.00,
+			Keyword: 0.30,
 		},
 	}
 }
@@ -513,9 +552,7 @@ func (s *SearchService) searchProfile(
 	queryForEmbedding string,
 	expandedQuery string,
 ) (*pb.SearchResponse, error) {
-	if profile == nil || profile.Image == nil || profile.Caption == nil ||
-		profile.Image.QdrantRepo == nil || profile.Image.Embedding == nil ||
-		profile.Caption.QdrantRepo == nil || profile.Caption.Embedding == nil {
+	if !hasUsableImageRoute(profile) {
 		return nil, fmt.Errorf("profile %q is incomplete", profileName)
 	}
 
@@ -527,11 +564,6 @@ func (s *SearchService) searchProfile(
 		return nil, fmt.Errorf("failed to generate image route query embedding: %w", err)
 	}
 
-	captionQueryEmbedding, err := profile.Caption.Embedding.EmbedQuery(ctx, queryForEmbedding)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate caption route query embedding: %w", err)
-	}
-
 	filters := buildSearchFilters(req)
 
 	imageResults, imageErr := profile.Image.QdrantRepo.Search(ctx, imageQueryEmbedding, s.retrieval.ImageTopK, filters)
@@ -540,19 +572,38 @@ func (s *SearchService) searchProfile(
 		imageResults = nil
 	}
 
-	captionResults, captionErr := profile.Caption.QdrantRepo.Search(ctx, captionQueryEmbedding, s.retrieval.CaptionTopK, filters)
-	if captionErr != nil {
-		logger.CtxWarn(ctx, "Profile caption search failed: profile=%s, error=%v", profileName, captionErr)
-		captionResults = nil
+	captionRouteAvailable := hasUsableCaptionRoute(profile)
+	keywordConfig := keywordRoute(profile)
+	captionSearchEnabled := captionRouteAvailable && s.retrieval.Weights.Caption > 0
+	keywordSearchEnabled := keywordConfig != nil && s.retrieval.Weights.Keyword > 0
+
+	var captionResults []repository.SearchResult
+	var captionErr error
+	if captionSearchEnabled {
+		captionQueryEmbedding, err := profile.Caption.Embedding.EmbedQuery(ctx, queryForEmbedding)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate caption route query embedding: %w", err)
+		}
+		captionResults, captionErr = profile.Caption.QdrantRepo.Search(ctx, captionQueryEmbedding, s.retrieval.CaptionTopK, filters)
+		if captionErr != nil {
+			logger.CtxWarn(ctx, "Profile caption search failed: profile=%s, error=%v", profileName, captionErr)
+			captionResults = nil
+		}
 	}
 
-	keywordResults, keywordErr := profile.Caption.QdrantRepo.SparseSearch(ctx, originalQuery, s.retrieval.CaptionTopK, filters)
-	if keywordErr != nil {
-		logger.CtxWarn(ctx, "Profile keyword search failed: profile=%s, error=%v", profileName, keywordErr)
-		keywordResults = nil
+	var keywordResults []repository.SearchResult
+	var keywordErr error
+	if keywordSearchEnabled {
+		keywordResults, keywordErr = keywordConfig.QdrantRepo.SparseSearch(ctx, originalQuery, s.retrieval.CaptionTopK, filters)
+		if keywordErr != nil {
+			logger.CtxWarn(ctx, "Profile keyword search failed: profile=%s, error=%v", profileName, keywordErr)
+			keywordResults = nil
+		}
 	}
 
-	if imageErr != nil && captionErr != nil && keywordErr != nil {
+	if imageErr != nil &&
+		(!captionSearchEnabled || captionErr != nil) &&
+		(!keywordSearchEnabled || keywordErr != nil) {
 		return nil, fmt.Errorf("all profile search routes failed: image=%v, caption=%v, keyword=%v", imageErr, captionErr, keywordErr)
 	}
 
@@ -629,9 +680,7 @@ func (s *SearchService) searchProfileWithPlan(
 	originalQuery string,
 	plan SearchPlan,
 ) (*pb.SearchResponse, error) {
-	if profile == nil || profile.Image == nil || profile.Caption == nil ||
-		profile.Image.QdrantRepo == nil || profile.Image.Embedding == nil ||
-		profile.Caption.QdrantRepo == nil || profile.Caption.Embedding == nil {
+	if !hasUsableImageRoute(profile) {
 		return nil, fmt.Errorf("profile %q is incomplete", profileName)
 	}
 
@@ -643,11 +692,6 @@ func (s *SearchService) searchProfileWithPlan(
 		return nil, fmt.Errorf("failed to generate image route query embedding: %w", err)
 	}
 
-	captionQueryEmbedding, err := profile.Caption.Embedding.EmbedQuery(ctx, plan.DenseQuery)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate caption route query embedding: %w", err)
-	}
-
 	filters := buildSearchFiltersWithPlan(req, plan)
 
 	imageResults, imageErr := profile.Image.QdrantRepo.Search(ctx, imageQueryEmbedding, plan.ImageTopK, filters)
@@ -656,19 +700,38 @@ func (s *SearchService) searchProfileWithPlan(
 		imageResults = nil
 	}
 
-	captionResults, captionErr := profile.Caption.QdrantRepo.Search(ctx, captionQueryEmbedding, plan.CaptionTopK, filters)
-	if captionErr != nil {
-		logger.CtxWarn(ctx, "Agentic profile caption search failed: profile=%s, error=%v", profileName, captionErr)
-		captionResults = nil
+	captionRouteAvailable := hasUsableCaptionRoute(profile)
+	keywordConfig := keywordRoute(profile)
+	captionSearchEnabled := captionRouteAvailable && plan.Weights.Caption > 0
+	keywordSearchEnabled := keywordConfig != nil && plan.Weights.Keyword > 0
+
+	var captionResults []repository.SearchResult
+	var captionErr error
+	if captionSearchEnabled {
+		captionQueryEmbedding, err := profile.Caption.Embedding.EmbedQuery(ctx, plan.DenseQuery)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate caption route query embedding: %w", err)
+		}
+		captionResults, captionErr = profile.Caption.QdrantRepo.Search(ctx, captionQueryEmbedding, plan.CaptionTopK, filters)
+		if captionErr != nil {
+			logger.CtxWarn(ctx, "Agentic profile caption search failed: profile=%s, error=%v", profileName, captionErr)
+			captionResults = nil
+		}
 	}
 
-	keywordResults, keywordErr := profile.Caption.QdrantRepo.SparseSearch(ctx, plan.SparseQuery, plan.KeywordTopK, filters)
-	if keywordErr != nil {
-		logger.CtxWarn(ctx, "Agentic profile keyword search failed: profile=%s, error=%v", profileName, keywordErr)
-		keywordResults = nil
+	var keywordResults []repository.SearchResult
+	var keywordErr error
+	if keywordSearchEnabled {
+		keywordResults, keywordErr = keywordConfig.QdrantRepo.SparseSearch(ctx, plan.SparseQuery, plan.KeywordTopK, filters)
+		if keywordErr != nil {
+			logger.CtxWarn(ctx, "Agentic profile keyword search failed: profile=%s, error=%v", profileName, keywordErr)
+			keywordResults = nil
+		}
 	}
 
-	if imageErr != nil && captionErr != nil && keywordErr != nil {
+	if imageErr != nil &&
+		(!captionSearchEnabled || captionErr != nil) &&
+		(!keywordSearchEnabled || keywordErr != nil) {
 		return nil, fmt.Errorf("all agentic profile search routes failed: image=%v, caption=%v, keyword=%v", imageErr, captionErr, keywordErr)
 	}
 
@@ -797,10 +860,15 @@ func fuseProfileCandidates(
 		if route.weight <= 0 {
 			continue
 		}
+		seenInRoute := make(map[string]struct{}, len(route.results))
 		for rank, qr := range route.results {
 			if qr.Payload == nil || qr.Payload.MemeID == "" {
 				continue
 			}
+			if _, seen := seenInRoute[qr.Payload.MemeID]; seen {
+				continue
+			}
+			seenInRoute[qr.Payload.MemeID] = struct{}{}
 			rankScore := route.weight * (1 / float32(rank+60))
 			item, ok := byMemeID[qr.Payload.MemeID]
 			if !ok {

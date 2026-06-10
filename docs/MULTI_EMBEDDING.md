@@ -1,14 +1,14 @@
 # 多 Embedding 与多路检索
 
-本文描述当前默认的数据导入和检索链路。旧版本曾主要依赖 “VLM 生成图片描述 -> text embedding -> Qdrant 检索”；当前默认链路已经改为 Qwen3-VL 多模态 embedding：导入时直接为图片生成 image 向量，搜索时把用户文本嵌入到同一语义空间，并直接与图片向量做相似度匹配。
+本文描述当前默认的数据导入和检索链路。旧版本曾主要依赖 “VLM 生成图片描述 -> text embedding -> Qdrant 检索”；当前默认链路已经改为 Qwen3-VL 多模态 image embedding：导入时直接为图片生成 image 向量，搜索时把用户文本嵌入到同一语义空间，并直接与图片向量做相似度匹配。
 
-VLM 描述和 OCR 仍然存在，但它们是 caption/keyword 辅助信号和展示元数据，不再是唯一或主检索路径。
+VLM 描述和 OCR 仍然存在，作为展示元数据与 keyword/BM25 sparse route 的文本来源。keyword route 当前默认以 0.3 权重参与检索；dense caption route 仍保留为显式实验配置，待 caption 文本策略验证后再启用。
 
 protobuf message schema 维护在 `backend/proto/emomo/v1/`：`types.proto` 定义 `ImageFormat`、`VectorType`、`TextPresence` 等跨边界封闭枚举，以及 allowlisted DB JSON 结构 `ImageInfo`、`MemeAnnotationLabels`；`meme.proto` / `api.proto` 定义 API entity DTO 与 HTTP request/response 消息。数据库里只保留三张核心表：`memes`、`meme_annotations`、`meme_vectors`；表结构、索引和迁移由 GORM model + `backend/internal/repository/db.go` 管，不由 protobuf 管。
 
 ## 默认架构
 
-`backend/configs/config.yaml` 中默认配置了两个 embedding 路由和一个 search profile：
+`backend/configs/config.yaml` 中配置了 image 与 caption 两个 embedding 路由。默认 search profile 启用 image route，并把 caption collection 作为 keyword/BM25 sparse-only route；dense caption route 不启用：
 
 ```yaml
 embeddings:
@@ -18,6 +18,7 @@ embeddings:
     document_mode: image
     dimensions: 1024
     collection: meme_image_qwen3vl_1024
+    is_default: true
 
   - name: qwen3vl_caption
     provider: siliconflow
@@ -25,23 +26,27 @@ embeddings:
     document_mode: text
     dimensions: 1024
     collection: meme_caption_qwen3vl_1024
-    is_default: true
 
 search:
   default_profile: qwen3vl
   profiles:
     - name: qwen3vl
       image_embedding: qwen3vl_image
-      caption_embedding: qwen3vl_caption
+      keyword_embedding: qwen3vl_caption
+  retrieval:
+    weights:
+      image: 0.70
+      caption: 0.00
+      keyword: 0.30
 ```
 
-默认检索 profile 会融合三路结果：
+默认导入 profile 会写 image route 和 keyword sparse-only route。检索时，keyword route 使用 caption collection 中的 BM25 sparse vector；dense caption route 保持关闭：
 
 | 路由 | Collection | 写入内容 | 查询方式 | 默认权重 |
 |------|------------|----------|----------|----------|
-| image | `meme_image_qwen3vl_1024` | 图片直接生成的多模态向量 | 文本 query 生成向量后直接搜图片向量 | 0.60 |
-| caption | `meme_caption_qwen3vl_1024` | OCR、VLM 描述、分类、tags、情绪词拼出的 caption 文本向量 | 文本 query 生成向量后搜 caption 向量 | 0.30 |
-| keyword | `meme_caption_qwen3vl_1024` | OCR、描述、tags 生成的 BM25 sparse vector | 原始 query 做 sparse/BM25 检索 | 0.10 |
+| image | `meme_image_qwen3vl_1024` | 图片直接生成的多模态向量 | 文本 query 生成向量后直接搜图片向量 | 0.70 |
+| caption | `meme_caption_qwen3vl_1024` | OCR、VLM 描述、分类、tags、情绪词拼出的 caption 文本向量 | 文本 query 生成向量后搜 caption 向量 | 0.00 |
+| keyword | `meme_caption_qwen3vl_1024` | OCR、描述、tags 生成的 BM25 sparse-only vector | 原始 query 做 sparse/BM25 检索 | 0.30 |
 
 ## 导入流程
 
@@ -56,7 +61,8 @@ localdir 扫描静态图片
   -> 新图上传到 S3/R2，写 memes 元数据和 image_info
   -> 获取或生成 VLM description + OCR text，写 meme_annotations
   -> image route: 图片 URL/data -> 多模态 embedding -> Qdrant image collection
-  -> caption route: OCR/描述/category/tags/情绪词 -> text embedding + BM25 -> Qdrant caption collection
+  -> keyword route: OCR/描述/tags -> BM25 sparse-only -> Qdrant caption collection
+  -> 默认跳过 dense caption route；显式启用时 OCR/描述/category/tags/情绪词 -> text embedding + BM25 -> Qdrant caption collection
   -> 写 meme_vectors，记录 collection、vector_type、model、point_id、annotation_id
 ```
 
@@ -81,14 +87,14 @@ localdir 扫描静态图片
 ```text
 meme_id
 collection
-vector_type        protobuf enum: 1=image, 2=caption
+vector_type        protobuf enum: 1=image, 2=caption, 3=keyword
 embedding_model
 input_hash
 annotation_id
 qdrant_point_id
 ```
 
-唯一约束按 `meme_id + collection + vector_type` 去重，因此同一张图可以同时拥有 image 向量和 caption 向量。
+唯一约束按 `meme_id + collection + vector_type` 去重，因此同一张图可以同时拥有 image 向量、keyword sparse-only 向量和 caption dense 向量。
 
 ## Ingest Script
 
@@ -125,6 +131,7 @@ cd backend
 ```bash
 go run ./cmd/reembed --profile qwen3vl --vector-type all
 go run ./cmd/reembed --profile qwen3vl --vector-type image
+go run ./cmd/reembed --profile qwen3vl --vector-type keyword
 go run ./cmd/reembed --profile qwen3vl --vector-type caption
 ```
 
@@ -162,9 +169,8 @@ query
   -> 可选 query expansion
   -> EmbedQuery(query) for image route
   -> Qdrant Search(image collection)
-  -> EmbedQuery(query) for caption route
-  -> Qdrant Search(caption collection)
-  -> Qdrant SparseSearch(caption collection, original query)
+  -> caption weight 为 0 时跳过 dense caption route
+  -> Qdrant SparseSearch(keyword collection, original query)
   -> weighted rank fusion
   -> 用 memes 表补充 image_info/category/tags
 ```
@@ -201,7 +207,7 @@ STORAGE_PUBLIC_URL=...
 
 ## 最佳实践
 
-- 默认优先使用 `--profile qwen3vl`，保证 image/caption/keyword 三路信号完整。
+- 默认优先使用 `--profile qwen3vl`，保证 image 主检索信号和 keyword/BM25 sparse-only 信号完整。
 - 只验证图片向量质量时，可以单独导入或回填 `qwen3vl_image`。
 - 调整模型、prompt 或 caption 构造逻辑后，应使用 `cmd/reembed` 回填受影响的 vector type。
 - 不要把 `meme_annotations.description` 当成唯一检索语料；它只是辅助 caption/keyword 的一部分。

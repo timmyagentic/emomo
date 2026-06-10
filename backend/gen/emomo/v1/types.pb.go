@@ -109,6 +109,7 @@ const (
 	VectorType_VECTOR_TYPE_UNSPECIFIED VectorType = 0
 	VectorType_VECTOR_TYPE_IMAGE       VectorType = 1
 	VectorType_VECTOR_TYPE_CAPTION     VectorType = 2
+	VectorType_VECTOR_TYPE_KEYWORD     VectorType = 3
 )
 
 // Enum value maps for VectorType.
@@ -117,11 +118,13 @@ var (
 		0: "VECTOR_TYPE_UNSPECIFIED",
 		1: "VECTOR_TYPE_IMAGE",
 		2: "VECTOR_TYPE_CAPTION",
+		3: "VECTOR_TYPE_KEYWORD",
 	}
 	VectorType_value = map[string]int32{
 		"VECTOR_TYPE_UNSPECIFIED": 0,
 		"VECTOR_TYPE_IMAGE":       1,
 		"VECTOR_TYPE_CAPTION":     2,
+		"VECTOR_TYPE_KEYWORD":     3,
 	}
 )
 
@@ -348,12 +351,13 @@ const file_emomo_v1_types_proto_rawDesc = "" +
 	"\x18IMAGE_FORMAT_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11IMAGE_FORMAT_JPEG\x10\x01\x12\x14\n" +
 	"\x10IMAGE_FORMAT_PNG\x10\x02\x12\x15\n" +
-	"\x11IMAGE_FORMAT_WEBP\x10\x03*Y\n" +
+	"\x11IMAGE_FORMAT_WEBP\x10\x03*r\n" +
 	"\n" +
 	"VectorType\x12\x1b\n" +
 	"\x17VECTOR_TYPE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11VECTOR_TYPE_IMAGE\x10\x01\x12\x17\n" +
-	"\x13VECTOR_TYPE_CAPTION\x10\x02*\x85\x01\n" +
+	"\x13VECTOR_TYPE_CAPTION\x10\x02\x12\x17\n" +
+	"\x13VECTOR_TYPE_KEYWORD\x10\x03*\x85\x01\n" +
 	"\fTextPresence\x12\x1d\n" +
 	"\x19TEXT_PRESENCE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15TEXT_PRESENCE_UNKNOWN\x10\x01\x12\x1b\n" +

@@ -2,7 +2,7 @@
 
 > AI 表情包语义搜索系统 — Go 后端 + React 前端 + Expo 移动端 monorepo
 
-Emomo 让你用自然语言搜表情包。系统由 Go 后端（搜索 + 本地静态图片目录摄入）、React 前端（Web 用户界面）和 Expo React Native 移动端组成。当前默认检索链路使用 Qwen3-VL 多模态 embedding：导入时直接为图片生成 image 向量，搜索时将用户文本嵌入到同一语义空间并与图片向量匹配；VLM 描述和 OCR 作为 caption/keyword 辅助信号与展示元数据，不再是唯一或主检索路径。
+Emomo 让你用自然语言搜表情包。系统由 Go 后端（搜索 + 本地静态图片目录摄入）、React 前端（Web 用户界面）和 Expo React Native 移动端组成。当前默认检索链路以 Qwen3-VL 多模态 image embedding 为主：导入时直接为图片生成 image 向量，并为 OCR/描述/tags 写入 keyword/BM25 sparse-only 向量；搜索时 image route 权重 0.7，keyword route 权重 0.3。VLM 描述和 OCR 作为展示元数据与 keyword 辅助信号保留；dense caption embedding 仍默认关闭，待 caption 策略验证后再启用。
 
 资源约束：表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
 
@@ -64,7 +64,7 @@ EXPO_PUBLIC_API_BASE=http://localhost:8080/api/v1 npm run start
 
 ### Qwen3-VL 多模态向量摄入
 
-数据导入只支持 `backend/scripts/import-data.sh` 这一种入口。默认配置会使用 `qwen3vl` profile 同时写入 image 与 caption 两路向量，其中 image 路直接对图片生成向量：
+数据导入只支持 `backend/scripts/import-data.sh` 这一种入口。默认配置会使用 `qwen3vl` profile 写入 image 向量和 keyword/BM25 sparse-only 向量；caption dense 向量可以通过显式 `-e qwen3vl_caption` 做实验性回填，但不是默认导入链路：
 
 ```bash
 cd backend

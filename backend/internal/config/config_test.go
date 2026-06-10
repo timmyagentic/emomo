@@ -25,6 +25,15 @@ func TestLoadDefaultsSearchRetrievalFinalTopKTo100(t *testing.T) {
 	if cfg.Search.Retrieval.FinalTopK != 100 {
 		t.Fatalf("final_top_k default = %d, want 100", cfg.Search.Retrieval.FinalTopK)
 	}
+	if cfg.Search.Retrieval.Weights.Image != 0.70 {
+		t.Fatalf("image weight default = %v, want 0.70", cfg.Search.Retrieval.Weights.Image)
+	}
+	if cfg.Search.Retrieval.Weights.Caption != 0.00 {
+		t.Fatalf("caption weight default = %v, want 0.00", cfg.Search.Retrieval.Weights.Caption)
+	}
+	if cfg.Search.Retrieval.Weights.Keyword != 0.30 {
+		t.Fatalf("keyword weight default = %v, want 0.30", cfg.Search.Retrieval.Weights.Keyword)
+	}
 }
 
 func TestLoadDefaultsAgenticSearchConfig(t *testing.T) {
@@ -104,7 +113,7 @@ func TestConfigDefaultSearchProfileUsesExplicitDefault(t *testing.T) {
 			DefaultProfile: "qwen3vl",
 			Profiles: []SearchProfileConfig{
 				{Name: "legacy", ImageEmbedding: "jina", CaptionEmbedding: "jina"},
-				{Name: "qwen3vl", ImageEmbedding: "qwen3vl_image", CaptionEmbedding: "qwen3vl_caption", IsDefault: true},
+				{Name: "qwen3vl", ImageEmbedding: "qwen3vl_image", KeywordEmbedding: "qwen3vl_caption", IsDefault: true},
 			},
 		},
 	}
@@ -124,7 +133,7 @@ func TestConfigGetSearchProfileByName(t *testing.T) {
 	cfg := &Config{
 		Search: SearchConfig{
 			Profiles: []SearchProfileConfig{
-				{Name: "qwen3vl", ImageEmbedding: "qwen3vl_image", CaptionEmbedding: "qwen3vl_caption"},
+				{Name: "qwen3vl", ImageEmbedding: "qwen3vl_image", KeywordEmbedding: "qwen3vl_caption"},
 			},
 		},
 	}
@@ -136,7 +145,10 @@ func TestConfigGetSearchProfileByName(t *testing.T) {
 	if profile.ImageEmbedding != "qwen3vl_image" {
 		t.Fatalf("image embedding = %q, want qwen3vl_image", profile.ImageEmbedding)
 	}
-	if profile.CaptionEmbedding != "qwen3vl_caption" {
-		t.Fatalf("caption embedding = %q, want qwen3vl_caption", profile.CaptionEmbedding)
+	if profile.CaptionEmbedding != "" {
+		t.Fatalf("caption embedding = %q, want empty", profile.CaptionEmbedding)
+	}
+	if profile.KeywordEmbedding != "qwen3vl_caption" {
+		t.Fatalf("keyword embedding = %q, want qwen3vl_caption", profile.KeywordEmbedding)
 	}
 }

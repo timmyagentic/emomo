@@ -135,6 +135,7 @@ type SearchProfileConfig struct {
 	Name             string `mapstructure:"name"`
 	ImageEmbedding   string `mapstructure:"image_embedding"`
 	CaptionEmbedding string `mapstructure:"caption_embedding"`
+	KeywordEmbedding string `mapstructure:"keyword_embedding"`
 	IsDefault        bool   `mapstructure:"is_default"`
 }
 
@@ -310,9 +311,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("search.retrieval.image_top_k", 100)
 	v.SetDefault("search.retrieval.caption_top_k", 100)
 	v.SetDefault("search.retrieval.final_top_k", 100)
-	v.SetDefault("search.retrieval.weights.image", 0.60)
-	v.SetDefault("search.retrieval.weights.caption", 0.30)
-	v.SetDefault("search.retrieval.weights.keyword", 0.10)
+	v.SetDefault("search.retrieval.weights.image", 0.70)
+	v.SetDefault("search.retrieval.weights.caption", 0.00)
+	v.SetDefault("search.retrieval.weights.keyword", 0.30)
 	v.SetDefault("search.query_expansion.enabled", true)
 	v.SetDefault("search.query_expansion.model", "gpt-4o-mini")
 	v.SetDefault("search.agentic.enabled", false)

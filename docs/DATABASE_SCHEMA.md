@@ -185,7 +185,7 @@ CREATE UNIQUE INDEX idx_meme_vectors_meme_collection_type
 | `id` | 向量记录 ID |
 | `meme_id` | 关联 `memes.id` |
 | `collection` | Qdrant collection 名称 |
-| `vector_type` | protobuf `VectorType`：`1=image`、`2=caption` |
+| `vector_type` | protobuf `VectorType`：`1=image`、`2=caption`、`3=keyword` |
 | `embedding_model` | 生成该向量的模型名 |
 | `input_hash` | 生成向量的输入 hash，用于判断是否需要重建 |
 | `annotation_id` | 可选，caption 向量可关联 annotation |
