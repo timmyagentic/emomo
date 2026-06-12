@@ -8,16 +8,16 @@ interface MemeTileProps {
 
 export function MemeTile({ meme, onPress }: MemeTileProps) {
   const aspectRatio = meme.width && meme.height ? meme.width / meme.height : 1;
+  const scoreLabel = typeof meme.score === 'number' ? `${Math.round(meme.score * 100)}%` : null;
 
   return (
     <Pressable accessibilityRole="button" onPress={() => onPress(meme)} style={styles.tile}>
       <Image source={{ uri: meme.url }} style={[styles.image, { aspectRatio }]} resizeMode="cover" />
-      <View style={styles.meta}>
-        <Text numberOfLines={2} style={styles.description}>
-          {meme.description || meme.category || '表情包'}
-        </Text>
-        {typeof meme.score === 'number' ? <Text style={styles.score}>{Math.round(meme.score * 100)}%</Text> : null}
-      </View>
+      {scoreLabel ? (
+        <View style={styles.meta}>
+          <Text style={styles.score}>{scoreLabel}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -38,14 +38,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8ece9',
   },
   meta: {
-    gap: 6,
     padding: 9,
-  },
-  description: {
-    color: '#151817',
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 17,
   },
   score: {
     color: '#4c6f64',
@@ -53,4 +46,3 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 });
-
