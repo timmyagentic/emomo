@@ -33,3 +33,27 @@ test('offers image copy instead of raw link copy in meme detail actions', () => 
 
   expect(onCopyImage).toHaveBeenCalledWith(meme);
 });
+
+test('closes from an iPhone-style left edge swipe', () => {
+  const onClose = jest.fn();
+
+  render(
+    <MemeDetailModal
+      meme={meme}
+      onClose={onClose}
+      onShare={jest.fn()}
+      onSave={jest.fn()}
+      onCopyImage={jest.fn()}
+    />
+  );
+
+  const gestureSurface = screen.getByTestId('meme-detail-gesture-surface');
+
+  gestureSurface.props.onStartShouldSetResponderCapture({ nativeEvent: { pageX: 12, pageY: 24 } });
+
+  expect(gestureSurface.props.onMoveShouldSetResponder({ nativeEvent: { pageX: 52, pageY: 28 } })).toBe(true);
+
+  gestureSurface.props.onResponderRelease({ nativeEvent: { pageX: 108, pageY: 28 } });
+
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
