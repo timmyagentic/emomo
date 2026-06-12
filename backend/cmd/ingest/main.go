@@ -258,12 +258,18 @@ func main() {
 	}
 
 	// Initialize VLM service
-	vlmService := service.NewVLMService(&service.VLMConfig{
-		Provider: cfg.VLM.Provider,
-		Model:    cfg.VLM.Model,
-		APIKey:   cfg.VLM.APIKey,
-		BaseURL:  cfg.VLM.BaseURL,
+	vlmService, err := service.NewImageAnalyzer(&service.VLMConfig{
+		Provider:             cfg.VLM.Provider,
+		Model:                cfg.VLM.Model,
+		APIKey:               cfg.VLM.APIKey,
+		BaseURL:              cfg.VLM.BaseURL,
+		LocalAnalyzerCommand: cfg.VLM.LocalAnalyzerCommand,
+		LocalAnalyzerLang:    cfg.VLM.LocalAnalyzerLang,
+		LocalAnalyzerPSM:     cfg.VLM.LocalAnalyzerPSM,
 	})
+	if err != nil {
+		appLogger.WithError(err).Fatal("Failed to initialize image analyzer")
+	}
 
 	// Initialize ingest service
 	ingestService := service.NewIngestService(

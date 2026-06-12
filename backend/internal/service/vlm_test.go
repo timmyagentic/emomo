@@ -1,6 +1,112 @@
 package service
 
-import "testing"
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestNewImageAnalyzerUsesLocalTextPresenceCommand(t *testing.T) {
+	t.Parallel()
+
+	commandPath := writeLocalAnalyzerScript(t, `#!/bin/sh
+printf 'HELLO\n'
+`)
+
+	analyzer, err := NewImageAnalyzer(&VLMConfig{
+		Provider:             "local_text_presence",
+		Model:                "local-text-presence-test",
+		LocalAnalyzerCommand: commandPath,
+	})
+	if err != nil {
+		t.Fatalf("NewImageAnalyzer() error = %v", err)
+	}
+
+	got, err := analyzer.AnalyzeImage(context.Background(), []byte("fake image bytes"), "png")
+	if err != nil {
+		t.Fatalf("AnalyzeImage() error = %v", err)
+	}
+	if got.OCRText != "HELLO" {
+		t.Fatalf("OCRText = %q, want HELLO", got.OCRText)
+	}
+	if got.Description != "" {
+		t.Fatalf("Description = %q, want empty local label-only description", got.Description)
+	}
+	if analyzer.GetModel() != "local-text-presence-test" {
+		t.Fatalf("GetModel() = %q, want local-text-presence-test", analyzer.GetModel())
+	}
+}
+
+func TestLocalTextPresenceAnalyzerTrimsEmptyOCR(t *testing.T) {
+	t.Parallel()
+
+	commandPath := writeLocalAnalyzerScript(t, `#!/bin/sh
+printf '   \n\t\n'
+`)
+
+	analyzer, err := NewImageAnalyzer(&VLMConfig{
+		Provider:             "local_text_presence",
+		Model:                "local-text-presence-test",
+		LocalAnalyzerCommand: commandPath,
+	})
+	if err != nil {
+		t.Fatalf("NewImageAnalyzer() error = %v", err)
+	}
+
+	got, err := analyzer.AnalyzeImage(context.Background(), []byte("fake image bytes"), "jpg")
+	if err != nil {
+		t.Fatalf("AnalyzeImage() error = %v", err)
+	}
+	if got.OCRText != "" {
+		t.Fatalf("OCRText = %q, want empty", got.OCRText)
+	}
+}
+
+func TestLocalTextPresenceAnalyzerIgnoresSuccessfulStderr(t *testing.T) {
+	t.Parallel()
+
+	commandPath := writeLocalAnalyzerScript(t, `#!/bin/sh
+printf 'Estimating resolution as 288\n' >&2
+printf 'VISIBLE TEXT\n'
+`)
+
+	analyzer, err := NewImageAnalyzer(&VLMConfig{
+		Provider:             "local_text_presence",
+		Model:                "local-text-presence-test",
+		LocalAnalyzerCommand: commandPath,
+	})
+	if err != nil {
+		t.Fatalf("NewImageAnalyzer() error = %v", err)
+	}
+
+	got, err := analyzer.AnalyzeImage(context.Background(), []byte("fake image bytes"), "png")
+	if err != nil {
+		t.Fatalf("AnalyzeImage() error = %v", err)
+	}
+	if got.OCRText != "VISIBLE TEXT" {
+		t.Fatalf("OCRText = %q, want stdout only", got.OCRText)
+	}
+}
+
+func TestNewImageAnalyzerRejectsUnknownProvider(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewImageAnalyzer(&VLMConfig{Provider: "glm"})
+	if err == nil {
+		t.Fatal("NewImageAnalyzer() error = nil, want unknown provider error")
+	}
+}
+
+func writeLocalAnalyzerScript(t *testing.T, body string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "local-analyzer")
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	return path
+}
 
 func TestSanitizeMalformedJSONStringPreservesLegalEscapes(t *testing.T) {
 	t.Parallel()
@@ -75,10 +181,10 @@ func TestSanitizeMalformedJSONStringPreservesLegalEscapes(t *testing.T) {
 func TestParseVLMAnalysisRecoversFromUnescapedNewline(t *testing.T) {
 	t.Parallel()
 
-	// Production failure mode: GLM-4.6V emits a literal LF (U+000A) between
-	// two OCR lines without escaping it as \n, which json.Unmarshal rejects
-	// per RFC 8259 §7. The state-machine sanitizer should rewrite the LF
-	// inside the string to `\n`, leaving JSON whitespace alone, so that
+	// Production failure mode: a vision model emits a literal LF (U+000A)
+	// between two OCR lines without escaping it as \n, which json.Unmarshal
+	// rejects per RFC 8259 §7. The state-machine sanitizer should rewrite the
+	// LF inside the string to `\n`, leaving JSON whitespace alone, so that
 	// downstream parsing succeeds.
 	raw := "{\"ocr_text\":\"你可以的\n你是棒棒的小汪汪\",\"description\":\"金毛小狗作为主体，正对着镜子，眼神坚定。\"}"
 
@@ -97,8 +203,8 @@ func TestParseVLMAnalysisRecoversFromUnescapedNewline(t *testing.T) {
 func TestParseVLMAnalysisRecoversFromOrphanBackslashEscapes(t *testing.T) {
 	t.Parallel()
 
-	// Real-shape sample drawn from the production failure logs: GLM-4.6V
-	// emitted `\ ` between OCR run separators, which `json.Unmarshal` rejects.
+	// Real-shape sample drawn from the production failure logs: a model emitted
+	// `\ ` between OCR run separators, which `json.Unmarshal` rejects.
 	raw := `{"ocr_text":"你将会毕业 | 你将会拿到那个学位\ | 你将会离开这个该死的学校\ | 谢了 人类","description":"画面主体是戴学士帽的立式镜子（拟人化形象）。"}`
 
 	got, ok := parseVLMAnalysis(raw)

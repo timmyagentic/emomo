@@ -231,7 +231,7 @@ func (s *staticTestSource) FetchBatch(ctx context.Context, cursor string, limit 
 	return s.items[start:end], next, nil
 }
 
-func TestProcessItemWritesImageVectorWhenVLMFails(t *testing.T) {
+func TestProcessItemFailsAndRollsBackWhenVLMFails(t *testing.T) {
 	t.Parallel()
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -295,28 +295,38 @@ func TestProcessItemWritesImageVectorWhenVLMFails(t *testing.T) {
 		Category:  "reaction",
 		Tags:      []string{"happy"},
 	}, &IngestOptions{})
-	if err != nil {
-		t.Fatalf("processItem() error = %v, want nil", err)
+	if err == nil {
+		t.Fatal("processItem() error = nil, want VLM failure")
 	}
 
 	var vectors []domain.MemeVector
 	if err := db.Find(&vectors).Error; err != nil {
 		t.Fatalf("failed to load vectors: %v", err)
 	}
-	if len(vectors) == 0 {
-		t.Fatal("vector count = 0, want at least image vector")
+	if len(vectors) != 0 {
+		t.Fatalf("vector count = %d, want 0 after rollback", len(vectors))
 	}
-	hasImageVector := false
-	for _, vector := range vectors {
-		if vector.VectorType == pb.VectorType_VECTOR_TYPE_IMAGE {
-			hasImageVector = true
-		}
+
+	var memeCount int64
+	if err := db.Model(&domain.Meme{}).Count(&memeCount).Error; err != nil {
+		t.Fatalf("count memes: %v", err)
 	}
-	if !hasImageVector {
-		t.Fatalf("vectors = %+v, want image vector", vectors)
+	if memeCount != 0 {
+		t.Fatalf("meme count = %d, want 0 after rollback", memeCount)
 	}
-	if fakeQdrant.upserts == 0 {
-		t.Fatal("qdrant upserts = 0, want at least one image vector upsert")
+
+	var annotationCount int64
+	if err := db.Model(&domain.MemeAnnotation{}).Count(&annotationCount).Error; err != nil {
+		t.Fatalf("count annotations: %v", err)
+	}
+	if annotationCount != 0 {
+		t.Fatalf("annotation count = %d, want 0", annotationCount)
+	}
+	if fakeQdrant.upserts != 0 {
+		t.Fatalf("qdrant upserts = %d, want 0", fakeQdrant.upserts)
+	}
+	if len(store.objects) != 0 {
+		t.Fatalf("storage objects = %d, want 0 after rollback", len(store.objects))
 	}
 }
 
@@ -717,16 +727,12 @@ func TestMissingVectorIndexesTreatsCaptionHybridAsExistingKeywordSparse(t *testi
 	}
 }
 
-func TestProcessItemReturnsNoOpWhenOnlyMissingCaptionVectorAndVLMFails(t *testing.T) {
+func TestProcessItemFailsWhenExistingMemeMissingAnnotationAndVLMFails(t *testing.T) {
 	t.Parallel()
 
-	// Regression test for a retry-path semantic bug:
-	// when a meme is hash-hit (full re-import path), the only missing route
-	// is caption, AND VLM analysis fails (so caption text is empty), the
-	// caption route is correctly `errSkipOptionalVectorIndex`-skipped. The
-	// previous implementation then returned `no vector indexes were written`
-	// as an error, polluting the failure metric for items that were already
-	// in a stable state with no useful retry work to do.
+	// Existing image-only rows must not stay image-only when the analyzer is
+	// unavailable. The old behavior treated this as a successful no-op, which
+	// left memes without the mandatory labels.has_text annotation.
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -824,8 +830,8 @@ func TestProcessItemReturnsNoOpWhenOnlyMissingCaptionVectorAndVLMFails(t *testin
 		LocalPath: imagePath,
 		Format:    "png",
 	}, &IngestOptions{})
-	if err != nil {
-		t.Fatalf("processItem() error = %v, want nil (no-op skip)", err)
+	if err == nil {
+		t.Fatal("processItem() error = nil, want VLM failure")
 	}
 
 	var vectors []domain.MemeVector
@@ -849,6 +855,144 @@ func TestProcessItemReturnsNoOpWhenOnlyMissingCaptionVectorAndVLMFails(t *testin
 	}
 	if memeCount != 1 {
 		t.Fatalf("meme count = %d, want 1 (existing meme must remain, no new meme created)", memeCount)
+	}
+
+	var annotationCount int64
+	if err := db.Model(&domain.MemeAnnotation{}).Count(&annotationCount).Error; err != nil {
+		t.Fatalf("count annotations: %v", err)
+	}
+	if annotationCount != 0 {
+		t.Fatalf("annotation count = %d, want 0 after failed annotation attempt", annotationCount)
+	}
+}
+
+func TestProcessItemBackfillsRequiredAnnotationForExistingMeme(t *testing.T) {
+	t.Parallel()
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&domain.Meme{}, &domain.MemeVector{}, &domain.MemeAnnotation{}); err != nil {
+		t.Fatalf("failed to migrate test database: %v", err)
+	}
+
+	imagePath := filepath.Join(t.TempDir(), "meme.png")
+	if err := os.WriteFile(imagePath, testPNG1x1, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	contentHash := calculateMD5(testPNG1x1)
+	memeID := "meme-needs-annotation"
+	storageKey := contentHash[:2] + "/" + contentHash + ".png"
+
+	memeRepo := repository.NewMemeRepository(db)
+	if err := memeRepo.Create(context.Background(), &domain.Meme{
+		ID:          memeID,
+		StorageKey:  storageKey,
+		ContentHash: contentHash,
+		ImageInfo: &pb.ImageInfo{
+			Width:  1,
+			Height: 1,
+			Format: pb.ImageFormat_IMAGE_FORMAT_PNG,
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to seed meme: %v", err)
+	}
+
+	vectorRepo := repository.NewMemeVectorRepository(db)
+	if err := vectorRepo.Create(context.Background(), &domain.MemeVector{
+		ID:             "vector-image-existing",
+		MemeID:         memeID,
+		Collection:     "image_collection",
+		VectorType:     pb.VectorType_VECTOR_TYPE_IMAGE,
+		EmbeddingModel: "fixed-test-embedding",
+		InputHash:      contentHash,
+		QdrantPointID:  "00000000-0000-0000-0000-000000000001",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to seed image vector: %v", err)
+	}
+
+	qdrantRepo, fakeQdrant := newTestQdrantRepository(t)
+	store := newMemoryObjectStorage()
+	store.objects[storageKey] = testPNG1x1
+
+	vlm := NewVLMService(&VLMConfig{
+		Model:   "test-vlm",
+		APIKey:  "test-key",
+		BaseURL: "https://vlm.test/v1",
+	})
+	vlm.client.SetTransport(roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(t, http.StatusOK, openAIResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{
+				{Message: struct {
+					Content string `json:"content"`
+				}{Content: `{"description":"白底黑字写着收到","ocr_text":"收到"}`}},
+			},
+		}), nil
+	}))
+
+	ingest := NewIngestService(
+		memeRepo,
+		vectorRepo,
+		repository.NewMemeAnnotationRepository(db),
+		nil,
+		qdrantRepo,
+		store,
+		vlm,
+		fixedEmbeddingProvider{},
+		nil,
+		&IngestConfig{
+			Workers:   1,
+			BatchSize: 1,
+			VectorIndexes: []IngestVectorIndex{
+				{
+					VectorType: pb.VectorType_VECTOR_TYPE_IMAGE,
+					Collection: "image_collection",
+					Embedding:  fixedEmbeddingProvider{},
+					QdrantRepo: qdrantRepo,
+				},
+			},
+		},
+	)
+
+	err = ingest.processItem(context.Background(), "test", &source.MemeItem{
+		SourceID:  "same-image",
+		LocalPath: imagePath,
+		Format:    "png",
+	}, &IngestOptions{})
+	if err != nil {
+		t.Fatalf("processItem() error = %v, want nil", err)
+	}
+
+	var annotation domain.MemeAnnotation
+	if err := db.First(&annotation, "meme_id = ?", memeID).Error; err != nil {
+		t.Fatalf("failed to load backfilled annotation: %v", err)
+	}
+	if !annotation.Labels.GetHasText() {
+		t.Fatalf("annotation Labels.HasText = false, want true")
+	}
+
+	var vector domain.MemeVector
+	if err := db.First(&vector, "id = ?", "vector-image-existing").Error; err != nil {
+		t.Fatalf("failed to load vector: %v", err)
+	}
+	if vector.AnnotationID != annotation.ID {
+		t.Fatalf("vector annotation_id = %q, want %q", vector.AnnotationID, annotation.ID)
+	}
+	if fakeQdrant.upserts != 1 {
+		t.Fatalf("qdrant upserts = %d, want 1 replacement", fakeQdrant.upserts)
+	}
+	if fakeQdrant.deletes != 1 {
+		t.Fatalf("qdrant deletes = %d, want 1 old-point cleanup", fakeQdrant.deletes)
 	}
 }
 

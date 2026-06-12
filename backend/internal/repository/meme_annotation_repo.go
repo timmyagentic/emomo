@@ -65,6 +65,18 @@ func (r *MemeAnnotationRepository) ExistsByMemeIDAndModel(ctx context.Context, m
 	return count > 0, nil
 }
 
+// ExistsByMemeID checks if any annotation exists for the meme.
+func (r *MemeAnnotationRepository) ExistsByMemeID(ctx context.Context, memeID string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&domain.MemeAnnotation{}).
+		Where("meme_id = ?", memeID).
+		Limit(1).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // GetByID retrieves an annotation by its ID.
 func (r *MemeAnnotationRepository) GetByID(ctx context.Context, id string) (*domain.MemeAnnotation, error) {
 	var annotation domain.MemeAnnotation

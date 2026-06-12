@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -69,6 +71,12 @@ type VLMAnalysis struct {
 	OCRText     string
 }
 
+// ImageAnalyzer is the ingest-facing contract for image OCR/semantic analysis.
+type ImageAnalyzer interface {
+	GetModel() string
+	AnalyzeImage(ctx context.Context, imageData []byte, format string) (*VLMAnalysis, error)
+}
+
 // vlmAnalyzePayload is the JSON shape the model is asked to produce. Keeping
 // it tightly scoped helps `json.Unmarshal` succeed even if the model drifts
 // (e.g. emits extra fields).
@@ -87,10 +95,32 @@ type VLMService struct {
 
 // VLMConfig holds configuration for VLM service.
 type VLMConfig struct {
-	Provider string
-	Model    string
-	APIKey   string
-	BaseURL  string
+	Provider             string
+	Model                string
+	APIKey               string
+	BaseURL              string
+	LocalAnalyzerCommand string
+	LocalAnalyzerLang    string
+	LocalAnalyzerPSM     string
+}
+
+// NewImageAnalyzer creates the configured image analyzer implementation.
+func NewImageAnalyzer(cfg *VLMConfig) (ImageAnalyzer, error) {
+	if cfg == nil {
+		cfg = &VLMConfig{}
+	}
+	switch normalizeProviderName(cfg.Provider) {
+	case "", "openai", "openai-compatible", "openai_compatible":
+		return NewVLMService(cfg), nil
+	case "local_text_presence", "local-text-presence":
+		return NewLocalTextPresenceAnalyzer(cfg), nil
+	default:
+		return nil, fmt.Errorf("unsupported VLM provider %q", cfg.Provider)
+	}
+}
+
+func normalizeProviderName(provider string) string {
+	return strings.ToLower(strings.TrimSpace(provider))
 }
 
 // NewVLMService creates a new VLM service.
@@ -100,6 +130,9 @@ type VLMConfig struct {
 // Returns:
 //   - *VLMService: initialized VLM client wrapper.
 func NewVLMService(cfg *VLMConfig) *VLMService {
+	if cfg == nil {
+		cfg = &VLMConfig{}
+	}
 	client := resty.New()
 	client.SetHeader("Authorization", "Bearer "+cfg.APIKey)
 	client.SetHeader("Content-Type", "application/json")
@@ -121,6 +154,97 @@ func NewVLMService(cfg *VLMConfig) *VLMService {
 	}
 }
 
+// LocalTextPresenceAnalyzer performs local OCR for mandatory has_text labels.
+type LocalTextPresenceAnalyzer struct {
+	model   string
+	command string
+	lang    string
+	psm     string
+}
+
+// NewLocalTextPresenceAnalyzer creates a local analyzer backed by tesseract.
+func NewLocalTextPresenceAnalyzer(cfg *VLMConfig) *LocalTextPresenceAnalyzer {
+	if cfg == nil {
+		cfg = &VLMConfig{}
+	}
+	model := strings.TrimSpace(cfg.Model)
+	if model == "" {
+		model = "local-text-presence-tesseract"
+	}
+	command := strings.TrimSpace(cfg.LocalAnalyzerCommand)
+	if command == "" {
+		command = "tesseract"
+	}
+	lang := strings.TrimSpace(cfg.LocalAnalyzerLang)
+	if lang == "" {
+		lang = "chi_sim+eng"
+	}
+	psm := strings.TrimSpace(cfg.LocalAnalyzerPSM)
+	if psm == "" {
+		psm = "6"
+	}
+	return &LocalTextPresenceAnalyzer{
+		model:   model,
+		command: command,
+		lang:    lang,
+		psm:     psm,
+	}
+}
+
+func (a *LocalTextPresenceAnalyzer) GetModel() string {
+	return a.model
+}
+
+func (a *LocalTextPresenceAnalyzer) AnalyzeImage(ctx context.Context, imageData []byte, format string) (*VLMAnalysis, error) {
+	tmp, err := os.CreateTemp("", "emomo-local-analyzer-*."+sanitizeLocalAnalyzerExt(format))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local analyzer image temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.Write(imageData); err != nil {
+		tmp.Close()
+		return nil, fmt.Errorf("failed to write local analyzer image temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close local analyzer image temp file: %w", err)
+	}
+
+	args := []string{tmpPath, "stdout"}
+	if a.lang != "" {
+		args = append(args, "-l", a.lang)
+	}
+	if a.psm != "" {
+		args = append(args, "--psm", a.psm)
+	}
+
+	cmd := exec.CommandContext(ctx, a.command, args...)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("local text-presence analyzer failed: command=%s: %w: %s", a.command, err, strings.TrimSpace(stderr.String()))
+	}
+
+	return &VLMAnalysis{
+		OCRText: strings.TrimSpace(string(out)),
+	}, nil
+}
+
+func sanitizeLocalAnalyzerExt(format string) string {
+	switch strings.ToLower(strings.TrimPrefix(strings.TrimSpace(format), ".")) {
+	case "jpg", "jpeg":
+		return "jpg"
+	case "png":
+		return "png"
+	case "webp":
+		return "webp"
+	default:
+		return "jpg"
+	}
+}
+
 // GetModel returns the model name being used.
 // Parameters: none.
 // Returns:
@@ -135,13 +259,13 @@ func (s *VLMService) GetModel() string {
 // the OpenAI shape; both are pointer + omitempty so callers that don't need
 // them get the OpenAI-compatible default payload.
 //
-//   - `do_sample: false` switches GLM-4.6V to greedy decoding, making the
-//     OCR + JSON payload from AnalyzeImage reproducible.
-//   - `thinking: {"type": "disabled"}` would suppress the GLM-4.6V "deep
-//     thinking" channel for latency-sensitive callers. We currently leave it
-//     ON (default) because hybrid thinking improves OCR accuracy and scene
-//     reasoning, and reasoning_content does not consume the `content` token
-//     budget on z.ai (it streams on a separate channel).
+//   - `do_sample: false` switches compatible models to greedy decoding,
+//     making the OCR + JSON payload from AnalyzeImage reproducible.
+//   - `thinking: {"type": "disabled"}` would suppress providers that expose a
+//     separate reasoning channel for latency-sensitive callers. We currently
+//     leave it ON (default) for providers that support it because hybrid
+//     thinking can improve OCR accuracy and scene reasoning, and the reasoning
+//     channel does not consume the `content` token budget on those providers.
 //
 // Note: z.ai's vision endpoint (ChatCompletionVisionRequest) does NOT expose
 // `response_format` today; structured-output / JSON mode is only available on
@@ -224,8 +348,8 @@ func getMIMEType(format string) string {
 // detect that server-side. AnalyzeImage therefore retries the call exactly
 // once: on the second attempt the prompt is augmented with a user message
 // that quotes the previous bad reply and asks the model to re-emit the
-// raw JSON. This template is well-known to nudge GLM-4.x back into the
-// JSON channel; the cost is one extra round-trip on the unlucky path.
+// raw JSON. This template nudges compatible models back into the JSON channel;
+// the cost is one extra round-trip on the unlucky path.
 //
 // Parameters:
 //   - ctx: context for cancellation and deadlines.
@@ -236,8 +360,8 @@ func getMIMEType(format string) string {
 //   - *VLMAnalysis: parsed analysis (Description + OCRText). Never nil on success.
 //   - error: non-nil when both the initial call and the retry fail to produce
 //     a structurally valid JSON payload (or the API itself errors). On error
-//     callers should fall back to image-only ingest rather than persisting
-//     a malformed annotation.
+//     callers should surface the error rather than persisting a meme without
+//     the required text-presence annotation.
 func (s *VLMService) AnalyzeImage(ctx context.Context, imageData []byte, format string) (*VLMAnalysis, error) {
 	mimeType := getMIMEType(format)
 	base64Image := base64.StdEncoding.EncodeToString(imageData)
@@ -385,7 +509,7 @@ func buildAnalyzeRetryUserPrompt(prevRaw string) string {
 //  2. if the model prefixes its reply with chatter like "好的，下面是 JSON：",
 //     slice between the outermost `{` and `}` and try again;
 //  3. if standard parsing still fails, run `sanitizeMalformedJSONString` over
-//     the candidate to repair common GLM-4.6V malformations: unescaped
+//     the candidate to repair common vision-model malformations: unescaped
 //     control characters inside string values (most often a literal LF
 //     between two OCR lines, e.g. `"ocr_text":"你可以的<LF>你是棒棒的小汪汪"`)
 //     and orphan backslash escapes such as `\ ` before a `|` separator.
@@ -454,7 +578,7 @@ func tryUnmarshalAnalyzePayload(s string) (*VLMAnalysis, bool) {
 	return analysis, analysis.Description != "" || analysis.OCRText != ""
 }
 
-// sanitizeMalformedJSONString repairs two common GLM-4.6V JSON
+// sanitizeMalformedJSONString repairs two common vision-model JSON
 // malformations so a downstream `json.Unmarshal` can succeed. It tracks
 // whether the cursor is currently inside a JSON string literal and only
 // rewrites bytes when in-string; bytes between tokens (where raw control
@@ -465,12 +589,12 @@ func tryUnmarshalAnalyzePayload(s string) (*VLMAnalysis, bool) {
 //
 //  1. Unescaped control characters (LF / CR / Tab / U+0000-001F) — by far
 //     the most common failure for our pipeline. The spec requires every
-//     character below 0x20 inside a string to be escaped, but GLM
-//     routinely emits raw newlines between OCR lines, e.g.
+//     character below 0x20 inside a string to be escaped, but vision models
+//     can emit raw newlines between OCR lines, e.g.
 //     `"ocr_text":"你可以的<LF>你是棒棒的小汪汪"`. We rewrite LF→`\n`,
 //     CR→`\r`, Tab→`\t`, others→`\u00XX`.
 //
-//  2. Orphan backslash escapes — GLM occasionally produces strings like
+//  2. Orphan backslash escapes — models can produce strings like
 //     `"...学位\ | ...学校\ | ..."` (a literal backslash followed by a
 //     space) when serializing OCR text that visually contains run
 //     separators. We keep the eight legal escapes (`\"`, `\\`, `\/`,
@@ -483,7 +607,7 @@ func tryUnmarshalAnalyzePayload(s string) (*VLMAnalysis, bool) {
 // state machine treats `"` as a string boundary (toggling in/out)
 // unless it follows an unescaped `\`, mirroring the JSON grammar; this
 // means an *unescaped* literal `"` inside a string value (a different
-// GLM bug we observed once in 2666) will misalign the toggle and leak
+// model bug we observed once in production) will misalign the toggle and leak
 // into out-of-string mode — that case is rare and not handled here.
 //
 // Output remains valid UTF-8 because we only ever inspect ASCII bytes

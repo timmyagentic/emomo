@@ -190,8 +190,13 @@ curl http://localhost:8080/api/v1/stats
 
 | 配置项 | 环境变量 | 说明 |
 |--------|----------|------|
+| vlm.provider | VLM_PROVIDER | `openai` 使用 OpenAI-compatible VLM；`local_text_presence` 使用本地 OCR 命令生成 `labels.has_text` |
+| vlm.model | VLM_MODEL | analyzer/model 标识，写入 `meme_annotations.analyzer_model` |
 | vlm.api_key | OPENAI_API_KEY | OpenAI-compatible API Key（VLM/OCR/查询扩展） |
 | vlm.base_url | OPENAI_BASE_URL | OpenAI-compatible Base URL |
+| vlm.local_analyzer_command | LOCAL_ANALYZER_COMMAND | 本地 analyzer 命令，`local_text_presence` 默认 `tesseract` |
+| vlm.local_analyzer_lang | LOCAL_ANALYZER_LANG | 本地 OCR 语言，默认 `chi_sim+eng` |
+| vlm.local_analyzer_psm | LOCAL_ANALYZER_PSM | 本地 OCR page segmentation mode，默认 `6` |
 | embeddings[].api_key_env | SILICONFLOW_API_KEY | 默认 Qwen3-VL 多模态 Embedding API Key |
 | embeddings[].base_url_env | SILICONFLOW_BASE_URL | 默认 Qwen3-VL Embedding API Base URL |
 | storage.type | STORAGE_TYPE | 存储类型：r2, s3, s3compatible |

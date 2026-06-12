@@ -58,10 +58,15 @@ storage:
 #   public_url: https://your-bucket-name.s3.amazonaws.com
 
 vlm:
+  # Use local_text_presence only in environments that have the configured
+  # local OCR command installed. Cloud defaults stay OpenAI-compatible.
   provider: openai
   model: qwen/qwen-2.5-vl-7b-instruct:free
   # api_key: 通过环境变量 OPENAI_API_KEY 设置
   base_url: https://openrouter.ai/api/v1
+  local_analyzer_command: tesseract
+  local_analyzer_lang: chi_sim+eng
+  local_analyzer_psm: "6"
 
 embeddings:
   - name: qwen3vl_image

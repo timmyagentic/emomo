@@ -105,6 +105,40 @@ func TestLoadDefaultsPublicAPIConfig(t *testing.T) {
 	}
 }
 
+func TestLoadBindsLocalAnalyzerEnv(t *testing.T) {
+	t.Setenv("VLM_PROVIDER", "local_text_presence")
+	t.Setenv("VLM_MODEL", "local-text-presence-test")
+	t.Setenv("LOCAL_ANALYZER_COMMAND", "/usr/local/bin/tesseract")
+	t.Setenv("LOCAL_ANALYZER_LANG", "eng")
+	t.Setenv("LOCAL_ANALYZER_PSM", "7")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("vlm: {}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.VLM.Provider != "local_text_presence" {
+		t.Fatalf("vlm.provider = %q, want local_text_presence", cfg.VLM.Provider)
+	}
+	if cfg.VLM.Model != "local-text-presence-test" {
+		t.Fatalf("vlm.model = %q, want local-text-presence-test", cfg.VLM.Model)
+	}
+	if cfg.VLM.LocalAnalyzerCommand != "/usr/local/bin/tesseract" {
+		t.Fatalf("vlm.local_analyzer_command = %q, want /usr/local/bin/tesseract", cfg.VLM.LocalAnalyzerCommand)
+	}
+	if cfg.VLM.LocalAnalyzerLang != "eng" {
+		t.Fatalf("vlm.local_analyzer_lang = %q, want eng", cfg.VLM.LocalAnalyzerLang)
+	}
+	if cfg.VLM.LocalAnalyzerPSM != "7" {
+		t.Fatalf("vlm.local_analyzer_psm = %q, want 7", cfg.VLM.LocalAnalyzerPSM)
+	}
+}
+
 func TestConfigDefaultSearchProfileUsesExplicitDefault(t *testing.T) {
 	t.Parallel()
 

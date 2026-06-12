@@ -41,10 +41,15 @@ storage:
   public_url: ""
 
 vlm:
+  # Set provider to local_text_presence to use a local tesseract command for
+  # mandatory has_text labels instead of an OpenAI-compatible VLM endpoint.
   provider: openai
   # model: set via VLM_MODEL env var
   model: ""
   base_url: https://openrouter.ai/api/v1
+  local_analyzer_command: tesseract
+  local_analyzer_lang: chi_sim+eng
+  local_analyzer_psm: "6"
 
 # Embedding configurations (list format)
 # Each embedding can have its own provider, model, and Qdrant collection
