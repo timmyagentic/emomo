@@ -107,10 +107,13 @@ type StorageConfig struct {
 
 // VLMConfig defines configuration for the Vision Language Model provider.
 type VLMConfig struct {
-	Provider string `mapstructure:"provider"`
-	Model    string `mapstructure:"model"`
-	APIKey   string `mapstructure:"api_key"`
-	BaseURL  string `mapstructure:"base_url"`
+	Provider             string `mapstructure:"provider"`
+	Model                string `mapstructure:"model"`
+	APIKey               string `mapstructure:"api_key"`
+	BaseURL              string `mapstructure:"base_url"`
+	LocalAnalyzerCommand string `mapstructure:"local_analyzer_command"`
+	LocalAnalyzerLang    string `mapstructure:"local_analyzer_lang"`
+	LocalAnalyzerPSM     string `mapstructure:"local_analyzer_psm"`
 }
 
 // IngestConfig defines ingestion concurrency and batching settings.
@@ -292,6 +295,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("vlm.provider", "openai")
 	v.SetDefault("vlm.model", "gpt-4o-mini")
 	v.SetDefault("vlm.base_url", "https://api.openai.com/v1")
+	v.SetDefault("vlm.local_analyzer_command", "tesseract")
+	v.SetDefault("vlm.local_analyzer_lang", "chi_sim+eng")
+	v.SetDefault("vlm.local_analyzer_psm", "6")
 
 	// Ingest defaults
 	v.SetDefault("ingest.workers", 5)
@@ -366,9 +372,13 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("storage.public_url", "STORAGE_PUBLIC_URL")
 
 	// VLM
+	v.BindEnv("vlm.provider", "VLM_PROVIDER")
 	v.BindEnv("vlm.api_key", "OPENAI_API_KEY")
 	v.BindEnv("vlm.base_url", "OPENAI_BASE_URL")
 	v.BindEnv("vlm.model", "VLM_MODEL")
+	v.BindEnv("vlm.local_analyzer_command", "LOCAL_ANALYZER_COMMAND")
+	v.BindEnv("vlm.local_analyzer_lang", "LOCAL_ANALYZER_LANG")
+	v.BindEnv("vlm.local_analyzer_psm", "LOCAL_ANALYZER_PSM")
 
 	// Search
 	v.BindEnv("search.score_threshold", "SEARCH_SCORE_THRESHOLD")

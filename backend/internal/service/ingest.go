@@ -38,7 +38,7 @@ type IngestService struct {
 	metadataRepo   *repository.MemeMetadataRepository
 	qdrantRepo     *repository.QdrantRepository
 	storage        storage.ObjectStorage
-	vlm            *VLMService
+	vlm            ImageAnalyzer
 	embedding      EmbeddingProvider
 	indexes        []IngestVectorIndex
 	logger         *logger.Logger
@@ -74,7 +74,7 @@ type IngestVectorIndex struct {
 //   - metadataRepo: repository for crawler/source provenance metadata; may be nil to skip metadata persistence.
 //   - qdrantRepo: Qdrant repository for vector storage.
 //   - objectStorage: object storage client for image files.
-//   - vlm: vision-language model service for descriptions.
+//   - vlm: image analyzer service for OCR/text-presence labels.
 //   - embedding: embedding provider for vector generation.
 //   - log: logger instance.
 //   - cfg: ingest configuration settings.
@@ -88,7 +88,7 @@ func NewIngestService(
 	metadataRepo *repository.MemeMetadataRepository,
 	qdrantRepo *repository.QdrantRepository,
 	objectStorage storage.ObjectStorage,
-	vlm *VLMService,
+	vlm ImageAnalyzer,
 	embedding EmbeddingProvider,
 	log *logger.Logger,
 	cfg *IngestConfig,
@@ -357,13 +357,32 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		return fmt.Errorf("no ingest vector indexes configured")
 	}
 	if hasExistingMeme {
-		targetIndexes, err = s.missingVectorIndexes(ctx, existingMeme.ID, opts.Force)
+		needsAnnotation, err := s.needsRequiredAnnotation(ctx, existingMeme.ID)
 		if err != nil {
 			return err
 		}
-		if len(targetIndexes) == 0 {
-			return errSkipDuplicate
+		if needsAnnotation {
+			// Existing image-only rows predate mandatory text-presence labels.
+			// Rewriting configured vector routes refreshes their Qdrant payloads
+			// from `unknown` to `with_text` / `without_text` after annotation.
+			targetIndexes = s.indexes
+		} else {
+			targetIndexes, err = s.missingVectorIndexes(ctx, existingMeme.ID, opts.Force)
+			if err != nil {
+				return err
+			}
+			if len(targetIndexes) == 0 {
+				return errSkipDuplicate
+			}
 		}
+	}
+	forceVectorReplace := opts.Force
+	if hasExistingMeme && len(targetIndexes) == len(s.indexes) {
+		needsAnnotation, err := s.needsRequiredAnnotation(ctx, existingMeme.ID)
+		if err != nil {
+			return err
+		}
+		forceVectorReplace = forceVectorReplace || needsAnnotation
 	}
 
 	var memeID string
@@ -473,7 +492,12 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		createdNewMeme = true // Mark that we created a new meme record
 	}
 
-	annotation := s.prepareAnnotationBestEffort(ctx, memeID, contentHash, imageData, processedFormat)
+	annotation, err := s.prepareRequiredAnnotation(ctx, memeID, contentHash, imageData, processedFormat)
+	if err != nil {
+		rollbackMeme()
+		rollbackStorage()
+		return err
+	}
 	vlmDescription = annotation.Description
 	ocrText = annotation.OCRText
 	annotationID = annotation.ID
@@ -503,7 +527,7 @@ func (s *IngestService) processItem(ctx context.Context, sourceType string, item
 		MemeID:         memeID,
 		ContentHash:    contentHash,
 		AnnotationID:   annotationID,
-		Force:          opts.Force,
+		Force:          forceVectorReplace,
 		ImageURL:       storageURL,
 		ImageData:      imageData,
 		ImageMediaType: getContentType(processedFormat),
@@ -574,32 +598,47 @@ type annotationResult struct {
 	Created     bool
 }
 
-func (s *IngestService) prepareAnnotationBestEffort(ctx context.Context, memeID, contentHash string, imageData []byte, format string) annotationResult {
+func (s *IngestService) needsRequiredAnnotation(ctx context.Context, memeID string) (bool, error) {
+	if s.annotationRepo == nil {
+		return true, nil
+	}
+	exists, err := s.annotationRepo.ExistsByMemeID(ctx, memeID)
+	if err != nil {
+		return false, fmt.Errorf("failed to check meme annotations: %w", err)
+	}
+	return !exists, nil
+}
+
+func (s *IngestService) prepareRequiredAnnotation(ctx context.Context, memeID, contentHash string, imageData []byte, format string) (annotationResult, error) {
 	result := annotationResult{}
 	if s.vlm == nil {
-		return result
+		return result, fmt.Errorf("VLM service is required to classify text presence: meme_id=%s", memeID)
+	}
+	if s.annotationRepo == nil {
+		return result, fmt.Errorf("meme annotation repository is required to classify text presence: meme_id=%s", memeID)
 	}
 
-	analyzerModel := s.vlm.GetModel()
-	if s.annotationRepo != nil && analyzerModel != "" {
-		existingAnnotation, err := s.annotationRepo.GetByMemeIDAndModel(ctx, memeID, analyzerModel)
-		if err == nil && existingAnnotation != nil {
-			result.ID = existingAnnotation.ID
-			result.Description = existingAnnotation.Description
-			result.OCRText = normalizeOCRText(existingAnnotation.OCRText)
-			result.OCRReliable = hasReliableTextPresence(existingAnnotation, result.OCRText)
-			logger.CtxDebug(ctx, "Reusing existing annotation: content_hash=%s, analyzer_model=%s", contentHash, analyzerModel)
-			return result
-		}
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			logger.CtxWarn(ctx, "Failed to load meme annotation: meme_id=%s, analyzer_model=%s, error=%v", memeID, analyzerModel, err)
-		}
+	analyzerModel := strings.TrimSpace(s.vlm.GetModel())
+	if analyzerModel == "" {
+		return result, fmt.Errorf("VLM analyzer model is required to classify text presence: meme_id=%s", memeID)
+	}
+
+	existingAnnotation, err := s.annotationRepo.GetByMemeIDAndModel(ctx, memeID, analyzerModel)
+	if err == nil && existingAnnotation != nil {
+		result.ID = existingAnnotation.ID
+		result.Description = existingAnnotation.Description
+		result.OCRText = normalizeOCRText(existingAnnotation.OCRText)
+		result.OCRReliable = hasReliableTextPresence(existingAnnotation, result.OCRText)
+		logger.CtxDebug(ctx, "Reusing existing annotation: content_hash=%s, analyzer_model=%s", contentHash, analyzerModel)
+		return result, nil
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return result, fmt.Errorf("failed to load meme annotation: meme_id=%s, analyzer_model=%s: %w", memeID, analyzerModel, err)
 	}
 
 	analysis, err := s.vlm.AnalyzeImage(ctx, imageData, format)
 	if err != nil {
-		logger.CtxWarn(ctx, "Failed to analyze image with VLM; continuing with image vector only: content_hash=%s, error=%v", contentHash, err)
-		return result
+		return result, fmt.Errorf("failed to analyze image with VLM for required text-presence label: content_hash=%s: %w", contentHash, err)
 	}
 	result.Description = analysis.Description
 	result.OCRText = normalizeOCRText(analysis.OCRText)
@@ -608,21 +647,16 @@ func (s *IngestService) prepareAnnotationBestEffort(ctx context.Context, memeID,
 	// authoritative — mark it reliable for downstream text-presence labeling.
 	result.OCRReliable = true
 
-	if s.annotationRepo == nil || analyzerModel == "" {
-		return result
-	}
-
 	annotationRecord := buildMemeAnnotation(uuid.New().String(), memeID, analyzerModel, result.Description, result.OCRText, result.OCRReliable)
 	if err := s.annotationRepo.Create(ctx, annotationRecord); err != nil {
-		logger.CtxWarn(ctx, "Failed to save meme annotation; continuing without annotation link: meme_id=%s, error=%v", memeID, err)
-		return result
+		return result, fmt.Errorf("failed to save required meme annotation: meme_id=%s: %w", memeID, err)
 	}
 
 	result.ID = annotationRecord.ID
 	result.Created = true
 	logger.CtxDebug(ctx, "Created new meme annotation: content_hash=%s, analyzer_model=%s, annotation_id=%s",
 		contentHash, analyzerModel, result.ID)
-	return result
+	return result, nil
 }
 
 func buildMemeAnnotation(id, memeID, analyzerModel, description, ocrText string, ocrReliable bool) *domain.MemeAnnotation {
@@ -1104,10 +1138,15 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 	stats.TotalItems = int64(len(memes))
 
 	for _, meme := range memes {
-		select {
-		case <-ctx.Done():
-			break
-		default:
+		if err := ctx.Err(); err != nil {
+			return stats, err
+		}
+
+		needsAnnotation, err := s.needsRequiredAnnotation(ctx, meme.ID)
+		if err != nil {
+			logger.CtxError(ctx, "Failed to check annotation completeness: meme_id=%s, error=%v", meme.ID, err)
+			stats.FailedItems++
+			continue
 		}
 
 		targetIndexes, err := s.missingVectorIndexes(ctx, meme.ID, false)
@@ -1115,6 +1154,11 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 			logger.CtxError(ctx, "Failed to check vector completeness: meme_id=%s, error=%v", meme.ID, err)
 			stats.FailedItems++
 			continue
+		}
+		forceVectorReplace := false
+		if needsAnnotation {
+			targetIndexes = s.indexes
+			forceVectorReplace = true
 		}
 		if len(targetIndexes) == 0 {
 			stats.ProcessedItems++
@@ -1142,7 +1186,12 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 		var ocrText string
 		var annotationID string
 		imageFormat := persistence.ImageFormatToExt(meme.ImageInfo.GetFormat())
-		annotation := s.prepareAnnotationBestEffort(ctx, meme.ID, meme.ContentHash, imageData, imageFormat)
+		annotation, err := s.prepareRequiredAnnotation(ctx, meme.ID, meme.ContentHash, imageData, imageFormat)
+		if err != nil {
+			logger.CtxError(ctx, "Failed to prepare required annotation: meme_id=%s, error=%v", meme.ID, err)
+			stats.FailedItems++
+			continue
+		}
 		description = annotation.Description
 		ocrText = annotation.OCRText
 		annotationID = annotation.ID
@@ -1172,7 +1221,7 @@ func (s *IngestService) RetryPending(ctx context.Context, limit int) (*IngestSta
 			MemeID:         meme.ID,
 			ContentHash:    meme.ContentHash,
 			AnnotationID:   annotationID,
-			Force:          false,
+			Force:          forceVectorReplace,
 			ImageURL:       imageURL,
 			ImageData:      imageData,
 			ImageMediaType: getContentType(imageFormat),
