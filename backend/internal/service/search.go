@@ -45,6 +45,8 @@ type RetrievalWeights struct {
 	Keyword float32
 }
 
+const withTextResultBoost = 1.06
+
 // SearchProfileConfig binds vector collections into one profile. Caption and
 // keyword are optional so deployments can run image-first search while the
 // caption dense embedding strategy is being evaluated.
@@ -503,7 +505,7 @@ func (s *SearchService) TextSearch(ctx context.Context, req *pb.SearchRequest) (
 		}
 	}
 
-	results := s.buildSearchResultsFromQdrant(qdrantResults, usingHybrid, int(topK))
+	results := s.buildSearchResultsFromQdrant(qdrantResults, usingHybrid, int(topK), shouldBoostWithTextResults(req, pb.TextPresence_TEXT_PRESENCE_UNSPECIFIED))
 	s.enrichSearchResults(ctx, results)
 
 	return &pb.SearchResponse{
@@ -515,7 +517,7 @@ func (s *SearchService) TextSearch(ctx context.Context, req *pb.SearchRequest) (
 	}, nil
 }
 
-func (s *SearchService) buildSearchResultsFromQdrant(qdrantResults []repository.SearchResult, usingHybrid bool, topK int) []*pb.SearchResult {
+func (s *SearchService) buildSearchResultsFromQdrant(qdrantResults []repository.SearchResult, usingHybrid bool, topK int, boostWithTextResults bool) []*pb.SearchResult {
 	results := make([]*pb.SearchResult, 0, topK)
 	for _, qr := range qdrantResults {
 		if qr.Payload == nil {
@@ -535,6 +537,9 @@ func (s *SearchService) buildSearchResultsFromQdrant(qdrantResults []repository.
 			Description:  qr.Payload.VLMDescription,
 			TextPresence: persistence.TextPresenceFromString(qr.Payload.TextPresence),
 		})
+	}
+	if boostWithTextResults {
+		boostAndSortWithTextResults(results)
 	}
 	if len(results) > topK {
 		results = results[:topK]
@@ -611,7 +616,14 @@ func (s *SearchService) searchProfile(
 	if finalTopK <= 0 {
 		finalTopK = s.retrieval.FinalTopK
 	}
-	results := fuseProfileResults(imageResults, captionResults, keywordResults, s.retrieval.Weights, finalTopK)
+	results := fuseProfileResults(
+		imageResults,
+		captionResults,
+		keywordResults,
+		s.retrieval.Weights,
+		finalTopK,
+		shouldBoostWithTextResults(req, pb.TextPresence_TEXT_PRESENCE_UNSPECIFIED),
+	)
 	s.enrichSearchResults(ctx, results)
 
 	return &pb.SearchResponse{
@@ -743,7 +755,14 @@ func (s *SearchService) searchProfileWithPlan(
 	if s.agentic != nil && s.agentic.RerankTopK() > candidateLimit {
 		candidateLimit = s.agentic.RerankTopK()
 	}
-	candidates := fuseProfileCandidates(imageResults, captionResults, keywordResults, plan.Weights, candidateLimit)
+	candidates := fuseProfileCandidates(
+		imageResults,
+		captionResults,
+		keywordResults,
+		plan.Weights,
+		candidateLimit,
+		shouldBoostWithTextResults(req, plan.TextPresence),
+	)
 	logTopRouteEvidence(ctx, candidates, 10)
 
 	if s.agentic != nil && s.agentic.reranker != nil && len(candidates) > 0 {
@@ -782,6 +801,11 @@ func buildSearchFiltersWithPlan(req *pb.SearchRequest, plan SearchPlan) *reposit
 		return nil
 	}
 	return filters
+}
+
+func shouldBoostWithTextResults(req *pb.SearchRequest, plannedTextPresence pb.TextPresence) bool {
+	return req.GetTextPresence() == pb.TextPresence_TEXT_PRESENCE_UNSPECIFIED &&
+		plannedTextPresence == pb.TextPresence_TEXT_PRESENCE_UNSPECIFIED
 }
 
 func logTopRouteEvidence(ctx context.Context, candidates []SearchCandidate, limit int) {
@@ -833,8 +857,9 @@ func fuseProfileResults(
 	keywordResults []repository.SearchResult,
 	weights RetrievalWeights,
 	topK int,
+	boostWithTextResults bool,
 ) []*pb.SearchResult {
-	candidates := fuseProfileCandidates(imageResults, captionResults, keywordResults, weights, topK)
+	candidates := fuseProfileCandidates(imageResults, captionResults, keywordResults, weights, topK, boostWithTextResults)
 	return candidatesToSearchResults(candidates, topK)
 }
 
@@ -844,6 +869,7 @@ func fuseProfileCandidates(
 	keywordResults []repository.SearchResult,
 	weights RetrievalWeights,
 	topK int,
+	boostWithTextResults bool,
 ) []SearchCandidate {
 	if topK <= 0 {
 		topK = 20
@@ -855,7 +881,6 @@ func fuseProfileCandidates(
 	}
 
 	byMemeID := make(map[string]*SearchCandidate)
-	maxScore := float32(0)
 	for _, route := range routes {
 		if route.weight <= 0 {
 			continue
@@ -889,9 +914,16 @@ func fuseProfileCandidates(
 			}
 			applyRouteEvidence(item, route.route, rank+1, qr.Score, qr.Payload)
 			item.FusionScore += rankScore
-			if item.FusionScore > maxScore {
-				maxScore = item.FusionScore
-			}
+		}
+	}
+
+	maxScore := float32(0)
+	for _, item := range byMemeID {
+		if boostWithTextResults && item.Result.GetTextPresence() == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT {
+			item.FusionScore *= withTextResultBoost
+		}
+		if item.FusionScore > maxScore {
+			maxScore = item.FusionScore
 		}
 	}
 
@@ -915,6 +947,20 @@ func fuseProfileCandidates(
 	}
 
 	return items
+}
+
+func boostAndSortWithTextResults(results []*pb.SearchResult) {
+	for _, result := range results {
+		if result.GetTextPresence() == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT {
+			result.Score *= withTextResultBoost
+		}
+	}
+	sort.SliceStable(results, func(i, j int) bool {
+		if results[i].GetScore() == results[j].GetScore() {
+			return results[i].GetMeme().GetId() < results[j].GetMeme().GetId()
+		}
+		return results[i].GetScore() > results[j].GetScore()
+	})
 }
 
 func applyRouteEvidence(candidate *SearchCandidate, route string, rank int, score float32, payload *repository.MemePayload) {
@@ -1113,7 +1159,7 @@ func (s *SearchService) TextSearchWithProgress(
 		}
 	}
 
-	results := s.buildSearchResultsFromQdrant(qdrantResults, usingHybrid, int(topK))
+	results := s.buildSearchResultsFromQdrant(qdrantResults, usingHybrid, int(topK), shouldBoostWithTextResults(req, pb.TextPresence_TEXT_PRESENCE_UNSPECIFIED))
 	if len(results) > 0 {
 		progressCh <- &pb.SearchProgressEvent{
 			Stage:   pb.SearchStage_SEARCH_STAGE_ENRICHING,

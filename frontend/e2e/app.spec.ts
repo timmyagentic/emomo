@@ -119,6 +119,38 @@ test.describe('Emomo 表情包搜索应用', () => {
     await expect(page.getByText('匹配度偏低')).toBeHidden();
   });
 
+  test('搜索请求包含用户选择的文字筛选条件', async ({ page }) => {
+    let requestBody: Record<string, unknown> | undefined;
+
+    await page.route('**/api/v1/search/stream', async (route) => {
+      requestBody = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: [
+          'event: complete',
+          `data: ${JSON.stringify({
+            stage: 7,
+            message: '搜索完成',
+            complete: {
+              results: [],
+              total: 0,
+              query: '猫咪',
+            },
+          })}`,
+          '',
+        ].join('\n'),
+      });
+    });
+
+    await page.getByRole('radio', { name: '有文字' }).click();
+    await page.locator('input[type="text"]').fill('猫咪');
+    await page.getByRole('button', { name: '搜索', exact: true }).click();
+
+    await expect.poll(() => requestBody !== undefined, { timeout: 5000 }).toBe(true);
+    expect([2, 'TEXT_PRESENCE_WITH_TEXT']).toContain(requestBody?.textPresence);
+  });
+
   test('随便逛逛区域显示', async ({ page }) => {
     // 检查随便逛逛标题或表情网格
     // 等待初始加载

@@ -111,6 +111,8 @@ export interface SearchProgressView {
   error?: string;
 }
 
+export type TextPresenceFilter = 'all' | 'with_text' | 'without_text';
+
 const STAGE_TO_SLUG: Record<SearchStage, SearchStageSlug | undefined> = {
   [SearchStage.UNSPECIFIED]: undefined,
   [SearchStage.QUERY_EXPANSION_START]: 'query_expansion_start',
@@ -123,15 +125,33 @@ const STAGE_TO_SLUG: Record<SearchStage, SearchStageSlug | undefined> = {
   [SearchStage.ERROR]: 'error',
 };
 
+function textPresenceFilterToProto(filter: TextPresenceFilter): TextPresence {
+  switch (filter) {
+    case 'with_text':
+      return TextPresence.WITH_TEXT;
+    case 'without_text':
+      return TextPresence.WITHOUT_TEXT;
+    case 'all':
+    default:
+      return TextPresence.UNSPECIFIED;
+  }
+}
+
 /** Builds a SearchRequest message body for the search endpoints. Empty fields
  *  default to proto3 zero values (UNSPECIFIED / 0 / "") which the backend
  *  treats as "not provided". */
-function buildSearchRequest(query: string, topK: number, profile?: string, category?: string): SearchRequest {
+function buildSearchRequest(
+  query: string,
+  topK: number,
+  profile?: string,
+  category?: string,
+  textPresenceFilter: TextPresenceFilter = 'all',
+): SearchRequest {
   return create(SearchRequestSchema, {
     query,
     topK,
     category: category ?? '',
-    textPresence: TextPresence.UNSPECIFIED,
+    textPresence: textPresenceFilterToProto(textPresenceFilter),
     collection: '',
     profile: profile ?? '',
   });
@@ -143,8 +163,9 @@ export async function searchMemes(
   topK: number = 100,
   category?: string,
   profile?: string,
+  textPresenceFilter: TextPresenceFilter = 'all',
 ): Promise<{ results: DisplayMeme[]; total: number }> {
-  const request = buildSearchRequest(query, topK, profile, category);
+  const request = buildSearchRequest(query, topK, profile, category, textPresenceFilter);
   const response = await fetch(`${API_BASE}/search`, {
     method: 'POST',
     headers: getHeaders('application/json'),
@@ -234,8 +255,9 @@ export async function searchMemesStream(
   onProgress: (event: SearchProgressView) => void,
   signal?: AbortSignal,
   profile?: string,
+  textPresenceFilter: TextPresenceFilter = 'all',
 ): Promise<void> {
-  const request = buildSearchRequest(query, topK, profile);
+  const request = buildSearchRequest(query, topK, profile, undefined, textPresenceFilter);
   const response = await fetch(`${API_BASE}/search/stream`, {
     method: 'POST',
     headers: getHeaders('application/json'),

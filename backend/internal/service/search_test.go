@@ -185,7 +185,7 @@ func TestFuseProfileResultsCombinesRoutesByMemeID(t *testing.T) {
 		Image:   0.6,
 		Caption: 0.3,
 		Keyword: 0.1,
-	}, 20)
+	}, 20, false)
 
 	if len(results) != 3 {
 		t.Fatalf("fuseProfileResults returned %d results, want 3", len(results))
@@ -212,7 +212,7 @@ func TestFuseProfileResultsIgnoresDuplicateMemeWithinSameRoute(t *testing.T) {
 	candidates := fuseProfileCandidates(imageResults, nil, keywordResults, RetrievalWeights{
 		Image:   0.7,
 		Keyword: 0.3,
-	}, 20)
+	}, 20, false)
 
 	if len(candidates) != 2 {
 		t.Fatalf("candidate count = %d, want 2", len(candidates))
@@ -232,6 +232,43 @@ func TestFuseProfileResultsIgnoresDuplicateMemeWithinSameRoute(t *testing.T) {
 	}
 	if memeA.Result.GetScore() >= 1 {
 		t.Fatalf("duplicate keyword point inflated score to %v, want below image top score", memeA.Result.GetScore())
+	}
+}
+
+func TestFuseProfileResultsBoostsWithTextWhenUnfiltered(t *testing.T) {
+	t.Parallel()
+
+	imageResults := []repository.SearchResult{
+		{
+			ID: "point-image-1",
+			Payload: &repository.MemePayload{
+				MemeID:       "meme-without-text",
+				StorageURL:   "without-text.jpg",
+				TextPresence: "without_text",
+			},
+		},
+		{
+			ID: "point-image-2",
+			Payload: &repository.MemePayload{
+				MemeID:       "meme-with-text",
+				StorageURL:   "with-text.jpg",
+				TextPresence: "with_text",
+			},
+		},
+	}
+
+	results := fuseProfileResults(imageResults, nil, nil, RetrievalWeights{
+		Image: 1,
+	}, 20, true)
+
+	if len(results) != 2 {
+		t.Fatalf("fuseProfileResults returned %d results, want 2", len(results))
+	}
+	if got := results[0].GetMeme().GetId(); got != "meme-with-text" {
+		t.Fatalf("first result ID = %q, want boosted with-text meme", got)
+	}
+	if got := results[0].GetTextPresence(); got != pb.TextPresence_TEXT_PRESENCE_WITH_TEXT {
+		t.Fatalf("first result text_presence = %v, want WITH_TEXT", got)
 	}
 }
 
