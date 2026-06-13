@@ -1,4 +1,4 @@
-import { searchMemesStream } from './index';
+import { searchMemes, searchMemesStream } from './index';
 
 const makeResponse = (body: unknown, init?: { ok?: boolean; body?: unknown; statusText?: string }) => ({
   ok: init?.ok ?? true,
@@ -64,4 +64,21 @@ test('falls back to non-streaming search when response body is not readable', as
     format: 'png',
     textPresence: 'with_text',
   });
+});
+
+test('sends selected text presence filter in search request', async () => {
+  const fetchMock = jest.fn().mockResolvedValueOnce(
+    makeResponse({
+      results: [],
+      total: 0,
+      query: '猫咪',
+    })
+  );
+  global.fetch = fetchMock as unknown as typeof fetch;
+
+  await searchMemes('猫咪', { topK: 20, textPresenceFilter: 'with_text' });
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { textPresence?: unknown };
+  expect([2, 'TEXT_PRESENCE_WITH_TEXT']).toContain(requestBody.textPresence);
 });

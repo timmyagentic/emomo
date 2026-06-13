@@ -2,6 +2,7 @@ import { ImageFormat, TextPresence } from '@gen/emomo/v1/types_pb';
 import type { Meme as PbMeme, SearchResult as PbSearchResult } from '@gen/emomo/v1/meme_pb';
 
 export type ImageFormatSlug = 'jpg' | 'png' | 'webp' | 'unknown';
+export type TextPresenceFilter = 'all' | 'with_text' | 'without_text';
 
 export interface DisplayMeme {
   id: string;
@@ -107,4 +108,3 @@ export function pbSearchResultToDisplay(result: PbSearchResult): DisplayMeme {
     textPresence: result.textPresence,
   });
 }
-

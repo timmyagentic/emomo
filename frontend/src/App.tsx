@@ -8,6 +8,7 @@ import {
   getStats,
   type SearchStageSlug,
   type SearchProgressView,
+  type TextPresenceFilter,
 } from './api';
 import { curatedMemes } from './data/curatedMemes';
 import type { DisplayMeme } from './types';
@@ -38,6 +39,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [inputQuery, setInputQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [textPresenceFilter, setTextPresenceFilter] = useState<TextPresenceFilter>('all');
   const [memeCount, setMemeCount] = useState(5791);
   const [selectedMeme, setSelectedMeme] = useState<DisplayMeme | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -130,7 +132,7 @@ function App() {
   }, []);
 
   // Handle search with streaming progress
-  const handleSearch = useCallback(async (query: string) => {
+  const handleSearch = useCallback(async (query: string, filter: TextPresenceFilter = textPresenceFilter) => {
     // Cancel any existing search
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -214,7 +216,9 @@ function App() {
             );
           }
         },
-        abortController.signal
+        abortController.signal,
+        undefined,
+        filter
       );
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
@@ -237,7 +241,7 @@ function App() {
         setIsLoading(false);
       }
     }
-  }, []);
+  }, [textPresenceFilter]);
 
   const resetToBrowse = useCallback(() => {
     // Cancel any ongoing search
@@ -248,6 +252,7 @@ function App() {
     setMemes([]);
     setInputQuery('');
     setSearchQuery('');
+    setTextPresenceFilter('all');
     setHasSearched(false);
     setSearchVisibleCount(SEARCH_PAGE_SIZE);
     setSelectedMeme(null);
@@ -263,6 +268,15 @@ function App() {
 
     resetToBrowse();
   }, [resetToBrowse]);
+
+  const handleTextPresenceFilterChange = useCallback((filter: TextPresenceFilter) => {
+    setTextPresenceFilter(filter);
+
+    const query = (inputQuery || searchQuery).trim();
+    if (hasSearched && query) {
+      void handleSearch(query, filter);
+    }
+  }, [handleSearch, hasSearched, inputQuery, searchQuery]);
 
   const handleLoadMoreFeed = useCallback(() => {
     if (hasSearched) return;
@@ -301,6 +315,8 @@ function App() {
           value={inputQuery}
           onValueChange={handleInputQueryChange}
           onSearch={handleSearch}
+          textPresenceFilter={textPresenceFilter}
+          onTextPresenceFilterChange={handleTextPresenceFilterChange}
           isLoading={isLoading}
           compact={hasSearched}
         />

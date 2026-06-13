@@ -27,7 +27,7 @@ import {
   normalizeSearchQuery,
   type SearchHistoryEntry,
 } from './src/storage/searchHistory';
-import type { DisplayMeme, SearchProgressView, SearchStageSlug } from './src/types';
+import type { DisplayMeme, SearchProgressView, SearchStageSlug, TextPresenceFilter } from './src/types';
 import { copyMemeImage, saveMemeToLibrary, shareMeme } from './src/utils/imageActions';
 
 const INITIAL_PAGE_SIZE = 20;
@@ -71,6 +71,7 @@ const SEARCH_PROGRESS_FALLBACKS: { delayMs: number; progress: SearchProgressView
 export default function App() {
   const [inputQuery, setInputQuery] = useState('');
   const [lastQuery, setLastQuery] = useState('');
+  const [textPresenceFilter, setTextPresenceFilter] = useState<TextPresenceFilter>('all');
   const [memeCount, setMemeCount] = useState(0);
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
   const [feedMemes, setFeedMemes] = useState<DisplayMeme[]>([]);
@@ -173,7 +174,7 @@ export default function App() {
   }, [clearProgressTimers, setSearchProgress]);
 
   const runSearch = useCallback(
-    async (rawQuery?: string) => {
+    async (rawQuery?: string, filter: TextPresenceFilter = textPresenceFilter) => {
       const query = normalizeSearchQuery(rawQuery ?? inputQuery);
       if (!query || isSearching) {
         return;
@@ -202,7 +203,7 @@ export default function App() {
         let accumulatedThinking = '';
         await searchMemesStream(
           query,
-          { topK: SEARCH_TOP_K },
+          { topK: SEARCH_TOP_K, textPresenceFilter: filter },
           (event) => {
             if (abortController.signal.aborted) {
               return;
@@ -243,8 +244,23 @@ export default function App() {
         }
       }
     },
-    [clearProgressTimers, inputQuery, isSearching, setSearchProgress, startFallbackProgress, updateSearchProgress]
+    [
+      clearProgressTimers,
+      inputQuery,
+      isSearching,
+      setSearchProgress,
+      startFallbackProgress,
+      textPresenceFilter,
+      updateSearchProgress,
+    ]
   );
+
+  const handleTextPresenceFilterChange = useCallback((filter: TextPresenceFilter) => {
+    setTextPresenceFilter(filter);
+    if (hasSearched && lastQuery && !isSearching) {
+      void runSearch(lastQuery, filter);
+    }
+  }, [hasSearched, isSearching, lastQuery, runSearch]);
 
   const clearHistory = useCallback(async () => {
     await clearSearchHistory();
@@ -312,6 +328,8 @@ export default function App() {
             value={inputQuery}
             onChangeText={setInputQuery}
             onSubmit={() => runSearch()}
+            textPresenceFilter={textPresenceFilter}
+            onTextPresenceFilterChange={handleTextPresenceFilterChange}
             onCancel={cancelSearch}
             isLoading={isSearching}
           />

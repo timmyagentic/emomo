@@ -167,7 +167,7 @@ func TestFuseProfileCandidatesPreservesRouteEvidenceAndUsesDynamicWeights(t *tes
 		Image:   0.1,
 		Caption: 0.2,
 		Keyword: 0.7,
-	}, 20)
+	}, 20, false)
 
 	if len(candidates) != 2 {
 		t.Fatalf("fuseProfileCandidates returned %d candidates, want 2", len(candidates))
