@@ -41,8 +41,8 @@ Before you begin, ensure you have the following installed:
    cp .env.example .env
    ```
 
-   - `VITE_API_BASE`: The base URL of the backend API (default: `http://localhost:8080/api/v1`).
-   - `VITE_API_TOKEN`: (Optional) API token for authentication.
+   - `VITE_API_BASE`: Local development API override (default: `http://localhost:8080/api/v1`). Production builds always use `https://api.emomo.net/api/v1`.
+   - Do not expose Hugging Face tokens in frontend environment variables. Production clients should go through the Cloudflare API gateway, which injects the upstream token server-side.
 
 ## Usage
 

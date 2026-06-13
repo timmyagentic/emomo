@@ -41,5 +41,5 @@
 - Call out any API or env changes in the PR description.
 
 ## Configuration Tips
-- Copy `.env.example` to `.env` and set `VITE_API_BASE` and optional `VITE_API_TOKEN`.
+- Copy `.env.example` to `.env` and set `VITE_API_BASE` for local development. Production builds use the Cloudflare API gateway. Do not add private upstream tokens to Vite env vars.
 - Vite only exposes env vars prefixed with `VITE_`.

@@ -40,8 +40,8 @@ Uses React hooks only (useState, useEffect, useCallback, useMemo, useRef). App.t
 
 ### API Configuration
 Environment variables (copy `.env.example` to `.env`):
-- `VITE_API_BASE` - Backend API URL (default: `http://localhost:8080/api/v1`)
-- `VITE_API_TOKEN` - Optional Bearer token for auth
+- `VITE_API_BASE` - Local development API override (default: `http://localhost:8080/api/v1`; production builds use `https://api.emomo.net/api/v1`)
+- Do not expose private upstream tokens in Vite env vars; production clients should call the Cloudflare API gateway.
 
 Demo data fallback exists in App.tsx for offline development.
 
