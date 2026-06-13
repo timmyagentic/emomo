@@ -47,8 +47,8 @@ Copy `.env.example` to `.env` and configure:
 ```bash
 cp .env.example .env
 ```
-- `VITE_API_BASE`: URL of the backend API (defaults to `http://localhost:8080/api/v1`).
-- `VITE_API_TOKEN`: Optional authentication token.
+- `VITE_API_BASE`: Local development API override (defaults to `http://localhost:8080/api/v1`; production builds use `https://api.emomo.net/api/v1`).
+- Do not expose private upstream tokens in Vite env vars; production clients should call the Cloudflare API gateway.
 
 ### 3. Running the Dev Server
 ```bash

@@ -19,15 +19,14 @@ import {
 import { logWarn } from '../utils/logger';
 
 /**
- * The base URL for the API, loaded from environment variables.
- * Defaults to 'http://localhost:8080/api/v1'.
+ * Production clients must use the public gateway. The gateway injects the
+ * private Hugging Face token server-side; browser bundles must not carry it.
  */
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api/v1';
-
-/**
- * The API token for authentication, loaded from environment variables.
- */
-const API_TOKEN = import.meta.env.VITE_API_TOKEN || '';
+const PRODUCTION_API_BASE = 'https://api.emomo.net/api/v1';
+const LOCAL_API_BASE = 'http://localhost:8080/api/v1';
+const API_BASE = import.meta.env.DEV
+  ? import.meta.env.VITE_API_BASE || LOCAL_API_BASE
+  : PRODUCTION_API_BASE;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -53,9 +52,6 @@ function getHeaders(contentType?: string): HeadersInit {
   const headers: HeadersInit = {};
   if (contentType) {
     headers['Content-Type'] = contentType;
-  }
-  if (API_TOKEN) {
-    headers['Authorization'] = `Bearer ${API_TOKEN}`;
   }
   return headers;
 }
