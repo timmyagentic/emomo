@@ -272,6 +272,30 @@ func TestFuseProfileResultsBoostsWithTextWhenUnfiltered(t *testing.T) {
 	}
 }
 
+func TestBuildSearchResultsFromQdrantClampsBoostedWithTextScore(t *testing.T) {
+	t.Parallel()
+
+	searchService := &SearchService{}
+	results := searchService.buildSearchResultsFromQdrant([]repository.SearchResult{
+		{
+			ID:    "point-image-1",
+			Score: 0.99,
+			Payload: &repository.MemePayload{
+				MemeID:       "meme-with-text",
+				StorageURL:   "with-text.jpg",
+				TextPresence: "with_text",
+			},
+		},
+	}, true, 20, true)
+
+	if len(results) != 1 {
+		t.Fatalf("buildSearchResultsFromQdrant returned %d results, want 1", len(results))
+	}
+	if got := results[0].GetScore(); got > 1 {
+		t.Fatalf("boosted score = %v, want <= 1", got)
+	}
+}
+
 type failingEmbeddingProvider struct{}
 
 func (p *failingEmbeddingProvider) Embed(context.Context, string) ([]float32, error) {

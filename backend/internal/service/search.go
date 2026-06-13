@@ -952,7 +952,7 @@ func fuseProfileCandidates(
 func boostAndSortWithTextResults(results []*pb.SearchResult) {
 	for _, result := range results {
 		if result.GetTextPresence() == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT {
-			result.Score *= withTextResultBoost
+			result.Score = min(result.Score*withTextResultBoost, 1)
 		}
 	}
 	sort.SliceStable(results, func(i, j int) bool {
