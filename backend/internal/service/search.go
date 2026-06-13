@@ -950,16 +950,20 @@ func fuseProfileCandidates(
 }
 
 func boostAndSortWithTextResults(results []*pb.SearchResult) {
+	sortScores := make(map[*pb.SearchResult]float32, len(results))
 	for _, result := range results {
+		sortScore := result.GetScore()
 		if result.GetTextPresence() == pb.TextPresence_TEXT_PRESENCE_WITH_TEXT {
-			result.Score = min(result.Score*withTextResultBoost, 1)
+			sortScore = result.Score * withTextResultBoost
+			result.Score = min(sortScore, 1)
 		}
+		sortScores[result] = sortScore
 	}
 	sort.SliceStable(results, func(i, j int) bool {
-		if results[i].GetScore() == results[j].GetScore() {
+		if sortScores[results[i]] == sortScores[results[j]] {
 			return results[i].GetMeme().GetId() < results[j].GetMeme().GetId()
 		}
-		return results[i].GetScore() > results[j].GetScore()
+		return sortScores[results[i]] > sortScores[results[j]]
 	})
 }
 

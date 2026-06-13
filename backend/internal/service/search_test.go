@@ -296,6 +296,42 @@ func TestBuildSearchResultsFromQdrantClampsBoostedWithTextScore(t *testing.T) {
 	}
 }
 
+func TestBuildSearchResultsFromQdrantSortsByUnclampedBoostedScore(t *testing.T) {
+	t.Parallel()
+
+	searchService := &SearchService{}
+	results := searchService.buildSearchResultsFromQdrant([]repository.SearchResult{
+		{
+			ID:    "point-image-1",
+			Score: 0.95,
+			Payload: &repository.MemePayload{
+				MemeID:       "a-lower-score",
+				StorageURL:   "lower.jpg",
+				TextPresence: "with_text",
+			},
+		},
+		{
+			ID:    "point-image-2",
+			Score: 0.96,
+			Payload: &repository.MemePayload{
+				MemeID:       "z-higher-score",
+				StorageURL:   "higher.jpg",
+				TextPresence: "with_text",
+			},
+		},
+	}, true, 20, true)
+
+	if len(results) != 2 {
+		t.Fatalf("buildSearchResultsFromQdrant returned %d results, want 2", len(results))
+	}
+	if got := results[0].GetMeme().GetId(); got != "z-higher-score" {
+		t.Fatalf("first result ID = %q, want higher boosted score before meme ID tie-break", got)
+	}
+	if results[0].GetScore() > 1 || results[1].GetScore() > 1 {
+		t.Fatalf("boosted scores = [%v, %v], want both <= 1", results[0].GetScore(), results[1].GetScore())
+	}
+}
+
 type failingEmbeddingProvider struct{}
 
 func (p *failingEmbeddingProvider) Embed(context.Context, string) ([]float32, error) {
