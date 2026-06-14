@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -49,8 +50,10 @@ const (
 
 // QueryExpansionService handles query expansion using an LLM.
 type QueryExpansionService struct {
+	mu       sync.RWMutex
 	client   *resty.Client
 	model    string
+	baseURL  string
 	endpoint string
 	apiKey   string
 	enabled  bool
@@ -64,6 +67,14 @@ type QueryExpansionConfig struct {
 	BaseURL string
 }
 
+// QueryExpansionSnapshot exposes non-secret runtime state for logs and tests.
+type QueryExpansionSnapshot struct {
+	Enabled  bool
+	Model    string
+	BaseURL  string
+	Endpoint string
+}
+
 // NewQueryExpansionService creates a new query expansion service.
 // Parameters:
 //   - cfg: query expansion configuration (nil disables expansion).
@@ -71,27 +82,90 @@ type QueryExpansionConfig struct {
 // Returns:
 //   - *QueryExpansionService: initialized service instance.
 func NewQueryExpansionService(cfg *QueryExpansionConfig) *QueryExpansionService {
+	s := &QueryExpansionService{}
+	s.UpdateConfig(cfg)
+	return s
+}
+
+// UpdateConfig replaces the query expansion runtime configuration.
+// Parameters:
+//   - cfg: query expansion configuration (nil disables expansion).
+//
+// Returns:
+//   - bool: true when the effective runtime configuration changed.
+func (s *QueryExpansionService) UpdateConfig(cfg *QueryExpansionConfig) bool {
+	next := buildQueryExpansionRuntime(cfg)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.enabled == next.enabled &&
+		s.model == next.model &&
+		s.baseURL == next.baseURL &&
+		s.endpoint == next.endpoint &&
+		s.apiKey == next.apiKey {
+		return false
+	}
+
+	s.client = next.client
+	s.model = next.model
+	s.baseURL = next.baseURL
+	s.endpoint = next.endpoint
+	s.apiKey = next.apiKey
+	s.enabled = next.enabled
+	return true
+}
+
+type queryExpansionRuntime struct {
+	client   *resty.Client
+	model    string
+	baseURL  string
+	endpoint string
+	apiKey   string
+	enabled  bool
+}
+
+func buildQueryExpansionRuntime(cfg *QueryExpansionConfig) queryExpansionRuntime {
 	if cfg == nil || !cfg.Enabled {
-		return &QueryExpansionService{enabled: false}
+		return queryExpansionRuntime{}
 	}
 
 	client := resty.New()
-	client.SetHeader("Authorization", "Bearer "+cfg.APIKey)
+	apiKey := strings.TrimSpace(cfg.APIKey)
+	if apiKey != "" {
+		client.SetHeader("Authorization", "Bearer "+apiKey)
+	}
 	client.SetHeader("Content-Type", "application/json")
 	client.SetTimeout(30 * time.Second)
 
-	baseURL := cfg.BaseURL
+	baseURL := strings.TrimSpace(cfg.BaseURL)
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
+	baseURL = strings.TrimRight(baseURL, "/")
 	endpoint := baseURL + "/chat/completions"
 
-	return &QueryExpansionService{
+	return queryExpansionRuntime{
 		client:   client,
-		model:    cfg.Model,
+		model:    strings.TrimSpace(cfg.Model),
+		baseURL:  baseURL,
 		endpoint: endpoint,
-		apiKey:   cfg.APIKey,
+		apiKey:   apiKey,
 		enabled:  true,
+	}
+}
+
+func (s *QueryExpansionService) snapshot() queryExpansionRuntime {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return queryExpansionRuntime{
+		client:   s.client,
+		model:    s.model,
+		baseURL:  s.baseURL,
+		endpoint: s.endpoint,
+		apiKey:   s.apiKey,
+		enabled:  s.enabled,
 	}
 }
 
@@ -100,7 +174,18 @@ func NewQueryExpansionService(cfg *QueryExpansionConfig) *QueryExpansionService 
 // Returns:
 //   - bool: true when expansion is enabled.
 func (s *QueryExpansionService) IsEnabled() bool {
-	return s.enabled
+	return s.snapshot().enabled
+}
+
+// Snapshot returns the non-secret query expansion runtime configuration.
+func (s *QueryExpansionService) Snapshot() QueryExpansionSnapshot {
+	cfg := s.snapshot()
+	return QueryExpansionSnapshot{
+		Enabled:  cfg.enabled,
+		Model:    cfg.model,
+		BaseURL:  cfg.baseURL,
+		Endpoint: cfg.endpoint,
+	}
 }
 
 // queryExpansionRequest represents the request to the LLM API
@@ -155,7 +240,8 @@ type streamDelta struct {
 //   - string: expanded query text (or original on fallback).
 //   - error: non-nil if the expansion request fails.
 func (s *QueryExpansionService) Expand(ctx context.Context, query string) (string, error) {
-	if !s.enabled {
+	cfg := s.snapshot()
+	if !cfg.enabled {
 		return query, nil
 	}
 
@@ -165,7 +251,7 @@ func (s *QueryExpansionService) Expand(ctx context.Context, query string) (strin
 	}
 
 	req := queryExpansionRequest{
-		Model: s.model,
+		Model: cfg.model,
 		Messages: []queryExpansionMessage{
 			{
 				Role:    "system",
@@ -181,11 +267,11 @@ func (s *QueryExpansionService) Expand(ctx context.Context, query string) (strin
 	}
 
 	var resp queryExpansionResponse
-	httpResp, err := s.client.R().
+	httpResp, err := cfg.client.R().
 		SetContext(ctx).
 		SetBody(req).
 		SetResult(&resp).
-		Post(s.endpoint)
+		Post(cfg.endpoint)
 
 	if err != nil {
 		// On error, fall back to original query
@@ -240,7 +326,8 @@ func (s *QueryExpansionService) ExpandWithFallback(ctx context.Context, query st
 func (s *QueryExpansionService) ExpandStream(ctx context.Context, query string, tokenCh chan<- string) (string, error) {
 	defer close(tokenCh)
 
-	if !s.enabled {
+	cfg := s.snapshot()
+	if !cfg.enabled {
 		return query, nil
 	}
 
@@ -250,7 +337,7 @@ func (s *QueryExpansionService) ExpandStream(ctx context.Context, query string, 
 	}
 
 	req := queryExpansionStreamRequest{
-		Model: s.model,
+		Model: cfg.model,
 		Messages: []queryExpansionMessage{
 			{
 				Role:    "system",
@@ -272,13 +359,15 @@ func (s *QueryExpansionService) ExpandStream(ctx context.Context, query string, 
 	}
 
 	// Create HTTP request manually for streaming
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", s.endpoint, strings.NewReader(string(reqBody)))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", cfg.endpoint, strings.NewReader(string(reqBody)))
 	if err != nil {
 		return query, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+s.apiKey)
+	if cfg.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+cfg.apiKey)
+	}
 	httpReq.Header.Set("Accept", "text/event-stream")
 
 	client := &http.Client{Timeout: 30 * time.Second}

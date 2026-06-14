@@ -1,6 +1,8 @@
 package config
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -63,6 +65,175 @@ func TestLoadDefaultsAgenticSearchConfig(t *testing.T) {
 	}
 	if !cfg.Search.Agentic.FallbackOnError {
 		t.Fatal("fallback_on_error = false, want true by default")
+	}
+}
+
+func TestLoadDefaultsConfigCenter(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.ConfigCenter.Enabled {
+		t.Fatal("config_center.enabled = true, want false by default")
+	}
+	if cfg.ConfigCenter.Required {
+		t.Fatal("config_center.required = true, want false by default")
+	}
+	if cfg.ConfigCenter.URL != "" {
+		t.Fatalf("config_center.url = %q, want empty", cfg.ConfigCenter.URL)
+	}
+	if cfg.ConfigCenter.PollInterval != time.Minute {
+		t.Fatalf("config_center.poll_interval = %s, want 1m", cfg.ConfigCenter.PollInterval)
+	}
+	if cfg.ConfigCenter.Timeout != 5*time.Second {
+		t.Fatalf("config_center.timeout = %s, want 5s", cfg.ConfigCenter.Timeout)
+	}
+	if cfg.Logging.Level != "info" {
+		t.Fatalf("logging.level = %q, want info", cfg.Logging.Level)
+	}
+	if cfg.Logging.LokiProject != "emomo" {
+		t.Fatalf("logging.loki_project = %q, want emomo", cfg.Logging.LokiProject)
+	}
+}
+
+func TestLoadBindsConfigCenterEnv(t *testing.T) {
+	t.Setenv("CONFIG_CENTER_SKIP_REMOTE", "true")
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "true")
+	t.Setenv("CONFIG_CENTER_URL", "https://config.example.com/v1/config/emomo/production/emomo-api")
+	t.Setenv("CONFIG_CENTER_TOKEN", "read-token")
+	t.Setenv("CONFIG_CENTER_POLL_INTERVAL", "15s")
+	t.Setenv("CONFIG_CENTER_TIMEOUT", "2s")
+	t.Setenv("QUERY_EXPANSION_ENABLED", "false")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if !cfg.ConfigCenter.Enabled {
+		t.Fatal("config_center.enabled = false, want true")
+	}
+	if !cfg.ConfigCenter.Required {
+		t.Fatal("config_center.required = false, want true")
+	}
+	if cfg.ConfigCenter.URL != "https://config.example.com/v1/config/emomo/production/emomo-api" {
+		t.Fatalf("config_center.url = %q", cfg.ConfigCenter.URL)
+	}
+	if cfg.ConfigCenter.Token != "read-token" {
+		t.Fatalf("config_center.token = %q, want read-token", cfg.ConfigCenter.Token)
+	}
+	if cfg.ConfigCenter.PollInterval != 15*time.Second {
+		t.Fatalf("config_center.poll_interval = %s, want 15s", cfg.ConfigCenter.PollInterval)
+	}
+	if cfg.ConfigCenter.Timeout != 2*time.Second {
+		t.Fatalf("config_center.timeout = %s, want 2s", cfg.ConfigCenter.Timeout)
+	}
+	if cfg.Search.QueryExpansion.Enabled {
+		t.Fatal("query_expansion.enabled = true, want env override false")
+	}
+}
+
+func TestLoadMergesConfigCenterConfigAboveEnv(t *testing.T) {
+	t.Setenv("QUERY_EXPANSION_MODEL", "local-model")
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "true")
+	t.Setenv("CONFIG_CENTER_TOKEN", "read-token")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer read-token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"version": "remote-version",
+			"config": {
+				"database": {
+					"driver": "postgres",
+					"url": "postgresql://remote"
+				},
+				"search": {
+					"query_expansion": {
+						"enabled": true,
+						"model": "remote-model",
+						"api_key": "remote-key",
+						"base_url": "https://remote.example.com/v1"
+					}
+				},
+				"logging": {
+					"level": "warn",
+					"loki_enabled": true,
+					"loki_password": "remote-loki-token"
+				}
+			}
+		}`))
+	}))
+	defer srv.Close()
+	t.Setenv("CONFIG_CENTER_URL", srv.URL)
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("search:\n  query_expansion:\n    model: yaml-model\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Database.Driver != "postgres" {
+		t.Fatalf("database.driver = %q, want postgres", cfg.Database.Driver)
+	}
+	if cfg.Database.URL != "postgresql://remote" {
+		t.Fatalf("database.url = %q, want remote", cfg.Database.URL)
+	}
+	if cfg.Search.QueryExpansion.Model != "remote-model" {
+		t.Fatalf("query expansion model = %q, want remote-model", cfg.Search.QueryExpansion.Model)
+	}
+	if cfg.Search.QueryExpansion.APIKey != "remote-key" {
+		t.Fatalf("query expansion api key = %q, want remote-key", cfg.Search.QueryExpansion.APIKey)
+	}
+	if cfg.Search.QueryExpansion.BaseURL != "https://remote.example.com/v1" {
+		t.Fatalf("query expansion base url = %q, want remote", cfg.Search.QueryExpansion.BaseURL)
+	}
+	if cfg.Logging.Level != "warn" {
+		t.Fatalf("logging.level = %q, want warn", cfg.Logging.Level)
+	}
+	if !cfg.Logging.LokiEnabled {
+		t.Fatal("logging.loki_enabled = false, want true")
+	}
+	if cfg.Logging.LokiPassword != "remote-loki-token" {
+		t.Fatalf("logging.loki_password = %q, want remote-loki-token", cfg.Logging.LokiPassword)
+	}
+}
+
+func TestLoadRequiredConfigCenterFailsClosed(t *testing.T) {
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "true")
+	t.Setenv("CONFIG_CENTER_URL", "http://127.0.0.1:1/config")
+	t.Setenv("CONFIG_CENTER_TIMEOUT", "1ms")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	if _, err := Load(configPath); err == nil {
+		t.Fatal("Load() error = nil, want config center failure")
 	}
 }
 

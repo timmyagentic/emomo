@@ -83,6 +83,33 @@ SILICONFLOW_API_KEY=your-siliconflow-key
 SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 ```
 
+### 配置中心（推荐）
+
+Hugging Face Space 里手动维护环境变量比较麻烦。生产环境建议只在 Space
+里保留一次性的配置中心地址和读 token。完整后端配置通过 Cloudflare
+Worker + Workers KV 更新，高敏感密钥放在 Cloudflare Secrets Store，由
+Worker 在返回配置时解析。
+
+```bash
+CONFIG_CENTER_ENABLED=true
+CONFIG_CENTER_REQUIRED=true
+CONFIG_CENTER_URL=https://your-worker.example.workers.dev/v1/config/emomo/production/emomo-api
+CONFIG_CENTER_TOKEN=your-read-token
+CONFIG_CENTER_POLL_INTERVAL=60s
+CONFIG_CENTER_TIMEOUT=5s
+```
+
+本地更新后发布：
+
+```bash
+cd backend
+CONFIG_CENTER_URL=https://your-worker.example.workers.dev/v1/config/emomo/production/emomo-api \
+CONFIG_CENTER_ADMIN_TOKEN=your-admin-token \
+./scripts/publish-config-center.sh
+```
+
+完整部署和安全说明见 [CONFIG_CENTER.md](./CONFIG_CENTER.md)。
+
 ## 临时解决方案：禁用 Qdrant 和对象存储
 
 如果暂时无法配置外部服务，可以修改代码使应用在服务不可用时仍能启动（但搜索功能将不可用）。

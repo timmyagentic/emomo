@@ -1,0 +1,60 @@
+name = "emomo-config-center"
+main = "src/index.js"
+compatibility_date = "2026-06-14"
+
+# Create a KV namespace first:
+#   npx wrangler kv namespace create emomo_config
+# Then paste the returned id below.
+[[kv_namespaces]]
+binding = "CONFIG_KV"
+id = "replace-with-kv-namespace-id"
+
+# Configure these as Worker secrets, not plaintext vars:
+#   npx wrangler secret put READ_TOKEN
+#   npx wrangler secret put ADMIN_TOKEN
+
+# Store all high-sensitivity values in Cloudflare Secrets Store:
+#   npx wrangler secrets-store store list
+#   npx wrangler secrets-store secret create <STORE_ID> --name DATABASE_URL --scopes workers --remote
+#   npx wrangler secrets-store secret create <STORE_ID> --name QDRANT_API_KEY --scopes workers --remote
+#   npx wrangler secrets-store secret create <STORE_ID> --name STORAGE_ACCESS_KEY --scopes workers --remote
+#   npx wrangler secrets-store secret create <STORE_ID> --name STORAGE_SECRET_KEY --scopes workers --remote
+#   npx wrangler secrets-store secret create <STORE_ID> --name OPENAI_API_KEY --scopes workers --remote
+#   npx wrangler secrets-store secret create <STORE_ID> --name SILICONFLOW_API_KEY --scopes workers --remote
+#   npx wrangler secrets-store secret create <STORE_ID> --name LOKI_PASSWORD --scopes workers --remote
+# Then bind each account-level secret to the Worker. Local *_SECRET env vars
+# should use these binding names.
+[[secrets_store_secrets]]
+binding = "DATABASE_URL"
+store_id = "replace-with-secrets-store-id"
+secret_name = "DATABASE_URL"
+
+[[secrets_store_secrets]]
+binding = "QDRANT_API_KEY"
+store_id = "replace-with-secrets-store-id"
+secret_name = "QDRANT_API_KEY"
+
+[[secrets_store_secrets]]
+binding = "STORAGE_ACCESS_KEY"
+store_id = "replace-with-secrets-store-id"
+secret_name = "STORAGE_ACCESS_KEY"
+
+[[secrets_store_secrets]]
+binding = "STORAGE_SECRET_KEY"
+store_id = "replace-with-secrets-store-id"
+secret_name = "STORAGE_SECRET_KEY"
+
+[[secrets_store_secrets]]
+binding = "OPENAI_API_KEY"
+store_id = "replace-with-secrets-store-id"
+secret_name = "OPENAI_API_KEY"
+
+[[secrets_store_secrets]]
+binding = "SILICONFLOW_API_KEY"
+store_id = "replace-with-secrets-store-id"
+secret_name = "SILICONFLOW_API_KEY"
+
+[[secrets_store_secrets]]
+binding = "LOKI_PASSWORD"
+store_id = "replace-with-secrets-store-id"
+secret_name = "LOKI_PASSWORD"

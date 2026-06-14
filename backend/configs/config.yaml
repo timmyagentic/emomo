@@ -114,6 +114,39 @@ search:
     rerank_top_k: 40
     fallback_on_error: true
 
+config_center:
+  # Optional runtime config center. When enabled, the API polls this endpoint and
+  # loads complete startup config from it. Query expansion can also hot-update
+  # without restarting the Hugging Face container.
+  enabled: false
+  required: false
+  url: ""
+  token: ""
+  poll_interval: 60s
+  timeout: 5s
+
+logging:
+  level: info
+  format: json
+  service_name: emomo-api
+  environment: local
+  log_file: ""
+  log_file_only: false
+  max_size: 100
+  max_backups: 7
+  max_age: 30
+  compress: true
+  loki_enabled: false
+  loki_url: ""
+  loki_username: ""
+  loki_password: ""
+  loki_project: emomo
+  cluster_name: ""
+  loki_batch_size: 100
+  loki_queue_size: 5000
+  loki_flush_interval: 2s
+  loki_timeout: 3s
+
 sources:
   localdir:
     enabled: true
