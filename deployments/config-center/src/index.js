@@ -81,6 +81,12 @@ function isSensitiveRawPath(path) {
   return sensitivePaths.some((pattern) => pathMatches(pattern, path));
 }
 
+function assertAllowedSecretPath(secretPath, rawPath) {
+  if (!isSensitiveRawPath(rawPath)) {
+    throw new Error(`${secretPath} is not an allowed Secrets Store reference path`);
+  }
+}
+
 function validateSecretReferences(value, path = '') {
   if (Array.isArray(value)) {
     value.forEach((item) => validateSecretReferences(item, `${path}.*`));
@@ -103,6 +109,8 @@ function validateSecretReferences(value, path = '') {
         throw new Error(`${fieldPath} must be a Worker binding name`);
       }
       const rawField = field.slice(0, -'_secret'.length);
+      const rawPath = path ? `${path}.${rawField}` : rawField;
+      assertAllowedSecretPath(fieldPath, rawPath);
       if (Object.prototype.hasOwnProperty.call(value, rawField) && value[rawField] !== '') {
         throw new Error(`${fieldPath} cannot be used with sibling ${rawField}`);
       }
@@ -166,9 +174,9 @@ function validateConfig(config) {
   validateSecretReferences(config);
 }
 
-async function resolveSecretsInPlace(value, env) {
+async function resolveSecretsInPlace(value, env, path = '') {
   if (Array.isArray(value)) {
-    await Promise.all(value.map((item) => resolveSecretsInPlace(item, env)));
+    await Promise.all(value.map((item) => resolveSecretsInPlace(item, env, `${path}.*`)));
     return;
   }
   if (value === null || typeof value !== 'object') {
@@ -176,9 +184,12 @@ async function resolveSecretsInPlace(value, env) {
   }
 
   for (const [field, fieldValue] of Object.entries(value)) {
+    const fieldPath = path ? `${path}.${field}` : field;
     if (field.endsWith('_secret')) {
       const bindingName = fieldValue;
       const rawField = field.slice(0, -'_secret'.length);
+      const rawPath = path ? `${path}.${rawField}` : rawField;
+      assertAllowedSecretPath(fieldPath, rawPath);
       const binding = env[bindingName];
       if (!binding || typeof binding.get !== 'function') {
         throw new Error(`missing Secrets Store binding: ${bindingName}`);
@@ -193,7 +204,7 @@ async function resolveSecretsInPlace(value, env) {
       delete value[field];
       continue;
     }
-    await resolveSecretsInPlace(fieldValue, env);
+    await resolveSecretsInPlace(fieldValue, env, fieldPath);
   }
 }
 

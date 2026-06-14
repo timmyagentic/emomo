@@ -16,6 +16,7 @@ id = "replace-with-kv-namespace-id"
 # Store all high-sensitivity values in Cloudflare Secrets Store:
 #   npx wrangler secrets-store store list
 #   npx wrangler secrets-store secret create <STORE_ID> --name DATABASE_URL --scopes workers --remote
+#   npx wrangler secrets-store secret create <STORE_ID> --name DATABASE_PASSWORD --scopes workers --remote
 #   npx wrangler secrets-store secret create <STORE_ID> --name QDRANT_API_KEY --scopes workers --remote
 #   npx wrangler secrets-store secret create <STORE_ID> --name STORAGE_ACCESS_KEY --scopes workers --remote
 #   npx wrangler secrets-store secret create <STORE_ID> --name STORAGE_SECRET_KEY --scopes workers --remote
@@ -28,6 +29,11 @@ id = "replace-with-kv-namespace-id"
 binding = "DATABASE_URL"
 store_id = "replace-with-secrets-store-id"
 secret_name = "DATABASE_URL"
+
+[[secrets_store_secrets]]
+binding = "DATABASE_PASSWORD"
+store_id = "replace-with-secrets-store-id"
+secret_name = "DATABASE_PASSWORD"
 
 [[secrets_store_secrets]]
 binding = "QDRANT_API_KEY"

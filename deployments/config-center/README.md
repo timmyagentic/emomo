@@ -29,8 +29,9 @@ KV stores a document like:
 }
 ```
 
-The Worker resolves `*_secret` fields from Cloudflare Secrets Store before
-returning the config to the backend. Raw sensitive fields are rejected on write.
+The Worker resolves allowlisted `*_secret` fields from Cloudflare Secrets Store
+before returning the config to the backend. Raw sensitive fields and arbitrary
+secret references are rejected on write.
 
 ## Deploy
 

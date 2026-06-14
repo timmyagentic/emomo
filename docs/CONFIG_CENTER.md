@@ -12,8 +12,8 @@ the backend configuration center.
   the Worker config override local and Hugging Face env values.
 - Workers KV stores non-secret config and Secrets Store binding names.
 - Cloudflare Secrets Store stores high-sensitivity values.
-- The Worker resolves every `*_secret` binding into the raw field before
-  returning config to the backend.
+- The Worker resolves `*_secret` bindings only for the high-sensitivity
+  allowlist before returning config to the backend.
 
 ## Config Tiers
 
@@ -58,8 +58,8 @@ These fields must be stored as Secrets Store references in KV:
 - `config.search.query_expansion.api_key`
 - `config.logging.loki_password`
 
-The Worker rejects raw values for those paths. Use sibling `*_secret` fields
-instead:
+The Worker rejects raw values for those paths, and it also rejects `*_secret`
+references outside this allowlist. Use sibling `*_secret` fields instead:
 
 ```json
 {
@@ -103,6 +103,7 @@ npx wrangler secrets-store store list
 # If needed:
 # npx wrangler secrets-store store create emomo --remote
 npx wrangler secrets-store secret create <STORE_ID> --name DATABASE_URL --scopes workers --remote
+npx wrangler secrets-store secret create <STORE_ID> --name DATABASE_PASSWORD --scopes workers --remote
 npx wrangler secrets-store secret create <STORE_ID> --name QDRANT_API_KEY --scopes workers --remote
 npx wrangler secrets-store secret create <STORE_ID> --name STORAGE_ACCESS_KEY --scopes workers --remote
 npx wrangler secrets-store secret create <STORE_ID> --name STORAGE_SECRET_KEY --scopes workers --remote
@@ -173,5 +174,7 @@ publishing.
 - `CONFIG_CENTER_ADMIN_TOKEN` should only exist locally or in trusted CI.
 - KV stores binding names, not raw secrets.
 - Secrets Store is the source of truth for high-sensitivity values.
+- Secret references are allowlisted by config path; arbitrary `*_secret`
+  fields are not resolved.
 - The backend receives raw secrets at runtime because it must connect to the
   actual providers; do not log config payloads.
