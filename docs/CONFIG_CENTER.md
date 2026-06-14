@@ -10,6 +10,8 @@ the backend configuration center.
   `CONFIG_CENTER_TOKEN`, polling interval, and timeout.
 - The API loads local YAML/env first, then fetches the Worker config and lets
   the Worker config override local and Hugging Face env values.
+- During migration, legacy Hugging Face variables can stay in place. When the
+  same key exists in both places, the config center value wins.
 - Workers KV stores non-secret config and Secrets Store binding names.
 - Cloudflare Secrets Store stores high-sensitivity values.
 - The Worker resolves `*_secret` bindings only for the high-sensitivity
@@ -43,6 +45,8 @@ Bootstrap exception:
 
 - `config_center.token` is not loaded from the config center because it is
   required before the backend can read the config center.
+- The other `CONFIG_CENTER_*` bootstrap values also remain local/Hugging Face
+  because they are needed before any remote config can be fetched.
 
 ## High-Sensitivity Fields
 
@@ -59,7 +63,10 @@ These fields must be stored as Secrets Store references in KV:
 - `config.logging.loki_password`
 
 The Worker rejects raw values for those paths, and it also rejects `*_secret`
-references outside this allowlist. Use sibling `*_secret` fields instead:
+references outside this allowlist. It also rejects raw secret-like field names
+such as `api_key`, `access_key`, `secret_key`, `password`, and `token` when
+they are not on the allowlist. Add a new path to the Worker allowlist before
+adding any new API key field. Use sibling `*_secret` fields instead:
 
 ```json
 {
@@ -175,6 +182,7 @@ publishing.
 - KV stores binding names, not raw secrets.
 - Secrets Store is the source of truth for high-sensitivity values.
 - Secret references are allowlisted by config path; arbitrary `*_secret`
-  fields are not resolved.
+  fields are not resolved, and unallowlisted raw API key-like fields are
+  rejected.
 - The backend receives raw secrets at runtime because it must connect to the
   actual providers; do not log config payloads.

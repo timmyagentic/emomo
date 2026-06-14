@@ -31,7 +31,8 @@ KV stores a document like:
 
 The Worker resolves allowlisted `*_secret` fields from Cloudflare Secrets Store
 before returning the config to the backend. Raw sensitive fields and arbitrary
-secret references are rejected on write.
+secret references are rejected on write. New API key-like fields must be added
+to the Worker allowlist before they can be published.
 
 ## Deploy
 

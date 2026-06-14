@@ -81,6 +81,20 @@ function isSensitiveRawPath(path) {
   return sensitivePaths.some((pattern) => pathMatches(pattern, path));
 }
 
+function isSensitiveFieldName(field) {
+  const normalized = field.toLowerCase();
+  return normalized === 'api_key' ||
+    normalized.endsWith('_api_key') ||
+    normalized === 'access_key' ||
+    normalized.endsWith('_access_key') ||
+    normalized === 'secret_key' ||
+    normalized.endsWith('_secret_key') ||
+    normalized === 'password' ||
+    normalized.endsWith('_password') ||
+    normalized === 'token' ||
+    normalized.endsWith('_token');
+}
+
 function assertAllowedSecretPath(secretPath, rawPath) {
   if (!isSensitiveRawPath(rawPath)) {
     throw new Error(`${secretPath} is not an allowed Secrets Store reference path`);
@@ -100,6 +114,9 @@ function validateSecretReferences(value, path = '') {
     const fieldPath = path ? `${path}.${field}` : field;
     if (isSensitiveRawPath(fieldPath) && fieldValue !== '') {
       throw new Error(`sensitive field ${fieldPath} must use ${field}_secret`);
+    }
+    if (!isSensitiveRawPath(fieldPath) && isSensitiveFieldName(field) && fieldValue !== '') {
+      throw new Error(`sensitive-like field ${fieldPath} is not allowlisted for raw values`);
     }
     if (field.endsWith('_secret')) {
       if (typeof fieldValue !== 'string') {
