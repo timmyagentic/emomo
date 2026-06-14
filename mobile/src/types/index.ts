@@ -108,3 +108,13 @@ export function pbSearchResultToDisplay(result: PbSearchResult): DisplayMeme {
     textPresence: result.textPresence,
   });
 }
+
+export function filterMemesByTextPresence(
+  memes: DisplayMeme[],
+  filter: TextPresenceFilter
+): DisplayMeme[] {
+  if (filter === 'all') {
+    return memes;
+  }
+  return memes.filter((meme) => meme.textPresence === filter);
+}

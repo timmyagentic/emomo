@@ -27,7 +27,13 @@ import {
   normalizeSearchQuery,
   type SearchHistoryEntry,
 } from './src/storage/searchHistory';
-import type { DisplayMeme, SearchProgressView, SearchStageSlug, TextPresenceFilter } from './src/types';
+import {
+  filterMemesByTextPresence,
+  type DisplayMeme,
+  type SearchProgressView,
+  type SearchStageSlug,
+  type TextPresenceFilter,
+} from './src/types';
 import { copyMemeImage, saveMemeToLibrary, shareMeme } from './src/utils/imageActions';
 
 const INITIAL_PAGE_SIZE = 20;
@@ -66,6 +72,12 @@ const SEARCH_PROGRESS_FALLBACKS: { delayMs: number; progress: SearchProgressView
       message: '正在整理最合适的结果...',
     },
   },
+];
+
+const textPresenceOptions: { value: TextPresenceFilter; label: string }[] = [
+  { value: 'all', label: '全部' },
+  { value: 'with_text', label: '有文字' },
+  { value: 'without_text', label: '无文字' },
 ];
 
 export default function App() {
@@ -154,7 +166,11 @@ export default function App() {
     };
   }, [clearProgressTimers]);
 
-  const visibleMemes = hasSearched ? results : feedMemes;
+  const filteredResults = filterMemesByTextPresence(results, textPresenceFilter);
+  const visibleMemes = hasSearched ? filteredResults : feedMemes;
+  const sectionMeta = hasSearched
+    ? `${filteredResults.length} / ${results.length} 张`
+    : visibleMemes.length > 0 ? `${visibleMemes.length} 张` : '';
   const emptyTitle = hasSearched ? '没有找到合适的表情' : isInitialLoading ? '正在加载表情库' : '还没有可展示的表情';
   const emptyMessage = hasSearched ? '换一种描述试试，比如说清楚情绪、场景和语气。' : '稍后下拉或重新打开 App 再试。';
 
@@ -174,7 +190,7 @@ export default function App() {
   }, [clearProgressTimers, setSearchProgress]);
 
   const runSearch = useCallback(
-    async (rawQuery?: string, filter: TextPresenceFilter = textPresenceFilter) => {
+    async (rawQuery?: string) => {
       const query = normalizeSearchQuery(rawQuery ?? inputQuery);
       if (!query || isSearching) {
         return;
@@ -203,7 +219,7 @@ export default function App() {
         let accumulatedThinking = '';
         await searchMemesStream(
           query,
-          { topK: SEARCH_TOP_K, textPresenceFilter: filter },
+          { topK: SEARCH_TOP_K },
           (event) => {
             if (abortController.signal.aborted) {
               return;
@@ -250,17 +266,13 @@ export default function App() {
       isSearching,
       setSearchProgress,
       startFallbackProgress,
-      textPresenceFilter,
       updateSearchProgress,
     ]
   );
 
   const handleTextPresenceFilterChange = useCallback((filter: TextPresenceFilter) => {
     setTextPresenceFilter(filter);
-    if (hasSearched && lastQuery && !isSearching) {
-      void runSearch(lastQuery, filter);
-    }
-  }, [hasSearched, isSearching, lastQuery, runSearch]);
+  }, []);
 
   const clearHistory = useCallback(async () => {
     await clearSearchHistory();
@@ -328,8 +340,6 @@ export default function App() {
             value={inputQuery}
             onChangeText={setInputQuery}
             onSubmit={() => runSearch()}
-            textPresenceFilter={textPresenceFilter}
-            onTextPresenceFilterChange={handleTextPresenceFilterChange}
             onCancel={cancelSearch}
             isLoading={isSearching}
           />
@@ -343,8 +353,30 @@ export default function App() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{hasSearched ? `“${lastQuery}” 的结果` : '随便逛逛'}</Text>
-          <Text style={styles.sectionMeta}>{visibleMemes.length > 0 ? `${visibleMemes.length} 张` : ''}</Text>
+          <Text style={styles.sectionMeta}>{sectionMeta}</Text>
         </View>
+
+        {hasSearched ? (
+          <View style={styles.resultFilter}>
+            <Text style={styles.resultFilterLabel}>展示</Text>
+            <View style={styles.segmentedControl}>
+              {textPresenceOptions.map((option) => {
+                const selected = option.value === textPresenceFilter;
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => handleTextPresenceFilterChange(option.value)}
+                    style={[styles.segmentButton, selected && styles.segmentButtonActive]}
+                  >
+                    <Text style={[styles.segmentLabel, selected && styles.segmentLabelActive]}>{option.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         <MemeMasonryList
           data={visibleMemes}
@@ -451,5 +483,40 @@ const styles = StyleSheet.create({
     color: '#68736c',
     fontSize: 12,
     fontWeight: '800',
+  },
+  resultFilter: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  resultFilterLabel: {
+    color: '#68736c',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  segmentButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 32,
+    borderRadius: 16,
+    borderColor: 'transparent',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#f8e18a',
+    borderColor: '#e7c657',
+  },
+  segmentLabel: {
+    color: '#58635d',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  segmentLabelActive: {
+    color: '#111111',
   },
 });

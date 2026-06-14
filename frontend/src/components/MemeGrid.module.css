@@ -37,18 +37,83 @@
   font-size: var(--text-sm);
 }
 
-/* Results info */
-.resultsInfo {
+/* Search results header */
+.searchSummary {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+.searchSummaryLabel {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 .resultsQuery {
   font-family: var(--font-display);
   font-size: var(--text-xl);
   color: var(--accent-coral);
+}
+
+.searchCount {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.resultFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
+  padding-left: var(--space-md);
+  border-left: 1px solid rgba(120, 113, 108, 0.16);
+}
+
+.resultFilterLabel {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.segmentedControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.segmentButton {
+  height: 28px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.segmentButton:hover {
+  color: var(--text-primary);
+  border-color: rgba(235, 227, 220, 0.95);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.segmentButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 229, 142, 0.7);
+}
+
+.segmentButtonActive {
+  border-color: rgba(241, 211, 108, 0.86);
+  background: rgba(255, 229, 142, 0.72);
+  color: var(--text-primary);
 }
 
 .qualityNotice {
@@ -258,7 +323,7 @@
     gap: var(--space-sm);
   }
 
-  .resultsInfo {
+  .searchSummary {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-xs);
@@ -266,6 +331,24 @@
 
   .resultsHeader {
     align-items: flex-start;
+  }
+
+  .resultFilter {
+    align-items: center;
+    flex-direction: row;
+    width: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .segmentedControl {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .segmentButton {
+    flex: 0 1 auto;
   }
 
   .titleGroup {

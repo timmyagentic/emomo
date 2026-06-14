@@ -1,10 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import type { DisplayMeme } from '../types';
+import type { DisplayMeme, TextPresenceFilter } from '../types';
 import MemeCard from './MemeCard';
 import styles from './MemeGrid.module.css';
 
 const countFormatter = new Intl.NumberFormat('en-US');
+const textPresenceOptions: Array<{ value: TextPresenceFilter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'with_text', label: '有文字' },
+  { value: 'without_text', label: '无文字' },
+];
 
 /**
  * Props for the MemeGrid component.
@@ -44,6 +49,14 @@ interface MemeGridProps {
   onLoadMore?: () => void;
   /** Message shown when all items have been loaded. */
   endMessage?: string;
+  /** Current result-side text-presence display filter. */
+  textPresenceFilter?: TextPresenceFilter;
+  /** Callback triggered when the result-side text-presence filter changes. */
+  onTextPresenceFilterChange?: (filter: TextPresenceFilter) => void;
+  /** Total number of search results before result-side display filtering. */
+  searchResultTotal?: number;
+  /** Total number of search results after result-side display filtering. */
+  filteredResultTotal?: number;
 }
 
 /**
@@ -92,6 +105,10 @@ export default function MemeGrid({
   loadMoreError = '',
   onLoadMore,
   endMessage = '已展示全部结果',
+  textPresenceFilter,
+  onTextPresenceFilterChange,
+  searchResultTotal,
+  filteredResultTotal,
 }: MemeGridProps) {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const lastAutoLoadCountRef = useRef(-1);
@@ -102,9 +119,72 @@ export default function MemeGrid({
     : null;
   const hasLowConfidence = !!searchQuery && topScore !== null && topScore < 0.15;
   const isBrowseMode = !searchQuery && !!onLoadMore;
+  const isSearchMode = !!searchQuery;
+  const resultFilter = isSearchMode && textPresenceFilter && onTextPresenceFilterChange
+    ? { value: textPresenceFilter, onChange: onTextPresenceFilterChange }
+    : null;
   const loadedCountText = typeof total === 'number'
     ? `已展示 ${countFormatter.format(memes.length)} / ${countFormatter.format(total)} 个表情包`
     : `已展示 ${countFormatter.format(memes.length)} 个表情包`;
+  const searchResultCountTotal = typeof searchResultTotal === 'number'
+    ? searchResultTotal
+    : filteredResultTotal;
+  const searchCountText = typeof searchResultCountTotal === 'number'
+    ? `显示 ${countFormatter.format(memes.length)} / ${countFormatter.format(searchResultCountTotal)} 个`
+    : `显示 ${countFormatter.format(memes.length)} 个`;
+  const resultsHeader = (title || searchQuery || resultFilter || hasLowConfidence) ? (
+    <motion.header
+      className={styles.resultsHeader}
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      {title && (
+        <div className={styles.titleGroup}>
+          <h2 className={styles.sectionTitle}>{title}</h2>
+          {isBrowseMode && (
+            <span className={styles.browseCount}>{loadedCountText}</span>
+          )}
+        </div>
+      )}
+
+      {searchQuery && (
+        <div className={styles.searchSummary}>
+          <span className={styles.searchSummaryLabel}>搜索结果</span>
+          <span className={styles.resultsQuery}>「{searchQuery}」</span>
+          <span className={styles.searchCount}>{searchCountText}</span>
+        </div>
+      )}
+
+      {resultFilter && (
+        <div className={styles.resultFilter}>
+          <span className={styles.resultFilterLabel}>展示</span>
+          <div className={styles.segmentedControl} role="radiogroup" aria-label="筛选当前搜索结果">
+            {textPresenceOptions.map((option) => {
+              const selected = resultFilter.value === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  className={`${styles.segmentButton} ${selected ? styles.segmentButtonActive : ''}`}
+                  onClick={() => resultFilter.onChange(option.value)}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {hasLowConfidence && (
+        <p className={styles.qualityNotice}>
+          匹配度偏低，当前结果更像相近情绪或相近语境。
+        </p>
+      )}
+    </motion.header>
+  ) : null;
 
   useEffect(() => {
     if (!onLoadMore || !hasMore || isLoading || isLoadingMore || loadMoreError) {
@@ -165,6 +245,7 @@ export default function MemeGrid({
   if (memes.length === 0) {
     return (
       <section className={styles.container}>
+        {resultsHeader}
         <motion.div
           className={styles.empty}
           initial={{ opacity: 0, y: 20 }}
@@ -192,32 +273,7 @@ export default function MemeGrid({
 
   return (
     <section className={styles.container}>
-      <motion.header
-        className={styles.resultsHeader}
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        {title && (
-          <div className={styles.titleGroup}>
-            <h2 className={styles.sectionTitle}>{title}</h2>
-            {isBrowseMode && (
-              <span className={styles.browseCount}>{loadedCountText}</span>
-            )}
-          </div>
-        )}
-
-        {searchQuery && (
-          <div className={styles.resultsInfo}>
-            <span className={styles.resultsQuery}>「{searchQuery}」</span>
-          </div>
-        )}
-
-        {hasLowConfidence && (
-          <p className={styles.qualityNotice}>
-            匹配度偏低，当前结果更像相近情绪或相近语境。
-          </p>
-        )}
-      </motion.header>
+      {resultsHeader}
 
       {/* Grid */}
       <div className={styles.grid}>

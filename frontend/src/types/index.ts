@@ -35,6 +35,8 @@ export interface DisplayMeme {
   textPresence?: 'unknown' | 'with_text' | 'without_text';
 }
 
+export type TextPresenceFilter = 'all' | 'with_text' | 'without_text';
+
 /** Search-progress UI state used by App.tsx. */
 export interface SearchUIState {
   isStreaming: boolean;
@@ -112,4 +114,14 @@ export function pbSearchResultToDisplay(result: PbSearchResult): DisplayMeme {
     description: result.description,
     textPresence: result.textPresence,
   });
+}
+
+export function filterMemesByTextPresence(
+  memes: DisplayMeme[],
+  filter: TextPresenceFilter
+): DisplayMeme[] {
+  if (filter === 'all') {
+    return memes;
+  }
+  return memes.filter((meme) => meme.textPresence === filter);
 }
