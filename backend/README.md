@@ -17,11 +17,11 @@ license: mit
 
 Emomo 是一个基于 Go + Qdrant + 多模态 Embedding 的表情包语义搜索系统，支持本地静态图片目录摄入、图片向量检索、可选 caption/keyword 辅助检索和元数据管理。当前默认链路使用 Qwen3-VL：导入时直接为图片生成 image 向量，并为 OCR/描述/tags 写入 keyword/BM25 sparse-only 向量；搜索时 image route 权重 0.7，keyword route 权重 0.3。VLM 描述和 OCR 仍会生成，作为展示元数据与 keyword 辅助信号。dense caption embedding 路线保留为显式实验配置，默认关闭。表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
 
-关系库当前收敛为三张核心表：`memes`、`meme_annotations`、`meme_vectors`。protobuf message schema 定义在 `proto/emomo/v1/{types,meme,api}.proto`，生成代码在 `gen/emomo/v1/`（导入为 `pb`）。本项目把 protobuf 限定在 API DTO、前后端生成类型、跨边界封闭枚举，以及少量结构化 DB JSON 值（当前仅 `memes.image_info` / `meme_annotations.labels`，通过 `protojson` + `UseEnumNumbers=true` 序列化）。关系表结构、索引、迁移、运行时配置、开放业务集合和 UI 状态不由 protobuf 管。它**不是** RPC 协议——HTTP API 仍是 RESTful（POST `/api/v1/search` 等），handler 直接对 protobuf message 做 `protojson.Marshal/Unmarshal`。
+关系库当前收敛为四张核心表：`memes`、`meme_annotations`、`meme_vectors`，外加只记录来源/出处、不参与检索的 `meme_metadata`。protobuf message schema 定义在 `proto/emomo/v1/{types,meme,api}.proto`，生成代码在 `gen/emomo/v1/`（导入为 `pb`）。本项目把 protobuf 限定在 API DTO、前后端生成类型、跨边界封闭枚举，以及少量结构化 DB JSON 值（当前仅 `memes.image_info` / `meme_annotations.labels`，通过 `protojson` + `UseEnumNumbers=true` 序列化）。关系表结构、索引、迁移、运行时配置、开放业务集合和 UI 状态不由 protobuf 管。它**不是** RPC 协议——HTTP API 仍是 RESTful（POST `/api/v1/search` 等），handler 直接对 protobuf message 做 `protojson.Marshal/Unmarshal`。
 
 数据库迁移完全由代码托管：`internal/repository/db.go` 中的 GORM AutoMigrate 加上 `prepareLegacy*` / `migrate*` / `dropLegacy*` 这一组迁移函数是唯一的事实来源（single source of truth）；项目**不使用** goose / golang-migrate / atlas 等独立 SQL 迁移工具，也不存在 `backend/migrations/` 目录。新增 schema 演进需要修改 `db.go`，并在 `db_test.go` 里补一条 SQLite 集成测试。
 
-三张核心表**不启用 Row Level Security**——访问控制完全在连接层（service-role DSN）做。Supabase 部署的前提是不通过 Data API（PostgREST）暴露这些表给 anon/authenticated 角色；前端只调用 Go API，Go 后端持服务端连接读写 Postgres。`disableCoreTableRLS` 会在每次 `InitDB` 时强制把 RLS 关闭，老库即使之前 ENABLE 过也会被自动关回。
+四张核心表**不启用 Row Level Security**——访问控制完全在连接层（service-role DSN）做。Supabase 部署的前提是不通过 Data API（PostgREST）暴露这些表给 anon/authenticated 角色；前端只调用 Go API，Go 后端持服务端连接读写 Postgres。`disableCoreTableRLS` 会在每次 `InitDB` 时强制把 RLS 关闭，老库即使之前 ENABLE 过也会被自动关回。
 
 ## 功能概览
 
