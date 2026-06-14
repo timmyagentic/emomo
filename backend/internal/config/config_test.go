@@ -358,6 +358,58 @@ func TestLoadRequiredConfigCenterFailsClosed(t *testing.T) {
 	}
 }
 
+func TestLoadDisabledConfigCenterSkipsRemote(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"config":{"search":{"query_expansion":{"model":"remote-model"}}}}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("CONFIG_CENTER_ENABLED", "false")
+	t.Setenv("CONFIG_CENTER_URL", srv.URL)
+	t.Setenv("QUERY_EXPANSION_MODEL", "local-model")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ConfigCenterLoadError != nil {
+		t.Fatalf("ConfigCenterLoadError = %v, want nil when disabled", cfg.ConfigCenterLoadError)
+	}
+	if cfg.Search.QueryExpansion.Model != "local-model" {
+		t.Fatalf("query_expansion.model = %q, want local-model (remote must be skipped when disabled)", cfg.Search.QueryExpansion.Model)
+	}
+}
+
+func TestLoadOptionalConfigCenterFetchFailureIsRecoverable(t *testing.T) {
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "false")
+	t.Setenv("CONFIG_CENTER_URL", "http://127.0.0.1:1/config")
+	t.Setenv("CONFIG_CENTER_TIMEOUT", "5ms")
+	t.Setenv("QUERY_EXPANSION_MODEL", "local-model")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil for optional config center", err)
+	}
+	if cfg.ConfigCenterLoadError == nil {
+		t.Fatal("ConfigCenterLoadError = nil, want non-nil after optional fetch failure")
+	}
+	if cfg.Search.QueryExpansion.Model != "local-model" {
+		t.Fatalf("query_expansion.model = %q, want local-model fallback", cfg.Search.QueryExpansion.Model)
+	}
+}
+
 func TestLoadDefaultsPublicAPIConfig(t *testing.T) {
 	t.Parallel()
 

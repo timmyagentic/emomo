@@ -17,6 +17,22 @@ the backend configuration center.
 - The Worker resolves `*_secret` bindings only for the high-sensitivity
   allowlist before returning config to the backend.
 
+## Enabling and Disabling
+
+- `CONFIG_CENTER_ENABLED` is the only switch. When it is `false`, the backend
+  never fetches or polls the config center, even if `CONFIG_CENTER_URL` is set.
+  To turn the config center off, set `CONFIG_CENTER_ENABLED=false`; you do not
+  need to clear the URL.
+- When `CONFIG_CENTER_ENABLED=true` but `CONFIG_CENTER_URL` is empty, the
+  backend fails to start.
+- `CONFIG_CENTER_REQUIRED` controls how a failed fetch is handled:
+  - `true`: startup aborts if the config center cannot be loaded (fail-closed).
+  - `false`: startup continues with local YAML/env config and the backend logs
+    a warning (`Config center enabled but optional fetch failed`) so the
+    fallback is visible instead of silent.
+- Production should set `CONFIG_CENTER_REQUIRED=true` so a config center outage
+  never silently falls back to stale local config.
+
 ## Config Tiers
 
 Startup-applied config, requires restart after changes:

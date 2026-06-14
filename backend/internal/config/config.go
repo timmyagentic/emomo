@@ -25,6 +25,11 @@ type Config struct {
 	Search       SearchConfig       `mapstructure:"search"`
 	Logging      LoggingConfig      `mapstructure:"logging"`
 	ConfigCenter ConfigCenterConfig `mapstructure:"config_center"`
+
+	// ConfigCenterLoadError records a non-fatal config center fetch failure so
+	// the caller can log it once a logger is configured. It is set only when the
+	// config center is enabled but not required and the remote fetch failed.
+	ConfigCenterLoadError error `mapstructure:"-"`
 }
 
 // ServerConfig defines HTTP server settings.
@@ -269,7 +274,8 @@ func Load(configPath string) (*Config, error) {
 	// Bind environment variables for sensitive/override data
 	bindEnvVars(v)
 
-	if err := applyRemoteConfigCenter(v); err != nil {
+	recoverableErr, err := applyRemoteConfigCenter(v)
+	if err != nil {
 		return nil, err
 	}
 
@@ -277,6 +283,7 @@ func Load(configPath string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+	cfg.ConfigCenterLoadError = recoverableErr
 
 	// Resolve environment variables for all embedding configurations
 	for i := range cfg.Embeddings {
@@ -508,21 +515,25 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("config_center.timeout", "CONFIG_CENTER_TIMEOUT")
 }
 
-func applyRemoteConfigCenter(v *viper.Viper) error {
+// applyRemoteConfigCenter loads remote configuration into v when the config
+// center is enabled. The config center is controlled solely by
+// config_center.enabled; a non-empty URL alone never enables it.
+//
+// It returns two errors: recoverable is a non-fatal fetch failure that the
+// caller may log and ignore (config center enabled but not required), and err
+// is a fatal configuration error that must abort startup.
+func applyRemoteConfigCenter(v *viper.Viper) (recoverable error, err error) {
 	if strings.EqualFold(os.Getenv("CONFIG_CENTER_SKIP_REMOTE"), "true") {
-		return nil
+		return nil, nil
 	}
 
-	enabled := v.GetBool("config_center.enabled")
-	url := strings.TrimSpace(v.GetString("config_center.url"))
-	if !enabled && url == "" {
-		return nil
+	if !v.GetBool("config_center.enabled") {
+		return nil, nil
 	}
+
+	url := strings.TrimSpace(v.GetString("config_center.url"))
 	if url == "" {
-		if v.GetBool("config_center.required") || enabled {
-			return fmt.Errorf("config center is enabled but URL is empty")
-		}
-		return nil
+		return nil, fmt.Errorf("config center is enabled but URL is empty")
 	}
 
 	timeout := v.GetDuration("config_center.timeout")
@@ -537,16 +548,16 @@ func applyRemoteConfigCenter(v *viper.Viper) error {
 		Token:   v.GetString("config_center.token"),
 		Timeout: timeout,
 	})
-	remote, err := client.Fetch(ctx)
-	if err != nil {
+	remote, fetchErr := client.Fetch(ctx)
+	if fetchErr != nil {
 		if v.GetBool("config_center.required") {
-			return fmt.Errorf("failed to load required config center config: %w", err)
+			return nil, fmt.Errorf("failed to load required config center config: %w", fetchErr)
 		}
-		return nil
+		return fmt.Errorf("failed to load optional config center config: %w", fetchErr), nil
 	}
 
 	applyRemoteValues(v, "", remote.RuntimeConfig())
-	return nil
+	return nil, nil
 }
 
 func applyRemoteValues(v *viper.Viper, prefix string, values map[string]any) {

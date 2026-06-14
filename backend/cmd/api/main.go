@@ -239,7 +239,7 @@ func startConfigCenterPolling(
 	if queryExpansionService == nil {
 		return
 	}
-	if !cfg.Enabled && cfg.URL == "" {
+	if !cfg.Enabled {
 		return
 	}
 	if cfg.URL == "" {
@@ -381,6 +381,11 @@ func main() {
 	appLogger := logger.NewFromEnv(loggerEnvConfigFromConfig(cfg.Logging, "emomo-api"))
 	logger.SetDefaultLogger(appLogger)
 	defer logger.Sync() // Ensure logs are flushed on exit
+
+	if cfg.ConfigCenterLoadError != nil {
+		appLogger.WithError(cfg.ConfigCenterLoadError).
+			Warn("Config center enabled but optional fetch failed; continuing with local config")
+	}
 
 	// Initialize database
 	db, err := repository.InitDB(&cfg.Database)
