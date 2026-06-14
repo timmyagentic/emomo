@@ -257,59 +257,6 @@
   cursor: not-allowed;
 }
 
-/* Filters */
-.filters {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  margin-top: var(--space-md);
-  min-height: 40px;
-  flex-wrap: wrap;
-}
-
-.filtersLabel {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  font-weight: 500;
-}
-
-.segmentedControl {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px;
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(235, 227, 220, 0.9);
-  box-shadow: var(--shadow-sm);
-}
-
-.segmentButton {
-  min-width: 72px;
-  height: 32px;
-  padding: 0 var(--space-md);
-  border-radius: calc(var(--radius-lg) - 4px);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-weight: 500;
-}
-
-.segmentButton:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-}
-
-.segmentButtonActive {
-  background: var(--accent-honey);
-  color: var(--text-primary);
-  box-shadow: 0 1px 4px rgba(33, 33, 33, 0.08);
-}
-
-.segmentButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
 /* Tags */
 .tags {
   display: flex;
@@ -388,19 +335,4 @@
     height: 40px;
   }
 
-  .filters {
-    align-items: flex-start;
-    margin-top: var(--space-sm);
-  }
-
-  .segmentedControl {
-    width: 100%;
-    max-width: 360px;
-  }
-
-  .segmentButton {
-    flex: 1;
-    min-width: 0;
-    padding: 0 var(--space-sm);
-  }
 }

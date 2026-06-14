@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { TextPresenceFilter } from '../types';
 import styles from './SearchHero.module.css';
 
 /**
@@ -16,10 +15,6 @@ interface SearchHeroProps {
    * @param query - The search query string.
    */
   onSearch: (query: string) => void;
-  /** Current text-presence filter applied to search requests. */
-  textPresenceFilter: TextPresenceFilter;
-  /** Callback triggered when the text-presence filter changes. */
-  onTextPresenceFilterChange: (filter: TextPresenceFilter) => void;
   /**
    * Indicates whether a search is currently in progress.
    * Controls loading states in the search bar.
@@ -46,12 +41,6 @@ const placeholders = [
   '还有：猫咪翻白眼',
 ];
 
-const textPresenceOptions: Array<{ value: TextPresenceFilter; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'with_text', label: '有文字' },
-  { value: 'without_text', label: '无文字' },
-];
-
 /**
  * The hero section component featuring the main search bar and suggested tags.
  * Includes animations for visual appeal and placeholder rotation.
@@ -66,8 +55,6 @@ export default function SearchHero({
   value,
   onValueChange,
   onSearch,
-  textPresenceFilter,
-  onTextPresenceFilterChange,
   isLoading = false,
   compact = false,
   suggestedTags = ['开心', '无语', '狗头', '猫咪', '熊猫头', '沙雕']
@@ -243,35 +230,6 @@ export default function SearchHero({
             </motion.button>
           </div>
         </motion.form>
-
-        <motion.div
-          className={styles.filters}
-          role="radiogroup"
-          aria-label="筛选文字类型"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.62, duration: 0.35 }}
-        >
-          <span className={styles.filtersLabel}>文字:</span>
-          <div className={styles.segmentedControl}>
-            {textPresenceOptions.map((option) => {
-              const selected = textPresenceFilter === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  className={`${styles.segmentButton} ${selected ? styles.segmentButtonActive : ''}`}
-                  disabled={isLoading}
-                  onClick={() => onTextPresenceFilterChange(option.value)}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
 
         {/* Suggested tags */}
         <motion.div

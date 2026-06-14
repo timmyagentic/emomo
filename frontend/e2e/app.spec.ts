@@ -178,12 +178,15 @@ test.describe('Emomo 表情包搜索应用', () => {
       });
     });
 
+    await expect(page.getByRole('radio', { name: '有文字' })).toHaveCount(0);
+
     await page.locator('input[type="text"]').fill('猫咪');
     await page.getByRole('button', { name: '搜索', exact: true }).click();
 
     await expect.poll(() => requestBody !== undefined, { timeout: 5000 }).toBe(true);
     await expect(page.getByRole('button', { name: /查看表情详情：带文字猫咪测试表情/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /查看表情详情：无文字猫咪测试表情/ })).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: '筛选当前搜索结果' })).toBeVisible();
 
     await page.getByRole('radio', { name: '有文字' }).click();
 
@@ -191,6 +194,59 @@ test.describe('Emomo 表情包搜索应用', () => {
     await expect(page.getByRole('button', { name: /查看表情详情：无文字猫咪测试表情/ })).toBeHidden();
     expect(searchRequestCount).toBe(1);
     expect(requestBody?.textPresence).toBeUndefined();
+  });
+
+  test('文字筛选为空时仍保留结果筛选控件', async ({ page }) => {
+    await page.route('**/api/v1/search/stream', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: [
+          'event: complete',
+          `data: ${JSON.stringify({
+            stage: 7,
+            message: '搜索完成',
+            complete: {
+              results: [
+                {
+                  meme: {
+                    id: 'cat-without-text-only',
+                    url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22 viewBox=%220 0 120 120%22%3E%3Crect width=%22120%22 height=%22120%22 fill=%22%23dff4ff%22/%3E%3Ccircle cx=%2260%22 cy=%2260%22 r=%2230%22 fill=%22%2390c8ef%22/%3E%3C/svg%3E',
+                    imageInfo: {
+                      width: 120,
+                      height: 120,
+                      format: 2,
+                    },
+                    tags: ['猫咪'],
+                    category: '测试',
+                  },
+                  score: 0.82,
+                  description: '无文字猫咪测试表情',
+                  textPresence: 'TEXT_PRESENCE_WITHOUT_TEXT',
+                },
+              ],
+              total: 1,
+              query: '猫咪',
+            },
+          })}`,
+          '',
+        ].join('\n'),
+      });
+    });
+
+    await page.locator('input[type="text"]').fill('猫咪');
+    await page.getByRole('button', { name: '搜索', exact: true }).click();
+
+    await expect(page.getByRole('button', { name: /查看表情详情：无文字猫咪测试表情/ })).toBeVisible();
+
+    await page.getByRole('radio', { name: '有文字' }).click();
+
+    await expect(page.getByText('没有找到相关表情包')).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: '筛选当前搜索结果' })).toBeVisible();
+
+    await page.getByRole('radio', { name: '全部' }).click();
+
+    await expect(page.getByRole('button', { name: /查看表情详情：无文字猫咪测试表情/ })).toBeVisible();
   });
 
   test('随便逛逛区域显示', async ({ page }) => {

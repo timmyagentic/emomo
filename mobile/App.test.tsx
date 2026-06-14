@@ -32,6 +32,7 @@ test('opens directly to the conversational search experience', async () => {
 
   expect(await screen.findByText('今天想找什么表情？')).toBeTruthy();
   expect(screen.getByPlaceholderText('描述一个情绪、场景或者想发的话')).toBeTruthy();
+  expect(screen.queryByText('有文字')).toBeNull();
   expect(await screen.findByText('老板突然沉默')).toBeTruthy();
 });
 
@@ -82,6 +83,8 @@ test('filters existing search results by text presence without searching again',
   await waitFor(() => expect(searchMemesStreamMock).toHaveBeenCalledTimes(1));
   expect(await screen.findByText('81%')).toBeTruthy();
   expect(screen.getByText('42%')).toBeTruthy();
+  expect(screen.getByText('结果筛选')).toBeTruthy();
+  expect(screen.getByText('从 2 个结果中筛选')).toBeTruthy();
 
   fireEvent.press(screen.getByText('有文字'));
 

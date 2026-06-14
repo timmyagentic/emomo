@@ -74,6 +74,12 @@ const SEARCH_PROGRESS_FALLBACKS: { delayMs: number; progress: SearchProgressView
   },
 ];
 
+const textPresenceOptions: { value: TextPresenceFilter; label: string }[] = [
+  { value: 'all', label: '全部' },
+  { value: 'with_text', label: '有文字' },
+  { value: 'without_text', label: '无文字' },
+];
+
 export default function App() {
   const [inputQuery, setInputQuery] = useState('');
   const [lastQuery, setLastQuery] = useState('');
@@ -162,6 +168,9 @@ export default function App() {
 
   const filteredResults = filterMemesByTextPresence(results, textPresenceFilter);
   const visibleMemes = hasSearched ? filteredResults : feedMemes;
+  const sectionMeta = hasSearched
+    ? `${filteredResults.length} / ${results.length} 张`
+    : visibleMemes.length > 0 ? `${visibleMemes.length} 张` : '';
   const emptyTitle = hasSearched ? '没有找到合适的表情' : isInitialLoading ? '正在加载表情库' : '还没有可展示的表情';
   const emptyMessage = hasSearched ? '换一种描述试试，比如说清楚情绪、场景和语气。' : '稍后下拉或重新打开 App 再试。';
 
@@ -331,8 +340,6 @@ export default function App() {
             value={inputQuery}
             onChangeText={setInputQuery}
             onSubmit={() => runSearch()}
-            textPresenceFilter={textPresenceFilter}
-            onTextPresenceFilterChange={handleTextPresenceFilterChange}
             onCancel={cancelSearch}
             isLoading={isSearching}
           />
@@ -346,8 +353,33 @@ export default function App() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{hasSearched ? `“${lastQuery}” 的结果` : '随便逛逛'}</Text>
-          <Text style={styles.sectionMeta}>{visibleMemes.length > 0 ? `${visibleMemes.length} 张` : ''}</Text>
+          <Text style={styles.sectionMeta}>{sectionMeta}</Text>
         </View>
+
+        {hasSearched ? (
+          <View style={styles.resultFilter}>
+            <View>
+              <Text style={styles.resultFilterTitle}>结果筛选</Text>
+              <Text style={styles.resultFilterMeta}>{`从 ${results.length} 个结果中筛选`}</Text>
+            </View>
+            <View style={styles.segmentedControl}>
+              {textPresenceOptions.map((option) => {
+                const selected = option.value === textPresenceFilter;
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => handleTextPresenceFilterChange(option.value)}
+                    style={[styles.segmentButton, selected && styles.segmentButtonActive]}
+                  >
+                    <Text style={[styles.segmentLabel, selected && styles.segmentLabelActive]}>{option.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         <MemeMasonryList
           data={visibleMemes}
@@ -454,5 +486,51 @@ const styles = StyleSheet.create({
     color: '#68736c',
     fontSize: 12,
     fontWeight: '800',
+  },
+  resultFilter: {
+    alignItems: 'stretch',
+    borderColor: '#d9dfda',
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    gap: 10,
+    padding: 10,
+  },
+  resultFilterTitle: {
+    color: '#111111',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  resultFilterMeta: {
+    color: '#68736c',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: '#f2f5f1',
+  },
+  segmentButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    minHeight: 32,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#f6d86b',
+  },
+  segmentLabel: {
+    color: '#58635d',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  segmentLabelActive: {
+    color: '#111111',
   },
 });

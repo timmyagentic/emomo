@@ -310,8 +310,6 @@ function App() {
           value={inputQuery}
           onValueChange={handleInputQueryChange}
           onSearch={handleSearch}
-          textPresenceFilter={textPresenceFilter}
-          onTextPresenceFilterChange={handleTextPresenceFilterChange}
           isLoading={isLoading}
           compact={hasSearched}
         />
@@ -339,6 +337,10 @@ function App() {
             hasMore={hasMoreSearchResults}
             onLoadMore={handleLoadMoreSearch}
             endMessage="已展示全部相关结果"
+            textPresenceFilter={textPresenceFilter}
+            onTextPresenceFilterChange={handleTextPresenceFilterChange}
+            searchResultTotal={memes.length}
+            filteredResultTotal={filteredSearchMemes.length}
           />
         ) : (
           <MemeGrid
