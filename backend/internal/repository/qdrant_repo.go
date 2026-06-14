@@ -22,6 +22,11 @@ const (
 	SparseVectorModel      = "qdrant/bm25"
 )
 
+var keywordPayloadIndexFields = []string{
+	"category",
+	"text_presence",
+}
+
 // QdrantConnectionConfig holds configuration for Qdrant connection.
 type QdrantConnectionConfig struct {
 	Host            string
@@ -132,9 +137,12 @@ func (r *QdrantRepository) EnsureCollection(ctx context.Context) error {
 					sparseConfig = params.GetSparseVectorsConfig()
 				}
 			}
-			return r.ensureSparseConfig(ctx, sparseConfig)
+			if err := r.ensureSparseConfig(ctx, sparseConfig); err != nil {
+				return err
+			}
+			return r.ensurePayloadIndexes(ctx, info.Result.GetPayloadSchema())
 		}
-		return nil
+		return r.ensurePayloadIndexes(ctx, nil)
 	}
 
 	// Create collection with named vectors (dense + sparse)
@@ -165,7 +173,7 @@ func (r *QdrantRepository) EnsureCollection(ctx context.Context) error {
 		return fmt.Errorf("failed to create collection: %w", err)
 	}
 
-	return nil
+	return r.ensurePayloadIndexes(ctx, nil)
 }
 
 func (r *QdrantRepository) ensureSparseConfig(ctx context.Context, existing *pb.SparseVectorConfig) error {
@@ -191,6 +199,37 @@ func (r *QdrantRepository) ensureSparseConfig(ctx context.Context, existing *pb.
 		return fmt.Errorf("failed to update sparse vectors config: %w", err)
 	}
 
+	return nil
+}
+
+func (r *QdrantRepository) ensurePayloadIndexes(ctx context.Context, schema map[string]*pb.PayloadSchemaInfo) error {
+	for _, fieldName := range keywordPayloadIndexFields {
+		if hasKeywordPayloadIndex(schema, fieldName) {
+			continue
+		}
+		if err := r.ensureKeywordPayloadIndex(ctx, fieldName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func hasKeywordPayloadIndex(schema map[string]*pb.PayloadSchemaInfo, fieldName string) bool {
+	info, ok := schema[fieldName]
+	return ok && info.GetDataType() == pb.PayloadSchemaType_Keyword
+}
+
+func (r *QdrantRepository) ensureKeywordPayloadIndex(ctx context.Context, fieldName string) error {
+	wait := true
+	_, err := r.pointsClient.CreateFieldIndex(ctx, &pb.CreateFieldIndexCollection{
+		CollectionName: r.collectionName,
+		FieldName:      fieldName,
+		FieldType:      pb.FieldType_FieldTypeKeyword.Enum(),
+		Wait:           &wait,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create %q payload index: %w", fieldName, err)
+	}
 	return nil
 }
 

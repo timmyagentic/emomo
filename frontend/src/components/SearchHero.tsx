@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { TextPresenceFilter } from '../api';
+import type { TextPresenceFilter } from '../types';
 import styles from './SearchHero.module.css';
 
 /**

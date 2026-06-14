@@ -66,7 +66,7 @@ test('falls back to non-streaming search when response body is not readable', as
   });
 });
 
-test('sends selected text presence filter in search request', async () => {
+test('does not send text presence display filter in search request', async () => {
   const fetchMock = jest.fn().mockResolvedValueOnce(
     makeResponse({
       results: [],
@@ -76,9 +76,9 @@ test('sends selected text presence filter in search request', async () => {
   );
   global.fetch = fetchMock as unknown as typeof fetch;
 
-  await searchMemes('猫咪', { topK: 20, textPresenceFilter: 'with_text' });
+  await searchMemes('猫咪', { topK: 20 });
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
   const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { textPresence?: unknown };
-  expect([2, 'TEXT_PRESENCE_WITH_TEXT']).toContain(requestBody.textPresence);
+  expect(requestBody.textPresence).toBeUndefined();
 });

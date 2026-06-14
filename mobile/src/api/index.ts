@@ -9,7 +9,6 @@ import {
   SearchStage,
 } from '@gen/emomo/v1/api_pb';
 import type { SearchProgressEvent, SearchRequest } from '@gen/emomo/v1/api_pb';
-import { TextPresence } from '@gen/emomo/v1/types_pb';
 import {
   pbMemeToDisplay,
   pbSearchResultToDisplay,
@@ -17,7 +16,6 @@ import {
   type SearchProgressView,
   type SearchStageSlug,
   type StatsView,
-  type TextPresenceFilter,
 } from '@/types';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE || 'http://localhost:8080/api/v1';
@@ -39,7 +37,6 @@ export interface SearchOptions {
   topK?: number;
   category?: string;
   profile?: string;
-  textPresenceFilter?: TextPresenceFilter;
 }
 
 function getHeaders(contentType?: string): HeadersInit {
@@ -50,24 +47,11 @@ function getHeaders(contentType?: string): HeadersInit {
   return headers;
 }
 
-function textPresenceFilterToProto(filter: TextPresenceFilter = 'all'): TextPresence {
-  switch (filter) {
-    case 'with_text':
-      return TextPresence.WITH_TEXT;
-    case 'without_text':
-      return TextPresence.WITHOUT_TEXT;
-    case 'all':
-    default:
-      return TextPresence.UNSPECIFIED;
-  }
-}
-
 function buildSearchRequest(query: string, options: SearchOptions = {}): SearchRequest {
   return create(SearchRequestSchema, {
     query,
     topK: options.topK ?? DEFAULT_TOP_K,
     category: options.category ?? '',
-    textPresence: textPresenceFilterToProto(options.textPresenceFilter),
     collection: '',
     profile: options.profile ?? '',
   });

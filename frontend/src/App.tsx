@@ -8,10 +8,9 @@ import {
   getStats,
   type SearchStageSlug,
   type SearchProgressView,
-  type TextPresenceFilter,
 } from './api';
 import { curatedMemes } from './data/curatedMemes';
-import type { DisplayMeme } from './types';
+import { filterMemesByTextPresence, type DisplayMeme, type TextPresenceFilter } from './types';
 import { logError } from './utils/logger';
 import './App.css';
 
@@ -132,7 +131,7 @@ function App() {
   }, []);
 
   // Handle search with streaming progress
-  const handleSearch = useCallback(async (query: string, filter: TextPresenceFilter = textPresenceFilter) => {
+  const handleSearch = useCallback(async (query: string) => {
     // Cancel any existing search
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -217,8 +216,7 @@ function App() {
           }
         },
         abortController.signal,
-        undefined,
-        filter
+        undefined
       );
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
@@ -241,7 +239,7 @@ function App() {
         setIsLoading(false);
       }
     }
-  }, [textPresenceFilter]);
+  }, []);
 
   const resetToBrowse = useCallback(() => {
     // Cancel any ongoing search
@@ -271,12 +269,8 @@ function App() {
 
   const handleTextPresenceFilterChange = useCallback((filter: TextPresenceFilter) => {
     setTextPresenceFilter(filter);
-
-    const query = (inputQuery || searchQuery).trim();
-    if (hasSearched && query) {
-      void handleSearch(query, filter);
-    }
-  }, [handleSearch, hasSearched, inputQuery, searchQuery]);
+    setSearchVisibleCount(SEARCH_PAGE_SIZE);
+  }, []);
 
   const handleLoadMoreFeed = useCallback(() => {
     if (hasSearched) return;
@@ -288,13 +282,14 @@ function App() {
     loadFeedPage(feedOffsetRef.current);
   }, [feedTotal, hasFeedMore, hasSearched, loadFeedPage]);
 
+  const filteredSearchMemes = filterMemesByTextPresence(memes, textPresenceFilter);
+  const visibleSearchMemes = filteredSearchMemes.slice(0, searchVisibleCount);
+  const hasMoreSearchResults = searchVisibleCount < filteredSearchMemes.length;
+
   // 搜索结果一次召回后，用本地 slice 渐进展示，模拟无限滚动。
   const handleLoadMoreSearch = useCallback(() => {
-    setSearchVisibleCount((current) => Math.min(current + SEARCH_PAGE_SIZE, memes.length));
-  }, [memes.length]);
-
-  const visibleSearchMemes = memes.slice(0, searchVisibleCount);
-  const hasMoreSearchResults = searchVisibleCount < memes.length;
+    setSearchVisibleCount((current) => Math.min(current + SEARCH_PAGE_SIZE, filteredSearchMemes.length));
+  }, [filteredSearchMemes.length]);
 
   // Handle meme click
   const handleMemeClick = useCallback((meme: DisplayMeme) => {

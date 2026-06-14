@@ -27,7 +27,13 @@ import {
   normalizeSearchQuery,
   type SearchHistoryEntry,
 } from './src/storage/searchHistory';
-import type { DisplayMeme, SearchProgressView, SearchStageSlug, TextPresenceFilter } from './src/types';
+import {
+  filterMemesByTextPresence,
+  type DisplayMeme,
+  type SearchProgressView,
+  type SearchStageSlug,
+  type TextPresenceFilter,
+} from './src/types';
 import { copyMemeImage, saveMemeToLibrary, shareMeme } from './src/utils/imageActions';
 
 const INITIAL_PAGE_SIZE = 20;
@@ -154,7 +160,8 @@ export default function App() {
     };
   }, [clearProgressTimers]);
 
-  const visibleMemes = hasSearched ? results : feedMemes;
+  const filteredResults = filterMemesByTextPresence(results, textPresenceFilter);
+  const visibleMemes = hasSearched ? filteredResults : feedMemes;
   const emptyTitle = hasSearched ? '没有找到合适的表情' : isInitialLoading ? '正在加载表情库' : '还没有可展示的表情';
   const emptyMessage = hasSearched ? '换一种描述试试，比如说清楚情绪、场景和语气。' : '稍后下拉或重新打开 App 再试。';
 
@@ -174,7 +181,7 @@ export default function App() {
   }, [clearProgressTimers, setSearchProgress]);
 
   const runSearch = useCallback(
-    async (rawQuery?: string, filter: TextPresenceFilter = textPresenceFilter) => {
+    async (rawQuery?: string) => {
       const query = normalizeSearchQuery(rawQuery ?? inputQuery);
       if (!query || isSearching) {
         return;
@@ -203,7 +210,7 @@ export default function App() {
         let accumulatedThinking = '';
         await searchMemesStream(
           query,
-          { topK: SEARCH_TOP_K, textPresenceFilter: filter },
+          { topK: SEARCH_TOP_K },
           (event) => {
             if (abortController.signal.aborted) {
               return;
@@ -250,17 +257,13 @@ export default function App() {
       isSearching,
       setSearchProgress,
       startFallbackProgress,
-      textPresenceFilter,
       updateSearchProgress,
     ]
   );
 
   const handleTextPresenceFilterChange = useCallback((filter: TextPresenceFilter) => {
     setTextPresenceFilter(filter);
-    if (hasSearched && lastQuery && !isSearching) {
-      void runSearch(lastQuery, filter);
-    }
-  }, [hasSearched, isSearching, lastQuery, runSearch]);
+  }, []);
 
   const clearHistory = useCallback(async () => {
     await clearSearchHistory();
