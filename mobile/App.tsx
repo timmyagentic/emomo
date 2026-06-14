@@ -358,10 +358,7 @@ export default function App() {
 
         {hasSearched ? (
           <View style={styles.resultFilter}>
-            <View>
-              <Text style={styles.resultFilterTitle}>结果筛选</Text>
-              <Text style={styles.resultFilterMeta}>{`从 ${results.length} 个结果中筛选`}</Text>
-            </View>
+            <Text style={styles.resultFilterLabel}>展示</Text>
             <View style={styles.segmentedControl}>
               {textPresenceOptions.map((option) => {
                 const selected = option.value === textPresenceFilter;
@@ -488,42 +485,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   resultFilter: {
-    alignItems: 'stretch',
-    borderColor: '#d9dfda',
-    borderRadius: 8,
-    borderWidth: 1,
-    backgroundColor: '#ffffff',
-    gap: 10,
-    padding: 10,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
-  resultFilterTitle: {
-    color: '#111111',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  resultFilterMeta: {
+  resultFilterLabel: {
     color: '#68736c',
     fontSize: 12,
-    fontWeight: '700',
-    marginTop: 2,
+    fontWeight: '900',
   },
   segmentedControl: {
     flexDirection: 'row',
-    gap: 4,
-    padding: 4,
-    borderRadius: 8,
-    backgroundColor: '#f2f5f1',
+    gap: 6,
   },
   segmentButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
     minHeight: 32,
-    borderRadius: 6,
-    paddingHorizontal: 8,
+    borderRadius: 16,
+    borderColor: 'transparent',
+    borderWidth: 1,
+    paddingHorizontal: 12,
   },
   segmentButtonActive: {
-    backgroundColor: '#f6d86b',
+    backgroundColor: '#f8e18a',
+    borderColor: '#e7c657',
   },
   segmentLabel: {
     color: '#58635d',

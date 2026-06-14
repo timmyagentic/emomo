@@ -126,12 +126,12 @@ export default function MemeGrid({
   const loadedCountText = typeof total === 'number'
     ? `已展示 ${countFormatter.format(memes.length)} / ${countFormatter.format(total)} 个表情包`
     : `已展示 ${countFormatter.format(memes.length)} 个表情包`;
-  const searchCountText = typeof filteredResultTotal === 'number'
-    ? `显示 ${countFormatter.format(memes.length)} / ${countFormatter.format(filteredResultTotal)} 个`
+  const searchResultCountTotal = typeof searchResultTotal === 'number'
+    ? searchResultTotal
+    : filteredResultTotal;
+  const searchCountText = typeof searchResultCountTotal === 'number'
+    ? `显示 ${countFormatter.format(memes.length)} / ${countFormatter.format(searchResultCountTotal)} 个`
     : `显示 ${countFormatter.format(memes.length)} 个`;
-  const searchFilterText = typeof searchResultTotal === 'number' && typeof filteredResultTotal === 'number'
-    ? `从 ${countFormatter.format(searchResultTotal)} 个结果中筛选`
-    : '筛选当前结果';
   const resultsHeader = (title || searchQuery || resultFilter || hasLowConfidence) ? (
     <motion.header
       className={styles.resultsHeader}
@@ -157,10 +157,7 @@ export default function MemeGrid({
 
       {resultFilter && (
         <div className={styles.resultFilter}>
-          <div className={styles.resultFilterCopy}>
-            <span className={styles.resultFilterLabel}>结果筛选</span>
-            <span className={styles.resultFilterMeta}>{searchFilterText}</span>
-          </div>
+          <span className={styles.resultFilterLabel}>展示</span>
           <div className={styles.segmentedControl} role="radiogroup" aria-label="筛选当前搜索结果">
             {textPresenceOptions.map((option) => {
               const selected = resultFilter.value === option.value;

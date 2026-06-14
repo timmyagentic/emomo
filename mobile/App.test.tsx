@@ -83,8 +83,7 @@ test('filters existing search results by text presence without searching again',
   await waitFor(() => expect(searchMemesStreamMock).toHaveBeenCalledTimes(1));
   expect(await screen.findByText('81%')).toBeTruthy();
   expect(screen.getByText('42%')).toBeTruthy();
-  expect(screen.getByText('结果筛选')).toBeTruthy();
-  expect(screen.getByText('从 2 个结果中筛选')).toBeTruthy();
+  expect(screen.getByText('展示')).toBeTruthy();
 
   fireEvent.press(screen.getByText('有文字'));
 
