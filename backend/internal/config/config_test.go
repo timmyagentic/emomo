@@ -1,6 +1,8 @@
 package config
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -63,6 +65,348 @@ func TestLoadDefaultsAgenticSearchConfig(t *testing.T) {
 	}
 	if !cfg.Search.Agentic.FallbackOnError {
 		t.Fatal("fallback_on_error = false, want true by default")
+	}
+}
+
+func TestLoadDefaultsConfigCenter(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.ConfigCenter.Enabled {
+		t.Fatal("config_center.enabled = true, want false by default")
+	}
+	if cfg.ConfigCenter.Required {
+		t.Fatal("config_center.required = true, want false by default")
+	}
+	if cfg.ConfigCenter.URL != "" {
+		t.Fatalf("config_center.url = %q, want empty", cfg.ConfigCenter.URL)
+	}
+	if cfg.ConfigCenter.PollInterval != time.Minute {
+		t.Fatalf("config_center.poll_interval = %s, want 1m", cfg.ConfigCenter.PollInterval)
+	}
+	if cfg.ConfigCenter.Timeout != 5*time.Second {
+		t.Fatalf("config_center.timeout = %s, want 5s", cfg.ConfigCenter.Timeout)
+	}
+	if cfg.Logging.Level != "info" {
+		t.Fatalf("logging.level = %q, want info", cfg.Logging.Level)
+	}
+	if cfg.Logging.LokiProject != "emomo" {
+		t.Fatalf("logging.loki_project = %q, want emomo", cfg.Logging.LokiProject)
+	}
+}
+
+func TestLoadBindsConfigCenterEnv(t *testing.T) {
+	t.Setenv("CONFIG_CENTER_SKIP_REMOTE", "true")
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "true")
+	t.Setenv("CONFIG_CENTER_URL", "https://config.example.com/v1/config/emomo/production/emomo-api")
+	t.Setenv("CONFIG_CENTER_TOKEN", "read-token")
+	t.Setenv("CONFIG_CENTER_POLL_INTERVAL", "15s")
+	t.Setenv("CONFIG_CENTER_TIMEOUT", "2s")
+	t.Setenv("QUERY_EXPANSION_ENABLED", "false")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if !cfg.ConfigCenter.Enabled {
+		t.Fatal("config_center.enabled = false, want true")
+	}
+	if !cfg.ConfigCenter.Required {
+		t.Fatal("config_center.required = false, want true")
+	}
+	if cfg.ConfigCenter.URL != "https://config.example.com/v1/config/emomo/production/emomo-api" {
+		t.Fatalf("config_center.url = %q", cfg.ConfigCenter.URL)
+	}
+	if cfg.ConfigCenter.Token != "read-token" {
+		t.Fatalf("config_center.token = %q, want read-token", cfg.ConfigCenter.Token)
+	}
+	if cfg.ConfigCenter.PollInterval != 15*time.Second {
+		t.Fatalf("config_center.poll_interval = %s, want 15s", cfg.ConfigCenter.PollInterval)
+	}
+	if cfg.ConfigCenter.Timeout != 2*time.Second {
+		t.Fatalf("config_center.timeout = %s, want 2s", cfg.ConfigCenter.Timeout)
+	}
+	if cfg.Search.QueryExpansion.Enabled {
+		t.Fatal("query_expansion.enabled = true, want env override false")
+	}
+}
+
+func TestLoadMergesConfigCenterConfigAboveEnv(t *testing.T) {
+	t.Setenv("QUERY_EXPANSION_MODEL", "local-model")
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "true")
+	t.Setenv("CONFIG_CENTER_TOKEN", "read-token")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer read-token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"version": "remote-version",
+			"config": {
+				"database": {
+					"driver": "postgres",
+					"url": "postgresql://remote"
+				},
+				"search": {
+					"query_expansion": {
+						"enabled": true,
+						"model": "remote-model",
+						"api_key": "remote-key",
+						"base_url": "https://remote.example.com/v1"
+					}
+				},
+				"logging": {
+					"level": "warn",
+					"loki_enabled": true,
+					"loki_password": "remote-loki-token"
+				}
+			}
+		}`))
+	}))
+	defer srv.Close()
+	t.Setenv("CONFIG_CENTER_URL", srv.URL)
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("search:\n  query_expansion:\n    model: yaml-model\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Database.Driver != "postgres" {
+		t.Fatalf("database.driver = %q, want postgres", cfg.Database.Driver)
+	}
+	if cfg.Database.URL != "postgresql://remote" {
+		t.Fatalf("database.url = %q, want remote", cfg.Database.URL)
+	}
+	if cfg.Search.QueryExpansion.Model != "remote-model" {
+		t.Fatalf("query expansion model = %q, want remote-model", cfg.Search.QueryExpansion.Model)
+	}
+	if cfg.Search.QueryExpansion.APIKey != "remote-key" {
+		t.Fatalf("query expansion api key = %q, want remote-key", cfg.Search.QueryExpansion.APIKey)
+	}
+	if cfg.Search.QueryExpansion.BaseURL != "https://remote.example.com/v1" {
+		t.Fatalf("query expansion base url = %q, want remote", cfg.Search.QueryExpansion.BaseURL)
+	}
+	if cfg.Logging.Level != "warn" {
+		t.Fatalf("logging.level = %q, want warn", cfg.Logging.Level)
+	}
+	if !cfg.Logging.LokiEnabled {
+		t.Fatal("logging.loki_enabled = false, want true")
+	}
+	if cfg.Logging.LokiPassword != "remote-loki-token" {
+		t.Fatalf("logging.loki_password = %q, want remote-loki-token", cfg.Logging.LokiPassword)
+	}
+}
+
+func TestLoadKeepsConfigCenterAboveLegacyHuggingFaceEnv(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://hf-db")
+	t.Setenv("QDRANT_HOST", "hf-qdrant.example.com")
+	t.Setenv("QDRANT_API_KEY", "hf-qdrant-key")
+	t.Setenv("STORAGE_ACCESS_KEY", "hf-storage-access")
+	t.Setenv("STORAGE_SECRET_KEY", "hf-storage-secret")
+	t.Setenv("OPENAI_API_KEY", "hf-openai-key")
+	t.Setenv("SILICONFLOW_API_KEY", "hf-siliconflow-key")
+	t.Setenv("QUERY_EXPANSION_API_KEY", "hf-query-key")
+	t.Setenv("LOKI_PASSWORD", "hf-loki-password")
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "true")
+	t.Setenv("CONFIG_CENTER_TOKEN", "read-token")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer read-token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"version": "remote-version",
+			"config": {
+				"database": {
+					"url": "postgresql://remote-db"
+				},
+				"qdrant": {
+					"host": "remote-qdrant.example.com",
+					"api_key": "remote-qdrant-key"
+				},
+				"storage": {
+					"access_key": "remote-storage-access",
+					"secret_key": "remote-storage-secret"
+				},
+				"vlm": {
+					"api_key": "remote-openai-key"
+				},
+				"embeddings": [
+					{
+						"name": "remote-image",
+						"provider": "siliconflow",
+						"model": "remote-embedding-model",
+						"api_key": "remote-siliconflow-key",
+						"api_key_env": "SILICONFLOW_API_KEY",
+						"document_mode": "image",
+						"dimensions": 1024,
+						"collection": "remote_collection",
+						"is_default": true
+					}
+				],
+				"search": {
+					"query_expansion": {
+						"api_key": "remote-query-key"
+					}
+				},
+				"logging": {
+					"loki_password": "remote-loki-password"
+				}
+			}
+		}`))
+	}))
+	defer srv.Close()
+	t.Setenv("CONFIG_CENTER_URL", srv.URL)
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte(`embeddings:
+  - name: local-image
+    provider: siliconflow
+    model: local-model
+    api_key_env: SILICONFLOW_API_KEY
+    document_mode: image
+    dimensions: 1024
+    collection: local_collection
+    is_default: true
+`), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Database.URL != "postgresql://remote-db" {
+		t.Fatalf("database.url = %q, want remote", cfg.Database.URL)
+	}
+	if cfg.Qdrant.Host != "remote-qdrant.example.com" {
+		t.Fatalf("qdrant.host = %q, want remote", cfg.Qdrant.Host)
+	}
+	if cfg.Qdrant.APIKey != "remote-qdrant-key" {
+		t.Fatalf("qdrant.api_key = %q, want remote", cfg.Qdrant.APIKey)
+	}
+	if cfg.Storage.AccessKey != "remote-storage-access" {
+		t.Fatalf("storage.access_key = %q, want remote", cfg.Storage.AccessKey)
+	}
+	if cfg.Storage.SecretKey != "remote-storage-secret" {
+		t.Fatalf("storage.secret_key = %q, want remote", cfg.Storage.SecretKey)
+	}
+	if cfg.VLM.APIKey != "remote-openai-key" {
+		t.Fatalf("vlm.api_key = %q, want remote", cfg.VLM.APIKey)
+	}
+	if len(cfg.Embeddings) != 1 {
+		t.Fatalf("embeddings len = %d, want 1", len(cfg.Embeddings))
+	}
+	if cfg.Embeddings[0].Name != "remote-image" {
+		t.Fatalf("embedding name = %q, want remote-image", cfg.Embeddings[0].Name)
+	}
+	if cfg.Embeddings[0].APIKey != "remote-siliconflow-key" {
+		t.Fatalf("embedding api_key = %q, want remote", cfg.Embeddings[0].APIKey)
+	}
+	if cfg.Search.QueryExpansion.APIKey != "remote-query-key" {
+		t.Fatalf("query expansion api_key = %q, want remote", cfg.Search.QueryExpansion.APIKey)
+	}
+	if cfg.Logging.LokiPassword != "remote-loki-password" {
+		t.Fatalf("logging.loki_password = %q, want remote", cfg.Logging.LokiPassword)
+	}
+	if cfg.ConfigCenter.Token != "read-token" {
+		t.Fatalf("config_center.token = %q, want bootstrap token", cfg.ConfigCenter.Token)
+	}
+}
+
+func TestLoadRequiredConfigCenterFailsClosed(t *testing.T) {
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "true")
+	t.Setenv("CONFIG_CENTER_URL", "http://127.0.0.1:1/config")
+	t.Setenv("CONFIG_CENTER_TIMEOUT", "1ms")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	if _, err := Load(configPath); err == nil {
+		t.Fatal("Load() error = nil, want config center failure")
+	}
+}
+
+func TestLoadDisabledConfigCenterSkipsRemote(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"config":{"search":{"query_expansion":{"model":"remote-model"}}}}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("CONFIG_CENTER_ENABLED", "false")
+	t.Setenv("CONFIG_CENTER_URL", srv.URL)
+	t.Setenv("QUERY_EXPANSION_MODEL", "local-model")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ConfigCenterLoadError != nil {
+		t.Fatalf("ConfigCenterLoadError = %v, want nil when disabled", cfg.ConfigCenterLoadError)
+	}
+	if cfg.Search.QueryExpansion.Model != "local-model" {
+		t.Fatalf("query_expansion.model = %q, want local-model (remote must be skipped when disabled)", cfg.Search.QueryExpansion.Model)
+	}
+}
+
+func TestLoadOptionalConfigCenterFetchFailureIsRecoverable(t *testing.T) {
+	t.Setenv("CONFIG_CENTER_ENABLED", "true")
+	t.Setenv("CONFIG_CENTER_REQUIRED", "false")
+	t.Setenv("CONFIG_CENTER_URL", "http://127.0.0.1:1/config")
+	t.Setenv("CONFIG_CENTER_TIMEOUT", "5ms")
+	t.Setenv("QUERY_EXPANSION_MODEL", "local-model")
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil for optional config center", err)
+	}
+	if cfg.ConfigCenterLoadError == nil {
+		t.Fatal("ConfigCenterLoadError = nil, want non-nil after optional fetch failure")
+	}
+	if cfg.Search.QueryExpansion.Model != "local-model" {
+		t.Fatalf("query_expansion.model = %q, want local-model fallback", cfg.Search.QueryExpansion.Model)
 	}
 }
 

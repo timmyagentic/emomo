@@ -28,19 +28,22 @@ database:
   # path: ./data/memes.db
 
 # Qdrant Cloud 配置
+# 生产环境启用配置中心后，api_key 由 Cloudflare Secrets Store 下发；
+# 只有 CONFIG_CENTER_ENABLED=false 的 legacy 部署才在本地/HF 配置密钥。
 qdrant:
   host: your-cluster.qdrant.io  # Qdrant Cloud 集群地址
   port: 6334                     # Qdrant Cloud gRPC 端口
   collection: emomo
-  api_key: your-qdrant-api-key    # Qdrant Cloud API Key
+  api_key: ""                     # legacy only when config center is disabled
   use_tls: true                  # Qdrant Cloud 需要 TLS
 
 # S3 兼容存储配置（Cloudflare R2）
+# 生产环境启用配置中心后，access_key/secret_key 由 Cloudflare Secrets Store 下发。
 storage:
   type: r2                                          # 存储类型: r2, s3, s3compatible
   endpoint: your-account-id.r2.cloudflarestorage.com  # R2 S3 API endpoint
-  access_key: your-r2-access-key                    # R2 Access Key ID
-  secret_key: your-r2-secret-key                    # R2 Secret Access Key
+  access_key: ""                                    # legacy only when config center is disabled
+  secret_key: ""                                    # legacy only when config center is disabled
   use_ssl: true                                     # R2 使用 HTTPS
   bucket: memes                                     # Bucket 名称
   region: auto                                      # R2 使用 "auto"
@@ -50,8 +53,8 @@ storage:
 # storage:
 #   type: s3
 #   endpoint: s3.amazonaws.com
-#   access_key: your-aws-access-key
-#   secret_key: your-aws-secret-key
+#   access_key: legacy-only-when-config-center-disabled
+#   secret_key: legacy-only-when-config-center-disabled
 #   use_ssl: true
 #   bucket: your-bucket-name
 #   region: us-east-1
@@ -120,6 +123,38 @@ search:
     reranker_timeout: 10s
     rerank_top_k: 40
     fallback_on_error: true
+
+config_center:
+  # Optional: set CONFIG_CENTER_* env vars in Hugging Face to load complete
+  # backend config from the Worker. Query expansion can also hot-update.
+  enabled: false
+  required: false
+  url: ""
+  token: ""
+  poll_interval: 60s
+  timeout: 5s
+
+logging:
+  level: info
+  format: json
+  service_name: emomo-api
+  environment: production
+  log_file: ""
+  log_file_only: false
+  max_size: 100
+  max_backups: 7
+  max_age: 30
+  compress: true
+  loki_enabled: false
+  loki_url: ""
+  loki_username: ""
+  loki_password: ""
+  loki_project: emomo
+  cluster_name: production
+  loki_batch_size: 100
+  loki_queue_size: 5000
+  loki_flush_interval: 2s
+  loki_timeout: 3s
 
 sources:
   localdir:

@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/timmy/emomo/internal/api"
 	"github.com/timmy/emomo/internal/config"
+	"github.com/timmy/emomo/internal/configcenter"
 	"github.com/timmy/emomo/internal/logger"
 	"github.com/timmy/emomo/internal/repository"
 	"github.com/timmy/emomo/internal/service"
@@ -74,6 +76,235 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+func loggerEnvConfigFromConfig(cfg config.LoggingConfig, serviceName string) *logger.EnvConfig {
+	if cfg.ServiceName != "" {
+		serviceName = cfg.ServiceName
+	}
+
+	return &logger.EnvConfig{
+		Level:             cfg.Level,
+		Format:            cfg.Format,
+		ServiceName:       serviceName,
+		Environment:       cfg.Environment,
+		LogFile:           cfg.LogFile,
+		LogFileOnly:       cfg.LogFileOnly,
+		MaxSize:           cfg.MaxSize,
+		MaxBackups:        cfg.MaxBackups,
+		MaxAge:            cfg.MaxAge,
+		Compress:          cfg.Compress,
+		LokiEnabled:       cfg.LokiEnabled,
+		LokiURL:           cfg.LokiURL,
+		LokiUsername:      cfg.LokiUsername,
+		LokiPassword:      cfg.LokiPassword,
+		LokiProject:       cfg.LokiProject,
+		ClusterName:       cfg.ClusterName,
+		LokiBatchSize:     cfg.LokiBatchSize,
+		LokiQueueSize:     cfg.LokiQueueSize,
+		LokiFlushInterval: cfg.LokiFlushInterval,
+		LokiTimeout:       cfg.LokiTimeout,
+	}
+}
+
+func queryExpansionRuntimeConfig(cfg *config.Config) service.QueryExpansionConfig {
+	apiKey := cfg.Search.QueryExpansion.APIKey
+	if apiKey == "" {
+		apiKey = cfg.VLM.APIKey
+	}
+	baseURL := cfg.Search.QueryExpansion.BaseURL
+	if baseURL == "" {
+		baseURL = cfg.VLM.BaseURL
+	}
+
+	return service.QueryExpansionConfig{
+		Enabled: cfg.Search.QueryExpansion.Enabled,
+		Model:   cfg.Search.QueryExpansion.Model,
+		APIKey:  apiKey,
+		BaseURL: baseURL,
+	}
+}
+
+func applyRemoteQueryExpansionConfig(
+	base service.QueryExpansionConfig,
+	remote configcenter.RemoteQueryExpansionConfig,
+) service.QueryExpansionConfig {
+	next := base
+	if remote.Enabled != nil {
+		next.Enabled = *remote.Enabled
+	}
+	if remote.Model != nil {
+		next.Model = *remote.Model
+	}
+	if remote.APIKey != nil {
+		next.APIKey = *remote.APIKey
+	}
+	if remote.BaseURL != nil {
+		next.BaseURL = *remote.BaseURL
+	}
+	return next
+}
+
+func mapValue(values map[string]any, key string) map[string]any {
+	if values == nil {
+		return nil
+	}
+	nested, _ := values[key].(map[string]any)
+	return nested
+}
+
+func stringValue(values map[string]any, key string) (string, bool) {
+	if values == nil {
+		return "", false
+	}
+	value, ok := values[key]
+	if !ok {
+		return "", false
+	}
+	typed, ok := value.(string)
+	return typed, ok
+}
+
+func boolValue(values map[string]any, key string) (bool, bool) {
+	if values == nil {
+		return false, false
+	}
+	value, ok := values[key]
+	if !ok {
+		return false, false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed, true
+	case string:
+		parsed, err := strconv.ParseBool(typed)
+		return parsed, err == nil
+	default:
+		return false, false
+	}
+}
+
+func queryExpansionRuntimeConfigFromRemote(
+	base service.QueryExpansionConfig,
+	runtimeConfig map[string]any,
+) (service.QueryExpansionConfig, bool) {
+	if len(runtimeConfig) == 0 {
+		return base, false
+	}
+
+	next := base
+	changed := false
+
+	if vlm := mapValue(runtimeConfig, "vlm"); vlm != nil {
+		if value, ok := stringValue(vlm, "api_key"); ok {
+			next.APIKey = value
+			changed = true
+		}
+		if value, ok := stringValue(vlm, "base_url"); ok {
+			next.BaseURL = value
+			changed = true
+		}
+	}
+
+	search := mapValue(runtimeConfig, "search")
+	qe := mapValue(search, "query_expansion")
+	if qe == nil {
+		return next, changed
+	}
+	if value, ok := boolValue(qe, "enabled"); ok {
+		next.Enabled = value
+		changed = true
+	}
+	if value, ok := stringValue(qe, "model"); ok {
+		next.Model = value
+		changed = true
+	}
+	if value, ok := stringValue(qe, "api_key"); ok {
+		next.APIKey = value
+		changed = true
+	}
+	if value, ok := stringValue(qe, "base_url"); ok {
+		next.BaseURL = value
+		changed = true
+	}
+
+	return next, changed
+}
+
+func startConfigCenterPolling(
+	ctx context.Context,
+	cfg config.ConfigCenterConfig,
+	baseQueryExpansion service.QueryExpansionConfig,
+	queryExpansionService *service.QueryExpansionService,
+	appLogger *logger.Logger,
+) {
+	if queryExpansionService == nil {
+		return
+	}
+	if !cfg.Enabled {
+		return
+	}
+	if cfg.URL == "" {
+		appLogger.Warn("Config center enabled but CONFIG_CENTER_URL is empty")
+		return
+	}
+
+	pollInterval := cfg.PollInterval
+	if pollInterval <= 0 {
+		pollInterval = time.Minute
+	}
+
+	client := configcenter.NewClient(configcenter.ClientConfig{
+		URL:     cfg.URL,
+		Token:   cfg.Token,
+		Timeout: cfg.Timeout,
+	})
+
+	appLogger.WithFields(logger.Fields{
+		"poll_interval": pollInterval.String(),
+	}).Info("Config center polling enabled")
+
+	fetchAndApply := func() {
+		remote, err := client.Fetch(ctx)
+		if err != nil {
+			appLogger.WithError(err).Warn("Failed to fetch config center config")
+			return
+		}
+		runtimeConfig := remote.RuntimeConfig()
+		next, ok := queryExpansionRuntimeConfigFromRemote(baseQueryExpansion, runtimeConfig)
+		if !ok {
+			return
+		}
+
+		if !queryExpansionService.UpdateConfig(&next) {
+			return
+		}
+
+		snapshot := queryExpansionService.Snapshot()
+		appLogger.WithFields(logger.Fields{
+			"enabled":        snapshot.Enabled,
+			"model":          snapshot.Model,
+			"base_url":       snapshot.BaseURL,
+			"remote_version": remote.Version,
+			"remote_updated": remote.UpdatedAt,
+		}).Info("Query expansion config updated from config center")
+	}
+
+	fetchAndApply()
+
+	go func() {
+		ticker := time.NewTicker(pollInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				fetchAndApply()
+			}
+		}
+	}()
+}
+
 func buildAgenticSearchService(cfg *config.Config, appLogger *logger.Logger) *service.AgenticSearchService {
 	agenticCfg := cfg.Search.Agentic
 	if !agenticCfg.Enabled {
@@ -130,18 +361,30 @@ func buildAgenticSearchService(cfg *config.Config, appLogger *logger.Logger) *se
 }
 
 func main() {
-	// Load .env before initializing the logger so LOG_* and LOKI_* are honored.
+	// Load .env so config-center bootstrap variables are available before
+	// loading the complete runtime config.
 	config.LoadDotEnv()
-
-	appLogger := logger.NewServiceFromEnv("emomo-api")
-	logger.SetDefaultLogger(appLogger)
-	defer logger.Sync() // Ensure logs are flushed on exit
+	bootstrapLogger := logger.New(&logger.Config{
+		Level:       "info",
+		Format:      "json",
+		ServiceName: "emomo-api",
+	})
+	logger.SetDefaultLogger(bootstrapLogger)
 
 	// Load configuration
 	configPath := os.Getenv("CONFIG_PATH")
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		appLogger.WithError(err).Fatal("Failed to load config")
+		bootstrapLogger.WithError(err).Fatal("Failed to load config")
+	}
+
+	appLogger := logger.NewFromEnv(loggerEnvConfigFromConfig(cfg.Logging, "emomo-api"))
+	logger.SetDefaultLogger(appLogger)
+	defer logger.Sync() // Ensure logs are flushed on exit
+
+	if cfg.ConfigCenterLoadError != nil {
+		appLogger.WithError(cfg.ConfigCenterLoadError).
+			Warn("Config center enabled but optional fetch failed; continuing with local config")
 	}
 
 	// Initialize database
@@ -154,7 +397,8 @@ func main() {
 	memeRepo := repository.NewMemeRepository(db)
 	annotationRepo := repository.NewMemeAnnotationRepository(db)
 
-	ctx := context.Background()
+	ctx, cancelRuntime := context.WithCancel(context.Background())
+	defer cancelRuntime()
 
 	// Initialize S3-compatible storage
 	storageCfg := cfg.GetStorageConfig()
@@ -200,28 +444,17 @@ func main() {
 	defaultProvider, defaultQdrantRepo := embeddingRegistry.Default()
 	defaultEmbeddingName := embeddingRegistry.DefaultName()
 	defaultQdrantCollection := defaultQdrantRepo.GetCollectionName()
-	// Initialize query expansion service
-	// Use Query Expansion's own APIKey/BaseURL if configured, otherwise fall back to VLM's
-	qeAPIKey := cfg.Search.QueryExpansion.APIKey
-	if qeAPIKey == "" {
-		qeAPIKey = cfg.VLM.APIKey
-	}
-	qeBaseURL := cfg.Search.QueryExpansion.BaseURL
-	if qeBaseURL == "" {
-		qeBaseURL = cfg.VLM.BaseURL
-	}
-	queryExpansionService := service.NewQueryExpansionService(&service.QueryExpansionConfig{
-		Enabled: cfg.Search.QueryExpansion.Enabled,
-		Model:   cfg.Search.QueryExpansion.Model,
-		APIKey:  qeAPIKey,
-		BaseURL: qeBaseURL,
-	})
+	// Initialize query expansion service. Query Expansion's own APIKey/BaseURL
+	// override VLM credentials; otherwise it falls back to VLM.
+	queryExpansionCfg := queryExpansionRuntimeConfig(cfg)
+	queryExpansionService := service.NewQueryExpansionService(&queryExpansionCfg)
 
 	if queryExpansionService.IsEnabled() {
 		appLogger.WithFields(logger.Fields{
-			"model": cfg.Search.QueryExpansion.Model,
+			"model": queryExpansionService.Snapshot().Model,
 		}).Info("Query expansion enabled")
 	}
+	startConfigCenterPolling(ctx, cfg.ConfigCenter, queryExpansionCfg, queryExpansionService, appLogger)
 	agenticSearchService := buildAgenticSearchService(cfg, appLogger)
 
 	// Create search service
@@ -286,6 +519,8 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	cancelRuntime()
 
 	logger.Info("Shutting down server...")
 

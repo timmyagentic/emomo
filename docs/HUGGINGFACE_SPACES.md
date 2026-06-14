@@ -33,15 +33,25 @@ Hugging Face Spaces 只运行单个 Docker 容器，**不包含 Qdrant 和对象
 
 ## 环境变量配置
 
-在 Hugging Face Spaces 的 Settings → Secrets and variables → Variables 中添加：
+生产环境启用配置中心后，Hugging Face Spaces 只需要保留配置中心的
+bootstrap 变量和读 token。Qdrant API key、数据库 URL、对象存储密钥、
+模型 API key、Loki 密码等高敏感值必须放在 Cloudflare Secrets Store，
+并通过配置中心 payload 的 `*_secret` 字段引用。
+
+迁移期间可以暂时保留 Hugging Face 里的旧变量；后端会先读取 YAML/env，
+再读取配置中心，同名配置以配置中心返回值为准。`CONFIG_CENTER_*`
+bootstrap 变量是例外，必须继续保留在 Hugging Face。
+
+如果暂时没有启用配置中心，才使用下面各服务的 legacy 环境变量。
 
 ### Qdrant 配置
 
 ```bash
 QDRANT_HOST=your-cluster.qdrant.io
 QDRANT_PORT=6334
-QDRANT_API_KEY=your-qdrant-api-key
 QDRANT_USE_TLS=true
+# Legacy only when CONFIG_CENTER_ENABLED=false:
+QDRANT_API_KEY=your-qdrant-api-key
 ```
 
 ### 存储配置（使用新的统一配置）
@@ -51,11 +61,12 @@ QDRANT_USE_TLS=true
 ```bash
 STORAGE_TYPE=r2
 STORAGE_ENDPOINT=https://<YOUR_ACCOUNT_ID>.r2.cloudflarestorage.com
-STORAGE_ACCESS_KEY=<YOUR_ACCESS_KEY_ID>
-STORAGE_SECRET_KEY=<YOUR_SECRET_ACCESS_KEY>
 STORAGE_USE_SSL=true
 STORAGE_BUCKET=<YOUR_BUCKET_NAME>
 STORAGE_PUBLIC_URL=https://pub-<random-id>.r2.dev  # 可选
+# Legacy only when CONFIG_CENTER_ENABLED=false:
+STORAGE_ACCESS_KEY=<YOUR_ACCESS_KEY_ID>
+STORAGE_SECRET_KEY=<YOUR_SECRET_ACCESS_KEY>
 ```
 
 **如何获取访问密钥**：参见 [CLOUDFLARE_R2_SETUP.md](./CLOUDFLARE_R2_SETUP.md)
@@ -65,10 +76,11 @@ STORAGE_PUBLIC_URL=https://pub-<random-id>.r2.dev  # 可选
 ```bash
 STORAGE_TYPE=s3
 STORAGE_ENDPOINT=s3.us-west-000.backblazeb2.com
-STORAGE_ACCESS_KEY=your-access-key
-STORAGE_SECRET_KEY=your-secret-key
 STORAGE_USE_SSL=true
 STORAGE_BUCKET=your-bucket-name
+# Legacy only when CONFIG_CENTER_ENABLED=false:
+STORAGE_ACCESS_KEY=your-access-key
+STORAGE_SECRET_KEY=your-secret-key
 ```
 
 **注意**：使用 `STORAGE_*` 环境变量配置 S3 兼容存储。
@@ -76,12 +88,40 @@ STORAGE_BUCKET=your-bucket-name
 ### API Keys
 
 ```bash
-OPENAI_API_KEY=your-openai-key
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 VLM_MODEL=qwen/qwen-2.5-vl-7b-instruct:free
-SILICONFLOW_API_KEY=your-siliconflow-key
 SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+# Legacy only when CONFIG_CENTER_ENABLED=false:
+OPENAI_API_KEY=your-openai-key
+SILICONFLOW_API_KEY=your-siliconflow-key
 ```
+
+### 配置中心（推荐）
+
+Hugging Face Space 里手动维护环境变量比较麻烦。生产环境建议只在 Space
+里保留一次性的配置中心地址和读 token。完整后端配置通过 Cloudflare
+Worker + Workers KV 更新，高敏感密钥放在 Cloudflare Secrets Store，由
+Worker 在返回配置时解析。
+
+```bash
+CONFIG_CENTER_ENABLED=true
+CONFIG_CENTER_REQUIRED=true
+CONFIG_CENTER_URL=https://your-worker.example.workers.dev/v1/config/emomo/production/emomo-api
+CONFIG_CENTER_TOKEN=your-read-token
+CONFIG_CENTER_POLL_INTERVAL=60s
+CONFIG_CENTER_TIMEOUT=5s
+```
+
+本地更新后发布：
+
+```bash
+cd backend
+CONFIG_CENTER_URL=https://your-worker.example.workers.dev/v1/config/emomo/production/emomo-api \
+CONFIG_CENTER_ADMIN_TOKEN=your-admin-token \
+./scripts/publish-config-center.sh
+```
+
+完整部署和安全说明见 [CONFIG_CENTER.md](./CONFIG_CENTER.md)。
 
 ## 临时解决方案：禁用 Qdrant 和对象存储
 
@@ -123,6 +163,6 @@ if err != nil {
 ## 注意事项
 
 1. **端口配置**: Hugging Face Spaces **要求应用监听端口 7860**。Dockerfile 已配置默认端口为 7860，无需额外设置
-2. **Qdrant API Key**: 当前代码版本已支持 Qdrant Cloud 的 API Key 认证
-3. **HTTPS**: Qdrant Cloud 使用 HTTPS，设置 `QDRANT_API_KEY` 后会自动启用 TLS
+2. **Qdrant API Key**: 当前代码版本已支持 Qdrant Cloud 的 API Key 认证；配置中心开启时不要把它放在 Hugging Face
+3. **HTTPS**: Qdrant Cloud 使用 HTTPS，配置中心或 legacy `QDRANT_API_KEY` 均可配合 TLS 使用
 4. **数据持久化**: Hugging Face Spaces 的存储是临时的，重启后会丢失 SQLite 数据，建议使用外部数据库（如 Supabase PostgreSQL）

@@ -1,25 +1,35 @@
 package config
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
+	"github.com/timmy/emomo/internal/configcenter"
 )
 
 // Config aggregates application configuration loaded from files and environment.
 type Config struct {
-	Server     ServerConfig      `mapstructure:"server"`
-	Database   DatabaseConfig    `mapstructure:"database"`
-	Qdrant     QdrantConfig      `mapstructure:"qdrant"`
-	Storage    StorageConfig     `mapstructure:"storage"`
-	VLM        VLMConfig         `mapstructure:"vlm"`
-	Embeddings []EmbeddingConfig `mapstructure:"embeddings"` // List of embedding configurations
-	Ingest     IngestConfig      `mapstructure:"ingest"`
-	Sources    SourcesConfig     `mapstructure:"sources"`
-	Search     SearchConfig      `mapstructure:"search"`
+	Server       ServerConfig       `mapstructure:"server"`
+	Database     DatabaseConfig     `mapstructure:"database"`
+	Qdrant       QdrantConfig       `mapstructure:"qdrant"`
+	Storage      StorageConfig      `mapstructure:"storage"`
+	VLM          VLMConfig          `mapstructure:"vlm"`
+	Embeddings   []EmbeddingConfig  `mapstructure:"embeddings"` // List of embedding configurations
+	Ingest       IngestConfig       `mapstructure:"ingest"`
+	Sources      SourcesConfig      `mapstructure:"sources"`
+	Search       SearchConfig       `mapstructure:"search"`
+	Logging      LoggingConfig      `mapstructure:"logging"`
+	ConfigCenter ConfigCenterConfig `mapstructure:"config_center"`
+
+	// ConfigCenterLoadError records a non-fatal config center fetch failure so
+	// the caller can log it once a logger is configured. It is set only when the
+	// config center is enabled but not required and the remote fetch failed.
+	ConfigCenterLoadError error `mapstructure:"-"`
 }
 
 // ServerConfig defines HTTP server settings.
@@ -165,6 +175,40 @@ type QueryExpansionConfig struct {
 	BaseURL string `mapstructure:"base_url"`
 }
 
+// LoggingConfig configures process logging and optional Loki direct push.
+type LoggingConfig struct {
+	Level             string        `mapstructure:"level"`
+	Format            string        `mapstructure:"format"`
+	ServiceName       string        `mapstructure:"service_name"`
+	Environment       string        `mapstructure:"environment"`
+	LogFile           string        `mapstructure:"log_file"`
+	LogFileOnly       bool          `mapstructure:"log_file_only"`
+	MaxSize           int           `mapstructure:"max_size"`
+	MaxBackups        int           `mapstructure:"max_backups"`
+	MaxAge            int           `mapstructure:"max_age"`
+	Compress          bool          `mapstructure:"compress"`
+	LokiEnabled       bool          `mapstructure:"loki_enabled"`
+	LokiURL           string        `mapstructure:"loki_url"`
+	LokiUsername      string        `mapstructure:"loki_username"`
+	LokiPassword      string        `mapstructure:"loki_password"`
+	LokiProject       string        `mapstructure:"loki_project"`
+	ClusterName       string        `mapstructure:"cluster_name"`
+	LokiBatchSize     int           `mapstructure:"loki_batch_size"`
+	LokiQueueSize     int           `mapstructure:"loki_queue_size"`
+	LokiFlushInterval time.Duration `mapstructure:"loki_flush_interval"`
+	LokiTimeout       time.Duration `mapstructure:"loki_timeout"`
+}
+
+// ConfigCenterConfig configures runtime config polling.
+type ConfigCenterConfig struct {
+	Enabled      bool          `mapstructure:"enabled"`
+	Required     bool          `mapstructure:"required"`
+	URL          string        `mapstructure:"url"`
+	Token        string        `mapstructure:"token"`
+	PollInterval time.Duration `mapstructure:"poll_interval"`
+	Timeout      time.Duration `mapstructure:"timeout"`
+}
+
 // AgenticSearchConfig configures optional LLM-planned search and reranking.
 type AgenticSearchConfig struct {
 	Enabled         bool          `mapstructure:"enabled"`
@@ -230,10 +274,16 @@ func Load(configPath string) (*Config, error) {
 	// Bind environment variables for sensitive/override data
 	bindEnvVars(v)
 
+	recoverableErr, err := applyRemoteConfigCenter(v)
+	if err != nil {
+		return nil, err
+	}
+
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+	cfg.ConfigCenterLoadError = recoverableErr
 
 	// Resolve environment variables for all embedding configurations
 	for i := range cfg.Embeddings {
@@ -246,6 +296,10 @@ func Load(configPath string) (*Config, error) {
 // LoadDotEnv loads the local .env file into the process environment if present.
 // Existing process environment values keep priority over file values.
 func LoadDotEnv() {
+	if envFile := strings.TrimSpace(os.Getenv("ENV_FILE")); envFile != "" {
+		_ = godotenv.Load(envFile)
+		return
+	}
 	_ = godotenv.Load()
 }
 
@@ -327,6 +381,36 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("search.agentic.reranker_timeout", "10s")
 	v.SetDefault("search.agentic.rerank_top_k", 40)
 	v.SetDefault("search.agentic.fallback_on_error", true)
+
+	// Logging defaults
+	v.SetDefault("logging.level", "info")
+	v.SetDefault("logging.format", "json")
+	v.SetDefault("logging.service_name", "")
+	v.SetDefault("logging.environment", "local")
+	v.SetDefault("logging.log_file", "")
+	v.SetDefault("logging.log_file_only", false)
+	v.SetDefault("logging.max_size", 100)
+	v.SetDefault("logging.max_backups", 7)
+	v.SetDefault("logging.max_age", 30)
+	v.SetDefault("logging.compress", true)
+	v.SetDefault("logging.loki_enabled", false)
+	v.SetDefault("logging.loki_url", "")
+	v.SetDefault("logging.loki_username", "")
+	v.SetDefault("logging.loki_password", "")
+	v.SetDefault("logging.loki_project", "emomo")
+	v.SetDefault("logging.cluster_name", "")
+	v.SetDefault("logging.loki_batch_size", 100)
+	v.SetDefault("logging.loki_queue_size", 5000)
+	v.SetDefault("logging.loki_flush_interval", "2s")
+	v.SetDefault("logging.loki_timeout", "3s")
+
+	// Config center defaults
+	v.SetDefault("config_center.enabled", false)
+	v.SetDefault("config_center.required", false)
+	v.SetDefault("config_center.url", "")
+	v.SetDefault("config_center.token", "")
+	v.SetDefault("config_center.poll_interval", "60s")
+	v.SetDefault("config_center.timeout", "5s")
 }
 
 // bindEnvVars binds environment variables to configuration keys.
@@ -382,6 +466,7 @@ func bindEnvVars(v *viper.Viper) {
 
 	// Search
 	v.BindEnv("search.score_threshold", "SEARCH_SCORE_THRESHOLD")
+	v.BindEnv("search.query_expansion.enabled", "QUERY_EXPANSION_ENABLED")
 	v.BindEnv("search.query_expansion.model", "QUERY_EXPANSION_MODEL")
 	v.BindEnv("search.query_expansion.api_key", "QUERY_EXPANSION_API_KEY")
 	v.BindEnv("search.query_expansion.base_url", "QUERY_EXPANSION_BASE_URL")
@@ -393,11 +478,104 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("search.agentic.rerank_top_k", "AGENTIC_SEARCH_RERANK_TOP_K")
 	v.BindEnv("search.agentic.fallback_on_error", "AGENTIC_SEARCH_FALLBACK_ON_ERROR")
 
+	// Logging
+	v.BindEnv("logging.level", "LOG_LEVEL")
+	v.BindEnv("logging.format", "LOG_FORMAT")
+	v.BindEnv("logging.service_name", "SERVICE_NAME")
+	v.BindEnv("logging.environment", "APP_ENV", "ENVIRONMENT")
+	v.BindEnv("logging.log_file", "LOG_FILE")
+	v.BindEnv("logging.log_file_only", "LOG_FILE_ONLY")
+	v.BindEnv("logging.max_size", "LOG_MAX_SIZE")
+	v.BindEnv("logging.max_backups", "LOG_MAX_BACKUPS")
+	v.BindEnv("logging.max_age", "LOG_MAX_AGE")
+	v.BindEnv("logging.compress", "LOG_COMPRESS")
+	v.BindEnv("logging.loki_enabled", "LOKI_ENABLED")
+	v.BindEnv("logging.loki_url", "LOKI_URL")
+	v.BindEnv("logging.loki_username", "LOKI_USERNAME")
+	v.BindEnv("logging.loki_password", "LOKI_PASSWORD")
+	v.BindEnv("logging.loki_project", "LOKI_PROJECT")
+	v.BindEnv("logging.cluster_name", "CLUSTER_NAME")
+	v.BindEnv("logging.loki_batch_size", "LOKI_BATCH_SIZE")
+	v.BindEnv("logging.loki_queue_size", "LOKI_QUEUE_SIZE")
+	v.BindEnv("logging.loki_flush_interval", "LOKI_FLUSH_INTERVAL")
+	v.BindEnv("logging.loki_timeout", "LOKI_TIMEOUT")
+
 	// Sources
 	v.BindEnv("sources.localdir.root_path", "LOCAL_MEMES_DIR")
 	v.BindEnv("sources.localdir.source_id", "LOCALDIR_SOURCE_ID")
 	v.BindEnv("sources.localdir.manifest_path", "LOCALDIR_MANIFEST_PATH")
 	v.BindEnv("sources.localdir.queue_path", "LOCALDIR_QUEUE_PATH")
+
+	// Runtime config center
+	v.BindEnv("config_center.enabled", "CONFIG_CENTER_ENABLED")
+	v.BindEnv("config_center.required", "CONFIG_CENTER_REQUIRED")
+	v.BindEnv("config_center.url", "CONFIG_CENTER_URL")
+	v.BindEnv("config_center.token", "CONFIG_CENTER_TOKEN")
+	v.BindEnv("config_center.poll_interval", "CONFIG_CENTER_POLL_INTERVAL")
+	v.BindEnv("config_center.timeout", "CONFIG_CENTER_TIMEOUT")
+}
+
+// applyRemoteConfigCenter loads remote configuration into v when the config
+// center is enabled. The config center is controlled solely by
+// config_center.enabled; a non-empty URL alone never enables it.
+//
+// It returns two errors: recoverable is a non-fatal fetch failure that the
+// caller may log and ignore (config center enabled but not required), and err
+// is a fatal configuration error that must abort startup.
+func applyRemoteConfigCenter(v *viper.Viper) (recoverable error, err error) {
+	if strings.EqualFold(os.Getenv("CONFIG_CENTER_SKIP_REMOTE"), "true") {
+		return nil, nil
+	}
+
+	if !v.GetBool("config_center.enabled") {
+		return nil, nil
+	}
+
+	url := strings.TrimSpace(v.GetString("config_center.url"))
+	if url == "" {
+		return nil, fmt.Errorf("config center is enabled but URL is empty")
+	}
+
+	timeout := v.GetDuration("config_center.timeout")
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	client := configcenter.NewClient(configcenter.ClientConfig{
+		URL:     url,
+		Token:   v.GetString("config_center.token"),
+		Timeout: timeout,
+	})
+	remote, fetchErr := client.Fetch(ctx)
+	if fetchErr != nil {
+		if v.GetBool("config_center.required") {
+			return nil, fmt.Errorf("failed to load required config center config: %w", fetchErr)
+		}
+		return fmt.Errorf("failed to load optional config center config: %w", fetchErr), nil
+	}
+
+	applyRemoteValues(v, "", remote.RuntimeConfig())
+	return nil, nil
+}
+
+func applyRemoteValues(v *viper.Viper, prefix string, values map[string]any) {
+	for key, value := range values {
+		path := key
+		if prefix != "" {
+			path = prefix + "." + key
+		}
+		if path == "config_center" || strings.HasPrefix(path, "config_center.") {
+			continue
+		}
+
+		if nested, ok := value.(map[string]any); ok {
+			applyRemoteValues(v, path, nested)
+			continue
+		}
+		v.Set(path, value)
+	}
 }
 
 // GetStorageConfig returns the storage configuration.
