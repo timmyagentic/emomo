@@ -31,5 +31,4 @@ Search history stored in the app remains on your device until you clear it or un
 
 For support or privacy questions, open an issue at:
 
-https://github.com/systemoutprintlnnnn/emomo/issues
-
+https://github.com/timmyagentic/emomo/issues
