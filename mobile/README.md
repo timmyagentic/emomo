@@ -36,9 +36,9 @@ npm run android  # requires Java, Android SDK, and an emulator or USB device
 
 The GitHub Actions `Mobile CI` workflow runs mobile tests, type checking, linting, protobuf generation checks, Expo doctor, and CI wiring checks for mobile changes.
 
-Android preview APK packaging runs on pushes to `main` when Expo secrets are configured, and can also be started manually from GitHub Actions with `workflow_dispatch`. It uses the EAS `preview` profile in `eas.json`, which is configured for internal distribution and Android `apk` output.
+Android preview APK packaging is started manually from GitHub Actions with `workflow_dispatch`. It uses the EAS `preview` profile in `eas.json`, which is configured for internal distribution and Android `apk` output.
 
-iOS simulator packaging uses the EAS `ios-simulator` profile. It produces a simulator artifact that can be installed into an iOS Simulator, and does not require App Store signing credentials. Device/TestFlight builds should use the EAS `preview` or `production` profiles after Apple Developer credentials are configured.
+iOS simulator packaging is also manual and uses the EAS `ios-simulator` profile. It produces a simulator artifact that can be installed into an iOS Simulator, and does not require App Store signing credentials. Device/TestFlight builds should use the EAS `preview` or `production` profiles after Apple Developer credentials are configured.
 
 Required repository setup:
 
