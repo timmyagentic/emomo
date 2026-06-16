@@ -21,12 +21,21 @@ require_text() {
 }
 
 require_file ".github/workflows/mobile.yml"
+require_file ".github/workflows/required-ci.yml"
 require_file "mobile/eas.json"
 require_file "mobile/metro.config.js"
 
+require_text ".github/workflows/required-ci.yml" "Backend required checks"
+require_text ".github/workflows/required-ci.yml" "Frontend required checks"
+require_text ".github/workflows/required-ci.yml" "Mobile required checks"
+require_text ".github/workflows/required-ci.yml" "npm run typecheck"
+require_text ".github/workflows/required-ci.yml" "bash scripts/check-mobile-ci.sh"
+
 require_text ".github/workflows/mobile.yml" "expo/expo-github-action@v9"
 require_text ".github/workflows/mobile.yml" "eas build --platform android --profile preview"
-require_text ".github/workflows/mobile.yml" "eas build --platform ios --profile ios-simulator"
+require_text ".github/workflows/mobile.yml" "eas build --platform ios --profile ios-simulator --local"
+require_text ".github/workflows/mobile.yml" "--output ../artifacts/ios/emomo-ios-simulator.tar.gz"
+require_text ".github/workflows/mobile.yml" "runs-on: macos-latest"
 require_text ".github/workflows/mobile.yml" "actions/upload-artifact@v6"
 require_text ".github/workflows/mobile.yml" "build_ios_simulator"
 require_text ".github/workflows/mobile.yml" "emomo-ios-simulator"

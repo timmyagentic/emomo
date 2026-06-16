@@ -1,0 +1,103 @@
+name: Required CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-required:
+    name: Backend required checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Test backend
+        working-directory: backend
+        run: go test ./...
+
+      - name: Build backend
+        working-directory: backend
+        run: go build ./...
+
+  frontend-required:
+    name: Frontend required checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  mobile-required:
+    name: Mobile required checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Regenerate mobile protobuf DTOs
+        working-directory: mobile
+        run: npm run gen
+
+      - name: Verify generated mobile DTOs are committed
+        working-directory: mobile
+        run: git diff --exit-code -- gen
+
+      - name: Run mobile tests
+        working-directory: mobile
+        run: npm test -- --runInBand
+
+      - name: Typecheck mobile app
+        working-directory: mobile
+        run: npm run typecheck
+
+      - name: Lint mobile app
+        working-directory: mobile
+        run: npm run lint
+
+      - name: Run Expo doctor
+        working-directory: mobile
+        run: npx expo-doctor
+
+      - name: Check mobile artifact workflow wiring
+        run: bash scripts/check-mobile-ci.sh
