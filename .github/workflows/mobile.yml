@@ -1,19 +1,6 @@
-name: Mobile CI
+name: Mobile Artifacts
 
 on:
-  pull_request:
-    paths:
-      - 'backend/proto/**'
-      - 'mobile/**'
-      - 'scripts/check-mobile-ci.sh'
-      - '.github/workflows/mobile.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'backend/proto/**'
-      - 'mobile/**'
-      - 'scripts/check-mobile-ci.sh'
-      - '.github/workflows/mobile.yml'
   workflow_dispatch:
     inputs:
       build_android_preview:
@@ -22,7 +9,7 @@ on:
         default: true
         type: boolean
       build_ios_simulator:
-        description: 'Build the iOS simulator app with EAS'
+        description: 'Build the iOS simulator app locally with EAS'
         required: true
         default: true
         type: boolean
@@ -195,7 +182,7 @@ jobs:
 
   ios-simulator:
     name: iOS simulator app
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     needs: mobile-checks
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_ios_simulator }}
     steps:
@@ -242,6 +229,13 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Verify local iOS build tools
+        if: steps.expo-config.outputs.configured == 'true'
+        run: |
+          xcodebuild -version
+          pod --version
+          fastlane --version
+
       - name: Install dependencies
         if: steps.expo-config.outputs.configured == 'true'
         working-directory: mobile
@@ -259,46 +253,14 @@ jobs:
           EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
         run: eas init --id "$EXPO_PROJECT_ID" --non-interactive
 
-      - name: Build iOS simulator app
-        if: steps.expo-config.outputs.configured == 'true'
-        id: eas-build
-        working-directory: mobile
-        run: |
-          set -euo pipefail
-          mkdir -p ../artifacts
-          eas build --platform ios --profile ios-simulator --non-interactive --wait --json > ../artifacts/eas-ios-simulator-build.json
-          node <<'NODE'
-          const fs = require('fs');
-          const raw = fs.readFileSync('../artifacts/eas-ios-simulator-build.json', 'utf8').trim();
-          const parsed = JSON.parse(raw);
-          const builds = Array.isArray(parsed) ? parsed : [parsed];
-          const build = builds.find((item) => String(item.platform).toUpperCase() === 'IOS') || builds[0];
-          if (!build?.id) {
-            throw new Error(`Could not find iOS EAS build id in ${raw}`);
-          }
-          const buildUrl = build.artifacts?.buildUrl || build.artifactUrl || build.buildUrl || '';
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `build_id=${build.id}\n`);
-          if (buildUrl) {
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `build_url=${buildUrl}\n`);
-          }
-          NODE
-
-      - name: Download iOS simulator artifact
+      - name: Build iOS simulator app locally
         if: steps.expo-config.outputs.configured == 'true'
         working-directory: mobile
-        env:
-          BUILD_ID: ${{ steps.eas-build.outputs.build_id }}
-          BUILD_URL: ${{ steps.eas-build.outputs.build_url }}
         run: |
           set -euo pipefail
           mkdir -p ../artifacts/ios
-          if [ -n "${BUILD_URL:-}" ]; then
-            curl --fail --location "$BUILD_URL" --output ../artifacts/ios/emomo-ios-simulator.tar.gz
-          else
-            eas build:download --build-id "$BUILD_ID" --non-interactive
-            find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec mv {} ../artifacts/ios/ \;
-          fi
-          test -n "$(find ../artifacts/ios -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print -quit)"
+          eas build --platform ios --profile ios-simulator --local --non-interactive --output ../artifacts/ios/emomo-ios-simulator.tar.gz
+          test -s ../artifacts/ios/emomo-ios-simulator.tar.gz
           ls -lh ../artifacts/ios
 
       - name: Upload iOS simulator artifact
