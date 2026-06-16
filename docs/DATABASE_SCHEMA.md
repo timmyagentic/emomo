@@ -9,7 +9,7 @@
 
 检索主链路不是“图片 -> VLM 描述 -> 文本向量”。当前默认链路是：导入时直接生成图片向量并写入 Qdrant；搜索时把用户文本编码到同一个多模态向量空间，直接和图片向量做相似度匹配。`meme_annotations` 只用于展示、OCR、标签筛选和 caption/BM25 辅助信号。`meme_metadata` 仅用于"这张图从哪来"的追溯，永远不参与 caption embedding、BM25、Qdrant payload 或前端 facet。
 
-生产环境使用 Supabase/PostgreSQL 时，三张核心表位于 `public` schema，但浏览器端不直接访问这些表。前端只调用 Go API；Go 后端使用服务端（service-role）数据库连接访问 Postgres。
+生产环境使用 Supabase/PostgreSQL 时，四张核心表位于 `public` schema，但浏览器端不直接访问这些表。前端只调用 Go API；Go 后端使用服务端（service-role）数据库连接访问 Postgres。
 
 四张核心表**不启用 Row Level Security**：访问控制完全在连接层做（service-role DSN + 不通过 Supabase Data API 把这些表暴露给 anon/authenticated）。早期版本曾把 RLS 在这些表上 ENABLE 但没建任何 policy，那是个"隐式拒绝 + 靠 BYPASSRLS 偷渡"的半成品；当前 `InitDB` 会通过 `disableCoreTableRLS` 主动 DISABLE，新老库行为统一。
 
@@ -28,7 +28,7 @@
 
 **不应该使用 protobuf 的地方：**
 
-- 关系型表结构本身。`memes` / `meme_annotations` / `meme_vectors` 的列、索引、约束和迁移以 GORM model + `db.go` 为准，`.proto` 顶层 entity message 是 API 投影，不是数据库 DDL。
+- 关系型表结构本身。`memes` / `meme_annotations` / `meme_vectors` / `meme_metadata` 的列、索引、约束和迁移以 GORM model + `db.go` 为准，`.proto` 顶层 entity message 是 API 投影，不是数据库 DDL。
 - 运行时配置和开放业务集合。`category`、`tags`、`collection`、`embedding_model`、`analyzer_model`、source ID 等是开放字符串，不做 protobuf enum。
 - 需要频繁过滤、JOIN、排序或建索引的数据。如果某个 JSON 子字段成为核心查询条件，应优先提升为关系列，而不是继续塞进 protobuf JSON。
 - repository / service 内部私有结构、临时计算结果、任务状态机内部类型。除非这些值跨 HTTP 边界或进入 allowlisted JSON 列，否则用普通 Go 类型。
@@ -65,7 +65,7 @@ GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
 - `prepareLegacyMemesForAutoMigrate` / `prepareLegacyMemeVectorsForAutoMigrate` 处理老 schema 在 SQLite/Postgres 上的预处理（含 SQLite 整表重建）；
 - `migrateMemes` / `migrateMemeAnnotations` / `migrateMemeVectorIndexes` 做数据回填与索引重建；
 - `dropLegacyArtifacts`（含 `dropLegacyMemesColumns` / `dropLegacyMemeVectorsColumns` / `finalizeMemesConstraints` / `dropLegacyIndexes` / `dropLegacyTables`）清理废弃列、表、索引并补上 NOT NULL/DEFAULT 约束（仅 Postgres 需要）；
-- `disableCoreTableRLS` 在 Postgres 上确保三张核心表的 RLS 处于关闭状态（旧库若已 ENABLE 也会被关回）。
+- `disableCoreTableRLS` 在 Postgres 上确保四张核心表的 RLS 处于关闭状态（旧库若已 ENABLE 也会被关回）。
 
 项目**不使用**独立的 SQL 迁移工具（goose / golang-migrate / atlas 等），也**不存在** `backend/migrations/` 目录。新增 schema 演进时：
 

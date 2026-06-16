@@ -6,7 +6,7 @@
 
 Hugging Face Spaces 只运行单个 Docker 容器，**不包含 Qdrant 和对象存储服务**。因此需要配置外部服务。
 
-当前默认检索链路使用 Qwen3-VL 多模态 image embedding：导入时直接生成图片向量，搜索时文本 query 直接匹配图片向量。VLM/OCR 只作为 `meme_annotations` 的辅助分析数据。关系库核心表为 `memes`、`meme_annotations`、`meme_vectors`，protobuf 消息 schema 定义在 `proto/emomo/v1/`（`types.proto` / `meme.proto` / `api.proto`），生成 Go 代码在 `gen/`。
+当前默认检索链路使用 Qwen3-VL 多模态 image embedding：导入时直接生成图片向量，搜索时文本 query 直接匹配图片向量。VLM/OCR 只作为 `meme_annotations` 的辅助分析数据。关系库核心表为 `memes`、`meme_annotations`、`meme_vectors`，以及只记录来源、不进检索的 `meme_metadata`；protobuf 消息 schema 定义在 `proto/emomo/v1/`（`types.proto` / `meme.proto` / `api.proto`），生成 Go 代码在 `gen/`。
 
 ## 解决方案
 

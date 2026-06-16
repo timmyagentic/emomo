@@ -80,7 +80,7 @@ graph LR
 *   **Change protobuf messages:**
     1.  Edit one of `proto/emomo/v1/types.proto` (closed cross-boundary enums + allowlisted JSON-column messages), `meme.proto` (API entity DTOs — Meme / MemeAnnotation / MemeVector / SearchResult), or `api.proto` (HTTP request/response + SSE event messages).
     2.  Run `GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate`.
-    3.  Keep the relational schema centered on `memes`, `meme_annotations`, and `meme_vectors`.
+    3.  Keep the relational schema centered on `memes`, `meme_annotations`, `meme_vectors`, and `meme_metadata` (provenance-only).
 *   **Database migrations:** managed entirely in code via `internal/repository/db.go` (GORM AutoMigrate plus explicit `prepareLegacy*` / `migrate*` / `dropLegacy*` helpers). Add new migration logic and a regression test in `internal/repository/db_test.go`; do not introduce a parallel SQL migration runner.
 
 ## 6. Testing

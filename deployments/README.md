@@ -3,7 +3,7 @@
 本目录包含 Docker Compose 配置文件，用于启动 API 服务与 Grafana Alloy（日志采集）。
 Qdrant 与对象存储需外部提供（云服务或本地容器）。
 
-API 使用当前后端 schema：关系库核心表为 `memes`、`meme_annotations`、`meme_vectors`；默认检索链路直接使用图片向量，VLM/OCR 只作为辅助 annotation。Protobuf 消息 schema 定义在 `backend/proto/emomo/v1/` 下 `types.proto` / `meme.proto` / `api.proto`，生成代码集中在 `backend/gen/`（Go）与 `frontend/gen/`（TS）。
+API 使用当前后端 schema：关系库核心表为 `memes`、`meme_annotations`、`meme_vectors`，以及只记录来源、不进检索的 `meme_metadata`；默认检索链路直接使用图片向量，VLM/OCR 只作为辅助 annotation。Protobuf 消息 schema 定义在 `backend/proto/emomo/v1/` 下 `types.proto` / `meme.proto` / `api.proto`，生成代码集中在 `backend/gen/`（Go）与 `frontend/gen/`（TS）。
 
 ## 文件说明
 

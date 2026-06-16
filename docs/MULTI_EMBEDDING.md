@@ -4,7 +4,7 @@
 
 VLM 描述和 OCR 仍然存在，作为展示元数据与 keyword/BM25 sparse route 的文本来源。keyword route 当前默认以 0.3 权重参与检索；dense caption route 仍保留为显式实验配置，待 caption 文本策略验证后再启用。
 
-protobuf message schema 维护在 `backend/proto/emomo/v1/`：`types.proto` 定义 `ImageFormat`、`VectorType`、`TextPresence` 等跨边界封闭枚举，以及 allowlisted DB JSON 结构 `ImageInfo`、`MemeAnnotationLabels`；`meme.proto` / `api.proto` 定义 API entity DTO 与 HTTP request/response 消息。数据库里只保留三张核心表：`memes`、`meme_annotations`、`meme_vectors`；表结构、索引和迁移由 GORM model + `backend/internal/repository/db.go` 管，不由 protobuf 管。
+protobuf message schema 维护在 `backend/proto/emomo/v1/`：`types.proto` 定义 `ImageFormat`、`VectorType`、`TextPresence` 等跨边界封闭枚举，以及 allowlisted DB JSON 结构 `ImageInfo`、`MemeAnnotationLabels`；`meme.proto` / `api.proto` 定义 API entity DTO 与 HTTP request/response 消息。数据库里收敛为四张核心表：`memes`、`meme_annotations`、`meme_vectors`，以及只记录来源、不进检索的 `meme_metadata`；表结构、索引和迁移由 GORM model + `backend/internal/repository/db.go` 管，不由 protobuf 管。
 
 ## 默认架构
 
