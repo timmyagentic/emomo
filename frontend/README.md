@@ -26,7 +26,7 @@ Before you begin, ensure you have the following installed:
 
 1. Clone the monorepo and move into this subproject:
    ```bash
-   git clone https://github.com/systemoutprintlnnnn/emomo.git
+   git clone https://github.com/timmyagentic/emomo.git
    cd emomo/frontend
    ```
 

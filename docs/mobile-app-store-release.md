@@ -52,8 +52,8 @@ The production build creates an App Store/TestFlight archive, not the existing s
 Before review, fill or verify:
 
 - App privacy questionnaire based on actual backend logging and data retention.
-- Privacy Policy URL: `https://github.com/systemoutprintlnnnn/emomo/blob/main/docs/PRIVACY.md`
-- Support URL: `https://github.com/systemoutprintlnnnn/emomo/issues`
+- Privacy Policy URL: `https://github.com/timmyagentic/emomo/blob/main/docs/PRIVACY.md`
+- Support URL: `https://github.com/timmyagentic/emomo/issues`
 - Category, age rating, description, keywords, and review notes.
 - At least one iPhone screenshot; up to ten screenshots are allowed.
 - TestFlight internal testing results.
