@@ -1,70 +1,13 @@
+/* App container */
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
+/* Main content area */
 .main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding-bottom: 54px;
-}
-
-.commandRail {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: var(--z-sticky);
-  min-height: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(24px, 5vw, 72px);
-  padding: 8px 24px;
-  color: var(--text-tertiary);
-  background: rgba(248, 245, 240, 0.88);
-  border-top: 1px solid var(--line);
-  backdrop-filter: blur(18px) saturate(150%);
-  font-size: var(--text-xs);
-}
-
-.commandHint {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.commandHint kbd {
-  min-width: 28px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 7px;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.74);
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  box-shadow: 0 1px 0 rgba(25, 21, 17, 0.08);
-  font: 500 11px/1 var(--font-body);
-}
-
-@media (max-width: 700px) {
-  .main {
-    padding-bottom: 0;
-  }
-
-  .commandRail {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .commandRail {
-    background: var(--bg-primary);
-    backdrop-filter: none;
-  }
 }

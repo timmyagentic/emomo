@@ -365,13 +365,6 @@ function App() {
         isOpen={!!selectedMeme}
         onClose={handleModalClose}
       />
-
-      <footer className="commandRail" aria-label="快捷操作提示">
-        <span className="commandHint"><kbd>Enter</kbd> 搜索</span>
-        <span className="commandHint"><kbd>Esc</kbd> 关闭预览</span>
-        <span className="commandHint">点击图片打开预览</span>
-        <span className="commandHint">复制与下载在预览中完成</span>
-      </footer>
     </div>
   );
 }

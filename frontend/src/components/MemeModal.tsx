@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Check, CircleAlert, CircleHelp, Copy, Download, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { DisplayMeme } from '../types';
 import { logError } from '../utils/logger';
 import styles from './MemeModal.module.css';
@@ -100,7 +99,6 @@ function formatTags(tags: string[] | undefined): string[] {
  * @returns The rendered MemeModal component.
  */
 export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
-  const shouldReduceMotion = useReducedMotion();
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [imageErrorState, setImageErrorState] = useState<{
@@ -223,7 +221,6 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: shouldReduceMotion ? 0.1 : 0.16 }}
           onClick={onClose}
         >
           <motion.div
@@ -233,41 +230,38 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
             aria-modal="true"
             aria-labelledby="meme-modal-title"
             tabIndex={-1}
-            initial={{
-              opacity: 0,
-              transform: shouldReduceMotion ? 'none' : 'translateY(14px) scale(0.98)',
-            }}
-            animate={{ opacity: 1, transform: 'translateY(0) scale(1)' }}
-            exit={{
-              opacity: 0,
-              transform: shouldReduceMotion ? 'none' : 'translateY(8px) scale(0.985)',
-            }}
-            transition={{
-              duration: shouldReduceMotion ? 0.12 : 0.22,
-              ease: [0.23, 1, 0.32, 1],
-            }}
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
-            <button
-              type="button"
+            <motion.button
               className={styles.closeBtn}
               onClick={onClose}
               aria-label="关闭详情"
+              whileHover={{ scale: 1.1, rotate: 90 }}
+              whileTap={{ scale: 0.9 }}
             >
-              <X />
-            </button>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </motion.button>
 
             {/* Image section */}
             <div className={styles.imageSection}>
               {imageError ? (
                 <div className={styles.imageError}>
-                  <CircleAlert />
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
                   <p>图片加载失败</p>
                 </div>
               ) : (
                 <motion.img
-                  layoutId={shouldReduceMotion ? undefined : `meme-image-${meme.id}`}
                   src={meme.url}
                   alt={description || 'Meme'}
                   className={styles.image}
@@ -291,43 +285,56 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
 
               {/* Actions */}
               <div className={styles.actions}>
-                <button
-                  type="button"
+                <motion.button
                   className={`${styles.actionBtn} ${styles.primary}`}
                   onClick={handleCopyImage}
                   aria-label="复制图片到剪贴板"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   {copied ? (
                     <>
-                      <Check />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20,6 9,17 4,12" />
+                      </svg>
                       已复制
                     </>
                   ) : (
                     <>
-                      <Copy />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                      </svg>
                       复制图片
                     </>
                   )}
-                </button>
+                </motion.button>
 
-                <button
-                  type="button"
+                <motion.button
                   className={styles.actionBtn}
                   onClick={handleDownload}
                   aria-label="下载表情图片"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   {downloaded ? (
                     <>
-                      <Check />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20,6 9,17 4,12" />
+                      </svg>
                       已下载
                     </>
                   ) : (
                     <>
-                      <Download />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                        <polyline points="7,10 12,15 17,10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
                       下载
                     </>
                   )}
-                </button>
+                </motion.button>
 
               </div>
 
@@ -335,7 +342,11 @@ export default function MemeModal({ meme, isOpen, onClose }: MemeModalProps) {
               {description && (
                 <div className={styles.descriptionBox}>
                   <h4 className={styles.descriptionTitle}>
-                    <CircleHelp />
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
                     AI 识别描述
                   </h4>
                   <p className={styles.description}>{description}</p>

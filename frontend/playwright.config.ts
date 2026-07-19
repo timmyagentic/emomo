@@ -1,11 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const requestedPort = Number(process.env.E2E_PORT);
-const e2ePort = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort < 65_536
-  ? String(requestedPort)
-  : '5173';
-const e2eBaseUrl = `http://localhost:${e2ePort}`;
-
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -14,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: e2eBaseUrl,
+    baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -25,8 +19,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run dev -- --port ${e2ePort}`,
-    url: e2eBaseUrl,
+    command: 'npm run dev',
+    url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
   },
 });
