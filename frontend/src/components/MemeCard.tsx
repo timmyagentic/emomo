@@ -1,5 +1,6 @@
 import { type CSSProperties, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
+import { CircleAlert, Copy, Download } from 'lucide-react';
 import type { DisplayMeme } from '../types';
 import styles from './MemeCard.module.css';
 
@@ -19,6 +20,8 @@ interface MemeCardProps {
    * @param meme - The meme data associated with the card.
    */
   onClick?: (meme: DisplayMeme) => void;
+  /** Presentation treatment for browsing spotlights versus search results. */
+  variant?: 'spotlight' | 'result';
 }
 
 /**
@@ -30,11 +33,16 @@ interface MemeCardProps {
  * @param props.onClick - The click handler for the card.
  * @returns The rendered MemeCard component.
  */
-export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
+export default function MemeCard({
+  meme,
+  index = 0,
+  onClick,
+  variant = 'result',
+}: MemeCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const animationDelay = (index % 12) * 0.025;
+  const shouldReduceMotion = useReducedMotion();
+  const animationDelay = shouldReduceMotion ? 0 : Math.min(index, 4) * 0.025;
   const description = meme.description || '';
   const detailLabel = description
     ? `查看表情详情：${description.slice(0, 80)}`
@@ -56,17 +64,21 @@ export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
 
   return (
     <motion.article
-      className={styles.card}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        duration: 0.24,
-        delay: animationDelay,
-        ease: [0.16, 1, 0.3, 1],
+      className={`${styles.card} ${variant === 'spotlight' ? styles.spotlight : styles.result}`}
+      initial={{
+        opacity: 0,
+        transform: shouldReduceMotion ? 'none' : 'translateY(10px) scale(0.99)',
       }}
-      whileHover={{ y: -4 }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      animate={{ opacity: 1, transform: 'translateY(0) scale(1)' }}
+      exit={{
+        opacity: 0,
+        transform: shouldReduceMotion ? 'none' : 'translateY(0) scale(0.98)',
+      }}
+      transition={{
+        duration: shouldReduceMotion ? 0.12 : 0.22,
+        delay: animationDelay,
+        ease: [0.23, 1, 0.32, 1],
+      }}
     >
       {/* Image container */}
       <div className={styles.imageWrapper} style={imageStyle}>
@@ -82,46 +94,32 @@ export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
           {/* Error placeholder */}
           {imageError && (
             <div className={styles.imageError}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
+              <CircleAlert />
             </div>
           )}
 
           {/* Meme image */}
           {!imageError && (
             <motion.img
+              layoutId={shouldReduceMotion ? undefined : `meme-image-${meme.id}`}
               src={meme.url}
               alt={description || 'Meme'}
-              className={styles.image}
+              className={`${styles.image} ${isLoaded ? styles.imageLoaded : ''}`}
               loading="lazy"
               onLoad={() => setIsLoaded(true)}
               onError={handleImageError}
-              animate={{
-                scale: isHovered ? 1.05 : 1,
-                opacity: isLoaded ? 1 : 0,
-              }}
-              transition={{ duration: 0.3 }}
             />
           )}
         </button>
 
         {/* Hover overlay */}
-        <motion.div
-          className={styles.overlay}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: isHovered ? 1 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
+        <div className={styles.overlay}>
           <div className={styles.overlayContent}>
             {/* Quick actions */}
             <div className={styles.actions}>
-              <motion.button
+              <button
+                type="button"
                 className={styles.actionBtn}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   // Copy image URL
@@ -132,15 +130,11 @@ export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
                 aria-label="复制表情链接"
                 title="复制链接"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" />
-                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                </svg>
-              </motion.button>
-              <motion.button
+                <Copy />
+              </button>
+              <button
+                type="button"
                 className={styles.actionBtn}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   // Download image
@@ -154,15 +148,11 @@ export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
                 aria-label="下载表情"
                 title="下载"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                  <polyline points="7,10 12,15 17,10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-              </motion.button>
+                <Download />
+              </button>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </motion.article>
   );

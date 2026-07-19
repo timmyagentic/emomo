@@ -1,27 +1,31 @@
-/* MemeCard - Individual meme display card */
-
 .card {
   position: relative;
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  min-width: 0;
   overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--bg-card);
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.3s var(--ease-out-expo), transform 0.3s var(--ease-out-expo);
   contain: layout paint;
+  transition:
+    border-color 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out);
 }
 
-.card:hover {
-  box-shadow: var(--shadow-lg);
-}
-
-/* Image wrapper */
 .imageWrapper {
   position: relative;
   width: 100%;
-  aspect-ratio: var(--meme-aspect-ratio, 1 / 1);
   min-height: 120px;
-  background: var(--bg-secondary);
   overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.spotlight .imageWrapper {
+  aspect-ratio: 4 / 5;
+}
+
+.result .imageWrapper {
+  aspect-ratio: var(--meme-aspect-ratio, 1 / 1);
 }
 
 .openButton {
@@ -32,7 +36,7 @@
   border: 0;
   background: transparent;
   color: inherit;
-  cursor: pointer;
+  cursor: zoom-in;
   line-height: 0;
   text-align: left;
 }
@@ -40,103 +44,166 @@
 .openButton:focus-visible,
 .actionBtn:focus-visible {
   outline: 2px solid var(--accent-coral);
-  outline-offset: -2px;
+  outline-offset: -3px;
 }
 
-/* Skeleton loading */
 .skeleton {
   position: absolute;
   inset: 0;
   z-index: 1;
 }
 
-/* Image */
 .image {
   display: block;
   width: 100%;
   height: 100%;
+  opacity: 0;
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 220ms var(--ease-out);
+}
+
+.spotlight .image {
+  object-fit: cover;
+}
+
+.result .image {
   object-fit: contain;
 }
 
-/* Image error */
+.imageLoaded {
+  opacity: 1;
+}
+
 .imageError {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  padding: var(--space-md);
   background: var(--bg-secondary);
   color: var(--text-tertiary);
-  padding: var(--space-md);
+  place-items: center;
 }
 
 .imageError svg {
-  width: 48px;
-  height: 48px;
-  margin-bottom: var(--space-sm);
-  opacity: 0.5;
+  width: 44px;
+  height: 44px;
+  opacity: 0.48;
 }
 
-/* Hover overlay */
 .overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    to top,
-    rgba(45, 42, 38, 0.85) 0%,
-    rgba(45, 42, 38, 0.4) 50%,
-    transparent 100%
-  );
   display: flex;
   align-items: flex-end;
-  padding: var(--space-md);
+  padding: 12px;
   pointer-events: none;
+  background: linear-gradient(to top, rgba(23, 21, 18, 0.68), transparent 44%);
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out);
 }
 
 .overlayContent {
-  width: 100%;
   display: flex;
   justify-content: flex-end;
+  width: 100%;
 }
 
-/* Actions */
 .actions {
   display: flex;
-  gap: var(--space-sm);
+  gap: 7px;
   pointer-events: auto;
 }
 
 .actionBtn {
+  display: grid;
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  background: rgba(255, 253, 250, 0.93);
+  box-shadow: 0 5px 15px rgba(24, 20, 17, 0.2);
   color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px);
+  place-items: center;
+  transition:
+    color 150ms var(--ease-out),
+    background-color 150ms var(--ease-out),
+    transform 130ms var(--ease-out);
 }
 
-.actionBtn:hover {
-  background: var(--accent-honey);
+.actionBtn:active {
+  transform: scale(0.97);
 }
 
 .actionBtn svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 
-/* Responsive */
+.card:focus-within {
+  border-color: var(--accent-coral);
+  box-shadow: var(--shadow-lg);
+}
+
+.card:focus-within .overlay {
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    border-color: rgba(255, 91, 87, 0.48);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .card:hover .image {
+    transform: scale(1.025);
+  }
+
+  .card:hover .overlay {
+    opacity: 1;
+  }
+
+  .actionBtn:hover {
+    background: var(--accent-honey);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .overlay {
+    background: linear-gradient(to top, rgba(23, 21, 18, 0.42), transparent 35%);
+    opacity: 1;
+  }
+}
+
 @media (max-width: 640px) {
+  .card {
+    border-radius: 12px;
+  }
+
+  .overlay {
+    padding: 8px;
+  }
+
   .actionBtn {
     width: 32px;
     height: 32px;
   }
 
   .actionBtn svg {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover .image,
+  .actionBtn:active {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .actionBtn {
+    background: var(--bg-card);
   }
 }
