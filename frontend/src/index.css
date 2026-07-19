@@ -1,4 +1,9 @@
-/* Emomo — Semantic Spotlight */
+/* ========================================
+   Emomo - AI Meme Search System
+   Global Styles & CSS Variables
+   ======================================== */
+
+/* HarmonyOS Sans — brand body font (self-hosted) */
 @font-face {
   font-family: 'HarmonyOS Sans';
   src: url('/fonts/HarmonyOS_Sans_Medium.ttf') format('truetype');
@@ -8,39 +13,57 @@
 }
 
 :root {
-  color-scheme: light;
-  --bg-primary: #f8f5f0;
-  --bg-secondary: #f1ece5;
-  --bg-tertiary: #e5ded5;
-  --bg-card: #fffdfa;
-  --bg-card-hover: #ffffff;
-  --text-primary: #1e1e1b;
-  --text-secondary: #6f6b66;
-  --text-tertiary: #9d9891;
-  --text-inverse: #ffffff;
-  --accent-coral: #ff5b57;
-  --accent-coral-dark: #e94845;
-  --accent-coral-light: #ffe4e1;
-  --accent-mint: #75cdb6;
-  --accent-mint-light: #dff4ed;
-  --accent-lavender: #a99ee8;
-  --accent-lavender-light: #ebe8fa;
-  --accent-honey: #f4c84a;
-  --accent-honey-dark: #c99317;
-  --accent-peach: #ef9c72;
-  --line: rgba(38, 34, 29, 0.1);
-  --line-strong: rgba(38, 34, 29, 0.17);
-  --gradient-soft: radial-gradient(circle at 50% 38%, #fffefa 0%, #f8f5f0 66%, #f3eee7 100%);
-  --shadow-sm: 0 2px 10px rgba(43, 35, 27, 0.05);
-  --shadow-md: 0 10px 30px rgba(43, 35, 27, 0.08);
-  --shadow-lg: 0 18px 52px rgba(43, 35, 27, 0.12);
-  --shadow-xl: 0 30px 90px rgba(31, 25, 20, 0.2);
-  --shadow-glow: 0 10px 42px rgba(255, 91, 87, 0.15);
-  --radius-sm: 6px;
+  /* Color Palette - Warm Light Theme */
+  --bg-primary: #FDF8F3;
+  --bg-secondary: #F5EDE6;
+  --bg-tertiary: #EBE3DC;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FFFCFA;
+
+  /* Text Colors */
+  --text-primary: #2D2A26;
+  --text-secondary: #7A746D;
+  --text-tertiary: #A39E97;
+  --text-inverse: #FFFFFF;
+
+  /* Accent Colors */
+  --accent-coral: #FF6B6B;
+  --accent-coral-light: #FFE0E0;
+  --accent-mint: #4ECDC4;
+  --accent-mint-light: #D4F5F2;
+  --accent-lavender: #A29BFE;
+  --accent-lavender-light: #E8E6FF;
+  --accent-honey: #FFEAA7;
+  --accent-honey-dark: #F5B041;
+  --accent-peach: #FFAB91;
+
+  /* Gradient */
+  --gradient-rainbow: linear-gradient(
+    135deg,
+    #FF6B6B 0%,
+    #FFEAA7 25%,
+    #4ECDC4 50%,
+    #A29BFE 75%,
+    #FF6B6B 100%
+  );
+  --gradient-soft: linear-gradient(135deg, #FDF8F3 0%, #F5EDE6 100%);
+  --gradient-card: linear-gradient(180deg, #FFFFFF 0%, #FFFCF9 100%);
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(45, 42, 38, 0.06);
+  --shadow-md: 0 4px 16px rgba(45, 42, 38, 0.08);
+  --shadow-lg: 0 8px 32px rgba(45, 42, 38, 0.12);
+  --shadow-xl: 0 16px 48px rgba(45, 42, 38, 0.16);
+  --shadow-glow: 0 0 40px rgba(255, 107, 107, 0.15);
+
+  /* Border Radius */
+  --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 18px;
+  --radius-lg: 20px;
   --radius-xl: 28px;
   --radius-full: 9999px;
+
+  /* Spacing */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
@@ -48,9 +71,13 @@
   --space-xl: 32px;
   --space-2xl: 48px;
   --space-3xl: 64px;
-  --font-display: 'Songti SC', 'STSong', 'Noto Serif CJK SC', serif;
-  --font-body: 'HarmonyOS Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-brand: ui-rounded, 'SF Pro Rounded', 'HarmonyOS Sans', sans-serif;
+
+  /* Typography */
+  --font-display: 'ZCOOL KuaiLe', cursive;
+  --font-body: 'HarmonyOS Sans', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-accent: 'Caveat', cursive;
+
+  /* Font Sizes */
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
@@ -60,10 +87,13 @@
   --text-3xl: 2rem;
   --text-4xl: 2.5rem;
   --text-5xl: 3.5rem;
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-out-expo: var(--ease-out);
+
+  /* Animation */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
+
+  /* Z-index */
   --z-base: 0;
   --z-dropdown: 100;
   --z-sticky: 200;
@@ -71,6 +101,7 @@
   --z-toast: 400;
 }
 
+/* Reset & Base */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -79,8 +110,6 @@
 
 html {
   font-size: 16px;
-  background: var(--bg-primary);
-  scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -89,25 +118,34 @@ html {
 body {
   font-family: var(--font-body);
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--text-primary);
-  background: var(--gradient-soft);
+  background: var(--bg-primary);
   min-height: 100vh;
   overflow-x: hidden;
 }
 
+/* Background Pattern */
 body::before {
   content: '';
   position: fixed;
-  inset: 0;
-  background-image: radial-gradient(rgba(40, 35, 30, 0.045) 0.55px, transparent 0.55px);
-  background-size: 5px 5px;
-  opacity: 0.28;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 20% 30%, var(--accent-coral-light) 0%, transparent 25%),
+    radial-gradient(circle at 80% 70%, var(--accent-mint-light) 0%, transparent 25%),
+    radial-gradient(circle at 50% 90%, var(--accent-lavender-light) 0%, transparent 20%);
+  opacity: 0.4;
   pointer-events: none;
   z-index: -1;
 }
 
+/* Typography */
 h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 400;
   line-height: 1.2;
   color: var(--text-primary);
 }
@@ -121,14 +159,20 @@ h6 { font-size: var(--text-lg); }
 
 p {
   color: var(--text-secondary);
+  margin-bottom: var(--space-md);
 }
 
 a {
   color: var(--accent-coral);
   text-decoration: none;
-  transition: color 160ms var(--ease-out);
+  transition: color 0.2s ease;
 }
 
+a:hover {
+  color: var(--accent-lavender);
+}
+
+/* Buttons */
 button {
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -136,7 +180,7 @@ button {
   border: none;
   outline: none;
   background: none;
-  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s var(--ease-out-expo);
 }
 
 button:focus-visible {
@@ -144,6 +188,7 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* Input */
 input, textarea {
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -157,6 +202,7 @@ textarea::placeholder {
   color: var(--text-tertiary);
 }
 
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -175,11 +221,13 @@ textarea::placeholder {
   background: var(--text-secondary);
 }
 
+/* Selection */
 ::selection {
-  background: #ffcbc7;
+  background: var(--accent-honey);
   color: var(--text-primary);
 }
 
+/* Utility Classes */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -192,10 +240,26 @@ textarea::placeholder {
   border: 0;
 }
 
+/* App Container */
 #root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 107, 107, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 107, 107, 0.4);
+  }
 }
 
 @keyframes shimmer {
@@ -203,6 +267,41 @@ textarea::placeholder {
   100% { background-position: 200% center; }
 }
 
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradient-rotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Loading Skeleton */
 .skeleton {
   background: linear-gradient(
     90deg,
@@ -213,34 +312,4 @@ textarea::placeholder {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-md);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  a:hover {
-    color: var(--accent-coral-dark);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
-  .skeleton {
-    animation: none;
-    background: var(--bg-secondary);
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  body::before {
-    display: none;
-  }
-}
-
-@media (prefers-contrast: more) {
-  :root {
-    --line: rgba(20, 18, 16, 0.28);
-    --line-strong: rgba(20, 18, 16, 0.48);
-  }
 }

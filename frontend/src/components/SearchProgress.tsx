@@ -1,5 +1,4 @@
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Check, MessageCircleQuestion } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { SearchStageSlug } from '../api';
 import styles from './SearchProgress.module.css';
 
@@ -10,7 +9,6 @@ interface SearchProgressProps {
   expandedQuery?: string;
   onCancel?: () => void;
 }
-
 const STAGES: { key: SearchStageSlug; label: string }[] = [
   { key: 'query_expansion_start', label: '理解意图' },
   { key: 'embedding', label: '生成向量' },
@@ -33,26 +31,16 @@ export default function SearchProgress({
   expandedQuery,
   onCancel,
 }: SearchProgressProps) {
-  const shouldReduceMotion = useReducedMotion();
   const currentIndex = getStageIndex(stage);
   const isThinking = stage === 'thinking' || stage === 'query_expansion_start';
 
   return (
     <motion.div
       className={styles.container}
-      initial={{
-        opacity: 0,
-        transform: shouldReduceMotion ? 'none' : 'translateY(-8px)',
-      }}
-      animate={{ opacity: 1, transform: 'translateY(0)' }}
-      exit={{
-        opacity: 0,
-        transform: shouldReduceMotion ? 'none' : 'translateY(-6px)',
-      }}
-      transition={{
-        duration: shouldReduceMotion ? 0.12 : 0.2,
-        ease: [0.23, 1, 0.32, 1],
-      }}
+      initial={{ opacity: 0, y: -20, height: 0 }}
+      animate={{ opacity: 1, y: 0, height: 'auto' }}
+      exit={{ opacity: 0, y: -20, height: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
     >
       {/* Progress Steps */}
       <div className={styles.progressSteps}>
@@ -65,9 +53,15 @@ export default function SearchProgress({
           >
             <div className={styles.stepDot}>
               {index < currentIndex ? (
-                <Check />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
               ) : index === currentIndex ? (
-                <span className={styles.stepPulse} />
+                <motion.div
+                  className={styles.stepPulse}
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                />
               ) : null}
             </div>
             <span className={styles.stepLabel}>{s.label}</span>
@@ -80,11 +74,9 @@ export default function SearchProgress({
       <motion.div
         className={styles.message}
         key={message}
-        role="status"
-        aria-live="polite"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: shouldReduceMotion ? 0.1 : 0.16 }}
+        transition={{ duration: 0.2 }}
       >
         {message}
       </motion.div>
@@ -94,21 +86,32 @@ export default function SearchProgress({
         {(isThinking || thinkingText) && (
           <motion.div
             className={styles.thinkingContainer}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: shouldReduceMotion ? 0.1 : 0.16 }}
+            initial={{ opacity: 0, y: 10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto' }}
+            exit={{ opacity: 0, y: 10, height: 0 }}
+            transition={{ duration: 0.3 }}
           >
             <div className={styles.thinkingBubble}>
-              <div className={styles.thinkingIcon} aria-hidden="true">
-                <MessageCircleQuestion />
-              </div>
+              <div className={styles.thinkingIcon}>💭</div>
               <div className={styles.thinkingContent}>
                 {thinkingText || (
-                  <span className={styles.thinkingPlaceholder}>思考中...</span>
+                  <span className={styles.thinkingPlaceholder}>
+                    <motion.span
+                      animate={{ opacity: [0.4, 1, 0.4] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                    >
+                      思考中...
+                    </motion.span>
+                  </span>
                 )}
                 {isThinking && (
-                  <span className={styles.cursor}>|</span>
+                  <motion.span
+                    className={styles.cursor}
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                  >
+                    |
+                  </motion.span>
                 )}
               </div>
             </div>
@@ -121,10 +124,10 @@ export default function SearchProgress({
         {expandedQuery && stage !== 'thinking' && stage !== 'query_expansion_start' && (
           <motion.div
             className={styles.expandedQuery}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: shouldReduceMotion ? 0.1 : 0.16 }}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
           >
             <span className={styles.expandedLabel}>理解为：</span>
             <span className={styles.expandedText}>{expandedQuery}</span>
@@ -134,13 +137,14 @@ export default function SearchProgress({
 
       {/* Cancel Button */}
       {onCancel && (
-        <button
-          type="button"
+        <motion.button
           className={styles.cancelBtn}
           onClick={onCancel}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
           取消
-        </button>
+        </motion.button>
       )}
     </motion.div>
   );

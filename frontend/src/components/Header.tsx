@@ -1,5 +1,4 @@
-import { motion, useReducedMotion } from 'framer-motion';
-import { Cat } from 'lucide-react';
+import { motion } from 'framer-motion';
 import styles from './Header.module.css';
 
 /**
@@ -26,34 +25,39 @@ interface HeaderProps {
  * @returns The rendered Header component.
  */
 export default function Header({ memeCount = 5791, onLogoClick }: HeaderProps) {
-  const shouldReduceMotion = useReducedMotion();
   const formattedCount = new Intl.NumberFormat('en-US').format(memeCount);
 
   return (
     <motion.header
       className={styles.header}
-      initial={{
-        opacity: 0,
-        transform: shouldReduceMotion ? 'none' : 'translateY(-8px)',
-      }}
-      animate={{ opacity: 1, transform: 'translateY(0)' }}
-      transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
     >
       <div className={styles.container}>
-        <button
-          type="button"
+        {/* Logo */}
+        <motion.button
           className={styles.logo}
           onClick={onLogoClick}
           aria-label="返回首页"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
-          <span className={styles.logoIcon} aria-hidden="true">
-            <Cat />
+          <span className={styles.logoIcon}>
+            <motion.span
+              animate={{ rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 4, repeat: Infinity }}
+            >
+              😸
+            </motion.span>
           </span>
           <span className={styles.logoText}>Emomo</span>
-        </button>
+        </motion.button>
 
+        {/* Right section */}
         <div className={styles.right}>
-          <div className={styles.stats} aria-label={`${formattedCount} 个表情包`}>
+          {/* Stats */}
+          <div className={styles.stats}>
             <span className={styles.statNumber}>{formattedCount}</span>
             <span className={styles.statLabel}>表情包</span>
           </div>

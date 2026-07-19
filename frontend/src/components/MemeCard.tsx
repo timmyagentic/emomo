@@ -1,6 +1,5 @@
 import { type CSSProperties, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
-import { CircleAlert, Copy, Download } from 'lucide-react';
+import { motion } from 'framer-motion';
 import type { DisplayMeme } from '../types';
 import styles from './MemeCard.module.css';
 
@@ -20,8 +19,6 @@ interface MemeCardProps {
    * @param meme - The meme data associated with the card.
    */
   onClick?: (meme: DisplayMeme) => void;
-  /** Presentation treatment for browsing spotlights versus search results. */
-  variant?: 'spotlight' | 'result';
 }
 
 /**
@@ -33,16 +30,11 @@ interface MemeCardProps {
  * @param props.onClick - The click handler for the card.
  * @returns The rendered MemeCard component.
  */
-export default function MemeCard({
-  meme,
-  index = 0,
-  onClick,
-  variant = 'result',
-}: MemeCardProps) {
+export default function MemeCard({ meme, index = 0, onClick }: MemeCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const shouldReduceMotion = useReducedMotion();
-  const animationDelay = shouldReduceMotion ? 0 : Math.min(index, 4) * 0.025;
+  const animationDelay = (index % 12) * 0.025;
   const description = meme.description || '';
   const detailLabel = description
     ? `查看表情详情：${description.slice(0, 80)}`
@@ -64,21 +56,17 @@ export default function MemeCard({
 
   return (
     <motion.article
-      className={`${styles.card} ${variant === 'spotlight' ? styles.spotlight : styles.result}`}
-      initial={{
-        opacity: 0,
-        transform: shouldReduceMotion ? 'none' : 'translateY(10px) scale(0.99)',
-      }}
-      animate={{ opacity: 1, transform: 'translateY(0) scale(1)' }}
-      exit={{
-        opacity: 0,
-        transform: shouldReduceMotion ? 'none' : 'translateY(0) scale(0.98)',
-      }}
+      className={styles.card}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{
-        duration: shouldReduceMotion ? 0.12 : 0.22,
+        duration: 0.24,
         delay: animationDelay,
-        ease: [0.23, 1, 0.32, 1],
+        ease: [0.16, 1, 0.3, 1],
       }}
+      whileHover={{ y: -4 }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Image container */}
       <div className={styles.imageWrapper} style={imageStyle}>
@@ -94,32 +82,46 @@ export default function MemeCard({
           {/* Error placeholder */}
           {imageError && (
             <div className={styles.imageError}>
-              <CircleAlert />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
             </div>
           )}
 
           {/* Meme image */}
           {!imageError && (
             <motion.img
-              layoutId={shouldReduceMotion ? undefined : `meme-image-${meme.id}`}
               src={meme.url}
               alt={description || 'Meme'}
-              className={`${styles.image} ${isLoaded ? styles.imageLoaded : ''}`}
+              className={styles.image}
               loading="lazy"
               onLoad={() => setIsLoaded(true)}
               onError={handleImageError}
+              animate={{
+                scale: isHovered ? 1.05 : 1,
+                opacity: isLoaded ? 1 : 0,
+              }}
+              transition={{ duration: 0.3 }}
             />
           )}
         </button>
 
         {/* Hover overlay */}
-        <div className={styles.overlay}>
+        <motion.div
+          className={styles.overlay}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: isHovered ? 1 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
           <div className={styles.overlayContent}>
             {/* Quick actions */}
             <div className={styles.actions}>
-              <button
-                type="button"
+              <motion.button
                 className={styles.actionBtn}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   // Copy image URL
@@ -130,11 +132,15 @@ export default function MemeCard({
                 aria-label="复制表情链接"
                 title="复制链接"
               >
-                <Copy />
-              </button>
-              <button
-                type="button"
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+              </motion.button>
+              <motion.button
                 className={styles.actionBtn}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   // Download image
@@ -148,11 +154,15 @@ export default function MemeCard({
                 aria-label="下载表情"
                 title="下载"
               >
-                <Download />
-              </button>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="7,10 12,15 17,10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </motion.button>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </motion.article>
   );
