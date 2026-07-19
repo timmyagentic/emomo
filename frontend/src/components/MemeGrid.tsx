@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { SearchX, Sparkles } from 'lucide-react';
 import type { DisplayMeme, TextPresenceFilter } from '../types';
 import MemeCard from './MemeCard';
 import styles from './MemeGrid.module.css';
@@ -68,14 +69,13 @@ interface MemeGridProps {
  */
 function SkeletonCard({ index }: { index: number }) {
   return (
-    <motion.div
+    <div
       className={styles.skeletonCard}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: index * 0.05 }}
+      aria-hidden="true"
+      data-skeleton-index={index}
     >
       <div className={`${styles.skeletonImage} skeleton`} />
-    </motion.div>
+    </div>
   );
 }
 
@@ -110,6 +110,7 @@ export default function MemeGrid({
   searchResultTotal,
   filteredResultTotal,
 }: MemeGridProps) {
+  const shouldReduceMotion = useReducedMotion();
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const lastAutoLoadCountRef = useRef(-1);
   const hasLeftLoadZoneRef = useRef(true);
@@ -135,12 +136,19 @@ export default function MemeGrid({
   const resultsHeader = (title || searchQuery || resultFilter || hasLowConfidence) ? (
     <motion.header
       className={styles.resultsHeader}
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{
+        opacity: 0,
+        transform: shouldReduceMotion ? 'none' : 'translateY(-8px)',
+      }}
+      animate={{ opacity: 1, transform: 'translateY(0)' }}
+      transition={{ duration: shouldReduceMotion ? 0.12 : 0.2, ease: [0.23, 1, 0.32, 1] }}
     >
       {title && (
         <div className={styles.titleGroup}>
-          <h2 className={styles.sectionTitle}>{title}</h2>
+          <h2 className={styles.sectionTitle}>
+            <Sparkles className={styles.sectionIcon} aria-hidden="true" />
+            {title}
+          </h2>
           {isBrowseMode && (
             <span className={styles.browseCount}>{loadedCountText}</span>
           )}
@@ -224,15 +232,12 @@ export default function MemeGrid({
     return (
       <section className={styles.container}>
         {title && (
-          <motion.h2
-            className={styles.sectionTitle}
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
+          <h2 className={styles.sectionTitle}>
+            <Sparkles className={styles.sectionIcon} aria-hidden="true" />
             {title}
-          </motion.h2>
+          </h2>
         )}
-        <div className={styles.grid}>
+        <div className={`${styles.grid} ${isBrowseMode ? styles.browseGrid : styles.searchGrid}`}>
           {Array.from({ length: 12 }).map((_, i) => (
             <SkeletonCard key={i} index={i} />
           ))}
@@ -248,18 +253,14 @@ export default function MemeGrid({
         {resultsHeader}
         <motion.div
           className={styles.empty}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          initial={{
+            opacity: 0,
+            transform: shouldReduceMotion ? 'none' : 'translateY(8px)',
+          }}
+          animate={{ opacity: 1, transform: 'translateY(0)' }}
+          transition={{ duration: shouldReduceMotion ? 0.12 : 0.2, ease: [0.23, 1, 0.32, 1] }}
         >
-          <div className={styles.emptyIcon}>
-            <motion.div
-              animate={{ rotate: [0, 10, -10, 0] }}
-              transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
-            >
-              🤔
-            </motion.div>
-          </div>
+          <SearchX className={styles.emptyIcon} aria-hidden="true" />
           <h3 className={styles.emptyTitle}>{emptyMessage}</h3>
           {searchQuery && (
             <p className={styles.emptyText}>
@@ -276,15 +277,18 @@ export default function MemeGrid({
       {resultsHeader}
 
       {/* Grid */}
-      <div className={styles.grid}>
-        {memes.map((meme, index) => (
-          <MemeCard
-            key={meme.id}
-            meme={meme}
-            index={index}
-            onClick={onMemeClick}
-          />
-        ))}
+      <div className={`${styles.grid} ${isBrowseMode ? styles.browseGrid : styles.searchGrid}`}>
+        <AnimatePresence initial={!shouldReduceMotion}>
+          {memes.map((meme, index) => (
+            <MemeCard
+              key={meme.id}
+              meme={meme}
+              index={index}
+              onClick={onMemeClick}
+              variant={isBrowseMode ? 'spotlight' : 'result'}
+            />
+          ))}
+        </AnimatePresence>
       </div>
 
       {onLoadMore && (
