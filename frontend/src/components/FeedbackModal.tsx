@@ -23,18 +23,21 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
+  const previewRequestRef = useRef(0);
 
   useEffect(() => {
     if (isOpen) {
       modalRef.current?.focus();
       document.body.style.overflow = 'hidden';
     } else {
+      previewRequestRef.current += 1;
       document.body.style.overflow = '';
       setDescription('');
       setPreview(null);
       setPreviewDescription('');
       setReceipt(null);
       setError('');
+      setIsPreviewing(false);
     }
     return () => {
       document.body.style.overflow = '';
@@ -51,11 +54,13 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
   }, [isOpen, isSubmitting, onClose]);
 
   const handleDescriptionChange = (value: string) => {
+    previewRequestRef.current += 1;
     setDescription(value);
     setPreview(null);
     setPreviewDescription('');
     setReceipt(null);
     setError('');
+    setIsPreviewing(false);
   };
 
   const handlePreview = async () => {
@@ -67,15 +72,20 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     setIsPreviewing(true);
     setError('');
     setReceipt(null);
+    const requestID = ++previewRequestRef.current;
     try {
       const nextPreview = await previewFeedback(value);
+      if (previewRequestRef.current !== requestID) return;
       setPreview(nextPreview);
       setPreviewDescription(value);
     } catch (nextError) {
+      if (previewRequestRef.current !== requestID) return;
       logError('Feedback preview failed', { error: nextError });
       setError('暂时无法生成脱敏预览，请稍后重试。');
     } finally {
-      setIsPreviewing(false);
+      if (previewRequestRef.current === requestID) {
+        setIsPreviewing(false);
+      }
     }
   };
 

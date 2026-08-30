@@ -371,4 +371,45 @@ test.describe('Emomo 表情包搜索应用', () => {
     );
     expect(submitCount).toBe(1);
   });
+
+  test('编辑期间到达的旧反馈预览不会恢复', async ({ page }) => {
+    let releasePreview: (() => void) | undefined;
+    let requestStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      releasePreview = resolve;
+    });
+    await page.route('**/api/v1/feedback/preview', async (route) => {
+      requestStarted?.();
+      await gate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          preview: {
+            environment: { product: 'emomo', version: 'test', os: 'linux', arch: 'amd64', agent: 'semantic-search' },
+            description: '旧内容',
+            capability_gaps: [],
+          },
+          submission_enabled: false,
+          public_fallback_url: 'https://github.com/timmyagentic/emomo/issues/new',
+        }),
+      });
+    });
+
+    await page.getByRole('button', { name: '反馈' }).click();
+    const dialog = page.getByRole('dialog', { name: '发送反馈' });
+    const textbox = dialog.getByRole('textbox', { name: '反馈内容' });
+    await textbox.fill('旧内容');
+    await dialog.getByRole('button', { name: '预览脱敏内容' }).click();
+    await started;
+    await textbox.fill('新内容');
+    releasePreview?.();
+
+    await expect(textbox).toHaveValue('新内容');
+    await expect(dialog.getByLabel('完整脱敏预览')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: '预览脱敏内容' })).toBeEnabled();
+  });
 });

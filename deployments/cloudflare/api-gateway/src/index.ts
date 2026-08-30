@@ -59,6 +59,18 @@ const ALLOWED_ROUTES: readonly Route[] = [
     queryParams: new Set(['collection', 'profile']),
     rateLimitKey: 'search',
   },
+  {
+    method: 'POST',
+    pattern: /^\/api\/v1\/feedback\/preview$/,
+    queryParams: new Set(),
+    rateLimitKey: 'feedback-preview',
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/v1\/feedback\/submit$/,
+    queryParams: new Set(),
+    rateLimitKey: 'feedback-submit',
+  },
 ];
 
 const HOP_BY_HOP_REQUEST_HEADERS = new Set([
@@ -228,6 +240,10 @@ async function validateRequest(
     const topKError = validateSearchBodyTopK(url.pathname, bodyResult.body, env);
     if (topKError) {
       return { error: topKError };
+    }
+    const feedbackError = validateFeedbackBody(url.pathname, bodyResult.body);
+    if (feedbackError) {
+      return { error: feedbackError };
     }
     return { body: bodyResult.body };
   }
@@ -495,6 +511,56 @@ function validateSearchBodyTopK(
       code: 'search_top_k_too_large',
       message: `Search topK is limited to ${maxTopK}.`,
     };
+  }
+  return undefined;
+}
+
+function validateFeedbackBody(
+  pathname: string,
+  body: Uint8Array
+): { status: number; code: string; message: string } | undefined {
+  const isPreview = pathname === '/api/v1/feedback/preview';
+  const isSubmit = pathname === '/api/v1/feedback/submit';
+  if (!isPreview && !isSubmit) {
+    return undefined;
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    return { status: 400, code: 'invalid_json', message: 'POST body must be valid JSON.' };
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { status: 400, code: 'invalid_feedback', message: 'Feedback body must be an object.' };
+  }
+
+  const record = payload as Record<string, unknown>;
+  const allowed = isPreview
+    ? new Set(['description'])
+    : new Set(['description', 'userApproved', 'user_approved']);
+  if (Object.keys(record).some((key) => !allowed.has(key))) {
+    return { status: 400, code: 'invalid_feedback', message: 'Feedback body contains unsupported fields.' };
+  }
+  if (typeof record.description !== 'string' || !record.description.trim()) {
+    return { status: 400, code: 'invalid_feedback', message: 'Feedback description is required.' };
+  }
+  if (new TextEncoder().encode(record.description).byteLength > 4000) {
+    return { status: 400, code: 'invalid_feedback', message: 'Feedback description exceeds 4000 bytes.' };
+  }
+
+  if (isSubmit) {
+    if ('userApproved' in record && 'user_approved' in record) {
+      return { status: 400, code: 'invalid_feedback', message: 'Feedback approval is ambiguous.' };
+    }
+    const approved = record.userApproved ?? record.user_approved;
+    if (approved !== true) {
+      return {
+        status: 400,
+        code: 'feedback_approval_required',
+        message: 'Feedback submission requires explicit user approval.',
+      };
+    }
   }
   return undefined;
 }

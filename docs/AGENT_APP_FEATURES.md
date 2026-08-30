@@ -25,7 +25,7 @@ The module stays on the published `v0.1.0`; the newer exact source revision supp
 6. The backend rebuilds the deterministic draft, calls `Approve(true)`, and submits opaque `Approved` through the Foundation HTTPS client.
 7. With no Relay endpoint configured, submission is disabled and the UI offers the public GitHub Issue fallback.
 
-The frontend owns copy, modal behavior, localization, explicit confirmation, fallback, and failure UX. The backend owns Emomo environment mapping and optional endpoint configuration. The Foundation owns redaction, bounds, opaque approval, the exact `/v1/feedback` wire contract, and no-redirect transport. The Relay owns its target repository, credentials, deduplication, and downstream presentation.
+The frontend owns copy, modal behavior, localization, explicit confirmation, fallback, and failure UX. The backend owns Emomo environment mapping and optional endpoint configuration. The Cloudflare API gateway exposes only the two bounded Feedback routes, validates their JSON/approval shape, applies dedicated rate-limit buckets, and streams the upstream response. The Foundation owns redaction, bounds, opaque approval, the exact `/v1/feedback` wire contract, and no-redirect transport. The Relay owns its target repository, credentials, deduplication, and downstream presentation.
 
 ## Configuration
 

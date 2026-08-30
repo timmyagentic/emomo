@@ -38,6 +38,8 @@
         "backend/internal/config/config.go",
         "backend/internal/config/config_test.go",
         "backend/proto/emomo/v1/api.proto",
+        "deployments/cloudflare/api-gateway/src/index.test.ts",
+        "deployments/cloudflare/api-gateway/src/index.ts",
         "docs/AGENT_APP_FEATURES.md",
         "docs/emomo-feedback-preview.png",
         "frontend/README.md",
@@ -52,7 +54,7 @@
         "frontend/src/components/index.ts",
         "mobile/gen/emomo/v1/api_pb.ts"
       ],
-      "verified_at": "2026-08-30T15:36:15Z",
+      "verified_at": "2026-08-30T15:40:28Z",
       "checks": [
         "cd backend && GOTOOLCHAIN=go1.26.2 go mod tidy -diff",
         "cd backend && GOTOOLCHAIN=go1.26.2 go test -race ./...",
@@ -62,6 +64,9 @@
         "cd frontend && npm run build",
         "cd frontend && npm test",
         "cd mobile && npm run gen && npm run typecheck && npm run lint && npm test -- --runInBand",
+        "cd deployments/cloudflare/api-gateway && npm test && npm run typecheck",
+        "cd deployments/cloudflare/api-gateway && npm run deploy:dry-run",
+        "cd deployments/cloudflare/api-gateway && npx wrangler check startup",
         "agent-browser local feedback preview walkthrough with mock API",
         "same-source feature-lock validate --json"
       ],
