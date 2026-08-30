@@ -52,7 +52,7 @@
         "frontend/src/components/index.ts",
         "mobile/gen/emomo/v1/api_pb.ts"
       ],
-      "verified_at": "2026-08-30T15:28:57Z",
+      "verified_at": "2026-08-30T15:36:15Z",
       "checks": [
         "cd backend && GOTOOLCHAIN=go1.26.2 go mod tidy -diff",
         "cd backend && GOTOOLCHAIN=go1.26.2 go test -race ./...",
