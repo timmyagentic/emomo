@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "source": {
+    "repository": "timmyagentic/awesome-agent-app-features",
+    "commit": "f5b3e69a7a451f8377dece49c7d0dd8cf5d3fc3c"
+  },
+  "features": [
+    {
+      "id": "feedback",
+      "contract": "v1",
+      "deliveries": [
+        {
+          "mode": "go-module",
+          "source": "github.com/timmyagentic/awesome-agent-app-features/feedback",
+          "target": "backend/go.mod",
+          "version": "v0.1.0"
+        },
+        {
+          "mode": "go-module",
+          "source": "github.com/timmyagentic/awesome-agent-app-features/feedback/httpclient",
+          "target": "backend/go.mod",
+          "version": "v0.1.0"
+        }
+      ],
+      "files": [
+        "README.md",
+        "agent-app-features.lock.json",
+        "backend/.env.example",
+        "backend/README.md",
+        "backend/configs/config.yaml",
+        "backend/gen/emomo/v1/api.pb.go",
+        "backend/go.mod",
+        "backend/go.sum",
+        "backend/internal/api/handler/feedback.go",
+        "backend/internal/api/handler/feedback_test.go",
+        "backend/internal/api/router.go",
+        "backend/internal/api/router_test.go",
+        "backend/internal/config/config.go",
+        "backend/internal/config/config_test.go",
+        "backend/proto/emomo/v1/api.proto",
+        "deployments/cloudflare/api-gateway/src/index.test.ts",
+        "deployments/cloudflare/api-gateway/src/index.ts",
+        "docs/AGENT_APP_FEATURES.md",
+        "docs/emomo-feedback-preview.png",
+        "frontend/README.md",
+        "frontend/e2e/app.spec.ts",
+        "frontend/gen/emomo/v1/api_pb.ts",
+        "frontend/src/App.tsx",
+        "frontend/src/api/index.ts",
+        "frontend/src/components/FeedbackModal.module.css",
+        "frontend/src/components/FeedbackModal.tsx",
+        "frontend/src/components/Header.module.css",
+        "frontend/src/components/Header.tsx",
+        "frontend/src/components/index.ts",
+        "mobile/gen/emomo/v1/api_pb.ts"
+      ],
+      "verified_at": "2026-08-30T15:40:28Z",
+      "checks": [
+        "cd backend && GOTOOLCHAIN=go1.26.2 go mod tidy -diff",
+        "cd backend && GOTOOLCHAIN=go1.26.2 go test -race ./...",
+        "cd backend && GOTOOLCHAIN=go1.26.2 go vet ./...",
+        "cd backend && GOTOOLCHAIN=go1.26.2 go build ./...",
+        "cd frontend && npm run lint",
+        "cd frontend && npm run build",
+        "cd frontend && npm test",
+        "cd mobile && npm run gen && npm run typecheck && npm run lint && npm test -- --runInBand",
+        "cd deployments/cloudflare/api-gateway && npm test && npm run typecheck",
+        "cd deployments/cloudflare/api-gateway && npm run deploy:dry-run",
+        "cd deployments/cloudflare/api-gateway && npx wrangler check startup",
+        "agent-browser local feedback preview walkthrough with mock API",
+        "same-source feature-lock validate --json"
+      ],
+      "unverified": [
+        "No production Feedback Relay endpoint was configured or deployed",
+        "No credential-backed GitHub issue was created through the Relay",
+        "No production Emomo deployment or real-user feedback submission was exercised"
+      ]
+    }
+  ]
+}

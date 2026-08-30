@@ -52,6 +52,24 @@
   gap: var(--space-lg);
 }
 
+.feedback {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.feedback:hover {
+  border-color: var(--accent-coral);
+  background: var(--accent-coral-light);
+  color: var(--accent-coral);
+}
+
 /* Stats */
 .stats {
   display: flex;
@@ -86,5 +104,9 @@
 
   .stats {
     display: none;
+  }
+
+  .right {
+    gap: var(--space-sm);
   }
 }

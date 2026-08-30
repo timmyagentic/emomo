@@ -310,4 +310,106 @@ test.describe('Emomo 表情包搜索应用', () => {
     // 验证搜索被触发
     await expect(searchInput).toHaveValue('狗狗');
   });
+
+  test('反馈必须先完整预览再由明确确认提交', async ({ page }) => {
+    let submitCount = 0;
+    await page.route('**/api/v1/feedback/preview', async (route) => {
+      expect(route.request().postDataJSON()).toEqual({ description: '希望增加收藏夹' });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          preview: {
+            environment: {
+              product: 'emomo',
+              version: 'v1.2.3',
+              os: 'linux',
+              arch: 'amd64',
+              agent: 'semantic-search',
+            },
+            description: '希望增加收藏夹',
+            capability_gaps: [],
+          },
+          submission_enabled: true,
+          public_fallback_url: 'https://github.com/timmyagentic/emomo/issues/new',
+        }),
+      });
+    });
+    await page.route('**/api/v1/feedback/submit', async (route) => {
+      submitCount += 1;
+      expect(route.request().postDataJSON()).toEqual({
+        description: '希望增加收藏夹',
+        userApproved: true,
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reference_url: 'https://github.com/timmyagentic/emomo/issues/123',
+          deduplicated: false,
+        }),
+      });
+    });
+
+    await page.getByRole('button', { name: '反馈' }).click();
+    const dialog = page.getByRole('dialog', { name: '发送反馈' });
+    await dialog.getByRole('textbox', { name: '反馈内容' }).fill('希望增加收藏夹');
+    await dialog.getByRole('button', { name: '预览脱敏内容' }).click();
+
+    const preview = dialog.getByLabel('完整脱敏预览');
+    await expect(preview.getByText('emomo')).toBeVisible();
+    await expect(preview.getByText('v1.2.3')).toBeVisible();
+    await expect(preview.getByText('linux / amd64')).toBeVisible();
+    await expect(preview.getByText('semantic-search')).toBeVisible();
+    await expect(preview.getByText('希望增加收藏夹')).toBeVisible();
+    expect(submitCount).toBe(0);
+
+    await dialog.getByRole('button', { name: '确认并提交这份脱敏反馈' }).click();
+    await expect(dialog.getByRole('link', { name: '查看反馈记录' })).toHaveAttribute(
+      'href',
+      'https://github.com/timmyagentic/emomo/issues/123'
+    );
+    expect(submitCount).toBe(1);
+  });
+
+  test('编辑期间到达的旧反馈预览不会恢复', async ({ page }) => {
+    let releasePreview: (() => void) | undefined;
+    let requestStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      releasePreview = resolve;
+    });
+    await page.route('**/api/v1/feedback/preview', async (route) => {
+      requestStarted?.();
+      await gate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          preview: {
+            environment: { product: 'emomo', version: 'test', os: 'linux', arch: 'amd64', agent: 'semantic-search' },
+            description: '旧内容',
+            capability_gaps: [],
+          },
+          submission_enabled: false,
+          public_fallback_url: 'https://github.com/timmyagentic/emomo/issues/new',
+        }),
+      });
+    });
+
+    await page.getByRole('button', { name: '反馈' }).click();
+    const dialog = page.getByRole('dialog', { name: '发送反馈' });
+    const textbox = dialog.getByRole('textbox', { name: '反馈内容' });
+    await textbox.fill('旧内容');
+    await dialog.getByRole('button', { name: '预览脱敏内容' }).click();
+    await started;
+    await textbox.fill('新内容');
+    releasePreview?.();
+
+    await expect(textbox).toHaveValue('新内容');
+    await expect(dialog.getByLabel('完整脱敏预览')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: '预览脱敏内容' })).toBeEnabled();
+  });
 });

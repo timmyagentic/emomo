@@ -161,3 +161,57 @@ test('rejects oversized POST bodies even when Content-Length is absent', async (
     },
   });
 });
+
+test('proxies bounded feedback preview through its own rate-limit bucket', async () => {
+  const calls = mockUpstream();
+  const keys: string[] = [];
+  const response = await worker.fetch(
+    new Request('https://api.emomo.net/api/v1/feedback/preview', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '203.0.113.20',
+        Origin: 'https://emomo.net',
+      },
+      body: JSON.stringify({ description: '希望增加收藏夹' }),
+    }),
+    makeEnv({
+      EMOMO_RATE_LIMITER: {
+        limit: async ({ key }: { key: string }) => {
+          keys.push(key);
+          return { success: true };
+        },
+      } as unknown as RateLimit,
+    }),
+    makeCtx()
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(keys, ['feedback-preview:203.0.113.20']);
+  assert.equal(calls.length, 1);
+  const upstream = calls[0].input as Request;
+  assert.equal(new URL(upstream.url).pathname, '/api/v1/feedback/preview');
+  assert.deepEqual(await upstream.json(), { description: '希望增加收藏夹' });
+});
+
+test('rejects feedback submit without explicit approval before proxying', async () => {
+  const calls = mockUpstream();
+  const response = await worker.fetch(
+    new Request('https://api.emomo.net/api/v1/feedback/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://emomo.net' },
+      body: JSON.stringify({ description: '建议', userApproved: false }),
+    }),
+    makeEnv(),
+    makeCtx()
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(calls.length, 0);
+  assert.deepEqual(await response.json(), {
+    error: {
+      code: 'feedback_approval_required',
+      message: 'Feedback submission requires explicit user approval.',
+    },
+  });
+});

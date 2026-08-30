@@ -77,6 +77,56 @@ message GetStatsResponse {
   repeated string available_profiles = 4;
 }
 
+// FeedbackPreviewRequest is the body of POST /api/v1/feedback/preview.
+message FeedbackPreviewRequest {
+  string description = 1;
+}
+
+// FeedbackEnvironment is the complete allowlisted environment rendered before
+// the user can approve a submission.
+message FeedbackEnvironment {
+  string product = 1;
+  string version = 2;
+  string os = 3;
+  string arch = 4;
+  string agent = 5;
+}
+
+// FeedbackRecentError is optional fresh error context in a redacted preview.
+message FeedbackRecentError {
+  string text = 1;
+  string occurred_at = 2;
+}
+
+// FeedbackPreview is the full host-owned rendering projection of the
+// Foundation Report. Every populated field must be visible before approval.
+message FeedbackPreview {
+  FeedbackEnvironment environment = 1;
+  string description = 2;
+  FeedbackRecentError recent_error = 3;
+  repeated string capability_gaps = 4;
+}
+
+// FeedbackPreviewResponse is returned without making a relay request.
+message FeedbackPreviewResponse {
+  FeedbackPreview preview = 1;
+  bool submission_enabled = 2;
+  string public_fallback_url = 3;
+}
+
+// FeedbackSubmitRequest is the body of POST /api/v1/feedback/submit. The
+// boolean must come from the explicit confirmation action in the host UI.
+message FeedbackSubmitRequest {
+  string description = 1;
+  bool user_approved = 2;
+}
+
+// FeedbackSubmitResponse returns the author-operated relay receipt.
+message FeedbackSubmitResponse {
+  string reference_url = 1;
+  bool deduplicated = 2;
+}
+
 // SearchStage names each step of the streaming search pipeline. The numeric
 // value is wire-stable; new stages MUST append.
 enum SearchStage {

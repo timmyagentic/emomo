@@ -19,7 +19,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file emomo/v1/api.proto.
  */
 export const file_emomo_v1_api: GenFile = /*@__PURE__*/
-  fileDesc("ChJlbW9tby92MS9hcGkucHJvdG8SCGVtb21vLnYxIpMBCg1TZWFyY2hSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEg0KBXRvcF9rGAIgASgFEhAKCGNhdGVnb3J5GAMgASgJEi0KDXRleHRfcHJlc2VuY2UYBCABKA4yFi5lbW9tby52MS5UZXh0UHJlc2VuY2USEgoKY29sbGVjdGlvbhgFIAEoCRIPCgdwcm9maWxlGAYgASgJIpQBCg5TZWFyY2hSZXNwb25zZRInCgdyZXN1bHRzGAEgAygLMhYuZW1vbW8udjEuU2VhcmNoUmVzdWx0Eg0KBXRvdGFsGAIgASgFEg0KBXF1ZXJ5GAMgASgJEhYKDmV4cGFuZGVkX3F1ZXJ5GAQgASgJEhIKCmNvbGxlY3Rpb24YBSABKAkSDwoHcHJvZmlsZRgGIAEoCSJDChBMaXN0TWVtZXNSZXF1ZXN0EhAKCGNhdGVnb3J5GAEgASgJEg0KBWxpbWl0GAIgASgFEg4KBm9mZnNldBgDIAEoBSJqChFMaXN0TWVtZXNSZXNwb25zZRInCgdyZXN1bHRzGAEgAygLMhYuZW1vbW8udjEuU2VhcmNoUmVzdWx0Eg0KBXRvdGFsGAIgASgFEg0KBWxpbWl0GAMgASgFEg4KBm9mZnNldBgEIAEoBSIcCg5HZXRNZW1lUmVxdWVzdBIKCgJpZBgBIAEoCSIvCg9HZXRNZW1lUmVzcG9uc2USHAoEbWVtZRgBIAEoCzIOLmVtb21vLnYxLk1lbWUiOgoVR2V0Q2F0ZWdvcmllc1Jlc3BvbnNlEhIKCmNhdGVnb3JpZXMYASADKAkSDQoFdG90YWwYAiABKAUifAoQR2V0U3RhdHNSZXNwb25zZRITCgt0b3RhbF9tZW1lcxgBIAEoAxIYChB0b3RhbF9jYXRlZ29yaWVzGAIgASgFEh0KFWF2YWlsYWJsZV9jb2xsZWN0aW9ucxgDIAMoCRIaChJhdmFpbGFibGVfcHJvZmlsZXMYBCADKAkiiAIKE1NlYXJjaFByb2dyZXNzRXZlbnQSJAoFc3RhZ2UYASABKA4yFS5lbW9tby52MS5TZWFyY2hTdGFnZRIPCgdtZXNzYWdlGAIgASgJEisKCHRoaW5raW5nGAMgASgLMhcuZW1vbW8udjEuVGhpbmtpbmdEZWx0YUgAEiwKCWV4cGFuc2lvbhgEIAEoCzIXLmVtb21vLnYxLkV4cGFuc2lvbkRvbmVIABIsCghjb21wbGV0ZRgFIAEoCzIYLmVtb21vLnYxLlNlYXJjaENvbXBsZXRlSAASJgoFZXJyb3IYBiABKAsyFS5lbW9tby52MS5TZWFyY2hFcnJvckgAQgkKB3BheWxvYWQiLwoNVGhpbmtpbmdEZWx0YRIMCgR0ZXh0GAEgASgJEhAKCGlzX2RlbHRhGAIgASgIIicKDUV4cGFuc2lvbkRvbmUSFgoOZXhwYW5kZWRfcXVlcnkYASABKAkilAEKDlNlYXJjaENvbXBsZXRlEicKB3Jlc3VsdHMYASADKAsyFi5lbW9tby52MS5TZWFyY2hSZXN1bHQSDQoFdG90YWwYAiABKAUSDQoFcXVlcnkYAyABKAkSFgoOZXhwYW5kZWRfcXVlcnkYBCABKAkSEgoKY29sbGVjdGlvbhgFIAEoCRIPCgdwcm9maWxlGAYgASgJIhwKC1NlYXJjaEVycm9yEg0KBWVycm9yGAEgASgJKpwCCgtTZWFyY2hTdGFnZRIcChhTRUFSQ0hfU1RBR0VfVU5TUEVDSUZJRUQQABImCiJTRUFSQ0hfU1RBR0VfUVVFUllfRVhQQU5TSU9OX1NUQVJUEAESGQoVU0VBUkNIX1NUQUdFX1RISU5LSU5HEAISJQohU0VBUkNIX1NUQUdFX1FVRVJZX0VYUEFOU0lPTl9ET05FEAMSGgoWU0VBUkNIX1NUQUdFX0VNQkVERElORxAEEhoKFlNFQVJDSF9TVEFHRV9TRUFSQ0hJTkcQBRIaChZTRUFSQ0hfU1RBR0VfRU5SSUNISU5HEAYSGQoVU0VBUkNIX1NUQUdFX0NPTVBMRVRFEAcSFgoSU0VBUkNIX1NUQUdFX0VSUk9SEAhCLVorZ2l0aHViLmNvbS90aW1teS9lbW9tby9nZW4vZW1vbW8vdjE7ZW1vbW92MWIGcHJvdG8z", [file_emomo_v1_types, file_emomo_v1_meme]);
+  fileDesc("ChJlbW9tby92MS9hcGkucHJvdG8SCGVtb21vLnYxIpMBCg1TZWFyY2hSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEg0KBXRvcF9rGAIgASgFEhAKCGNhdGVnb3J5GAMgASgJEi0KDXRleHRfcHJlc2VuY2UYBCABKA4yFi5lbW9tby52MS5UZXh0UHJlc2VuY2USEgoKY29sbGVjdGlvbhgFIAEoCRIPCgdwcm9maWxlGAYgASgJIpQBCg5TZWFyY2hSZXNwb25zZRInCgdyZXN1bHRzGAEgAygLMhYuZW1vbW8udjEuU2VhcmNoUmVzdWx0Eg0KBXRvdGFsGAIgASgFEg0KBXF1ZXJ5GAMgASgJEhYKDmV4cGFuZGVkX3F1ZXJ5GAQgASgJEhIKCmNvbGxlY3Rpb24YBSABKAkSDwoHcHJvZmlsZRgGIAEoCSJDChBMaXN0TWVtZXNSZXF1ZXN0EhAKCGNhdGVnb3J5GAEgASgJEg0KBWxpbWl0GAIgASgFEg4KBm9mZnNldBgDIAEoBSJqChFMaXN0TWVtZXNSZXNwb25zZRInCgdyZXN1bHRzGAEgAygLMhYuZW1vbW8udjEuU2VhcmNoUmVzdWx0Eg0KBXRvdGFsGAIgASgFEg0KBWxpbWl0GAMgASgFEg4KBm9mZnNldBgEIAEoBSIcCg5HZXRNZW1lUmVxdWVzdBIKCgJpZBgBIAEoCSIvCg9HZXRNZW1lUmVzcG9uc2USHAoEbWVtZRgBIAEoCzIOLmVtb21vLnYxLk1lbWUiOgoVR2V0Q2F0ZWdvcmllc1Jlc3BvbnNlEhIKCmNhdGVnb3JpZXMYASADKAkSDQoFdG90YWwYAiABKAUifAoQR2V0U3RhdHNSZXNwb25zZRITCgt0b3RhbF9tZW1lcxgBIAEoAxIYChB0b3RhbF9jYXRlZ29yaWVzGAIgASgFEh0KFWF2YWlsYWJsZV9jb2xsZWN0aW9ucxgDIAMoCRIaChJhdmFpbGFibGVfcHJvZmlsZXMYBCADKAkiLQoWRmVlZGJhY2tQcmV2aWV3UmVxdWVzdBITCgtkZXNjcmlwdGlvbhgBIAEoCSJgChNGZWVkYmFja0Vudmlyb25tZW50Eg8KB3Byb2R1Y3QYASABKAkSDwoHdmVyc2lvbhgCIAEoCRIKCgJvcxgDIAEoCRIMCgRhcmNoGAQgASgJEg0KBWFnZW50GAUgASgJIjgKE0ZlZWRiYWNrUmVjZW50RXJyb3ISDAoEdGV4dBgBIAEoCRITCgtvY2N1cnJlZF9hdBgCIAEoCSKoAQoPRmVlZGJhY2tQcmV2aWV3EjIKC2Vudmlyb25tZW50GAEgASgLMh0uZW1vbW8udjEuRmVlZGJhY2tFbnZpcm9ubWVudBITCgtkZXNjcmlwdGlvbhgCIAEoCRIzCgxyZWNlbnRfZXJyb3IYAyABKAsyHS5lbW9tby52MS5GZWVkYmFja1JlY2VudEVycm9yEhcKD2NhcGFiaWxpdHlfZ2FwcxgEIAMoCSJ+ChdGZWVkYmFja1ByZXZpZXdSZXNwb25zZRIqCgdwcmV2aWV3GAEgASgLMhkuZW1vbW8udjEuRmVlZGJhY2tQcmV2aWV3EhoKEnN1Ym1pc3Npb25fZW5hYmxlZBgCIAEoCBIbChNwdWJsaWNfZmFsbGJhY2tfdXJsGAMgASgJIkMKFUZlZWRiYWNrU3VibWl0UmVxdWVzdBITCgtkZXNjcmlwdGlvbhgBIAEoCRIVCg11c2VyX2FwcHJvdmVkGAIgASgIIkUKFkZlZWRiYWNrU3VibWl0UmVzcG9uc2USFQoNcmVmZXJlbmNlX3VybBgBIAEoCRIUCgxkZWR1cGxpY2F0ZWQYAiABKAgiiAIKE1NlYXJjaFByb2dyZXNzRXZlbnQSJAoFc3RhZ2UYASABKA4yFS5lbW9tby52MS5TZWFyY2hTdGFnZRIPCgdtZXNzYWdlGAIgASgJEisKCHRoaW5raW5nGAMgASgLMhcuZW1vbW8udjEuVGhpbmtpbmdEZWx0YUgAEiwKCWV4cGFuc2lvbhgEIAEoCzIXLmVtb21vLnYxLkV4cGFuc2lvbkRvbmVIABIsCghjb21wbGV0ZRgFIAEoCzIYLmVtb21vLnYxLlNlYXJjaENvbXBsZXRlSAASJgoFZXJyb3IYBiABKAsyFS5lbW9tby52MS5TZWFyY2hFcnJvckgAQgkKB3BheWxvYWQiLwoNVGhpbmtpbmdEZWx0YRIMCgR0ZXh0GAEgASgJEhAKCGlzX2RlbHRhGAIgASgIIicKDUV4cGFuc2lvbkRvbmUSFgoOZXhwYW5kZWRfcXVlcnkYASABKAkilAEKDlNlYXJjaENvbXBsZXRlEicKB3Jlc3VsdHMYASADKAsyFi5lbW9tby52MS5TZWFyY2hSZXN1bHQSDQoFdG90YWwYAiABKAUSDQoFcXVlcnkYAyABKAkSFgoOZXhwYW5kZWRfcXVlcnkYBCABKAkSEgoKY29sbGVjdGlvbhgFIAEoCRIPCgdwcm9maWxlGAYgASgJIhwKC1NlYXJjaEVycm9yEg0KBWVycm9yGAEgASgJKpwCCgtTZWFyY2hTdGFnZRIcChhTRUFSQ0hfU1RBR0VfVU5TUEVDSUZJRUQQABImCiJTRUFSQ0hfU1RBR0VfUVVFUllfRVhQQU5TSU9OX1NUQVJUEAESGQoVU0VBUkNIX1NUQUdFX1RISU5LSU5HEAISJQohU0VBUkNIX1NUQUdFX1FVRVJZX0VYUEFOU0lPTl9ET05FEAMSGgoWU0VBUkNIX1NUQUdFX0VNQkVERElORxAEEhoKFlNFQVJDSF9TVEFHRV9TRUFSQ0hJTkcQBRIaChZTRUFSQ0hfU1RBR0VfRU5SSUNISU5HEAYSGQoVU0VBUkNIX1NUQUdFX0NPTVBMRVRFEAcSFgoSU0VBUkNIX1NUQUdFX0VSUk9SEAhCLVorZ2l0aHViLmNvbS90aW1teS9lbW9tby9nZW4vZW1vbW8vdjE7ZW1vbW92MWIGcHJvdG8z", [file_emomo_v1_types, file_emomo_v1_meme]);
 
 /**
  * SearchRequest is the body of POST /api/v1/search and POST
@@ -278,6 +278,202 @@ export const GetStatsResponseSchema: GenMessage<GetStatsResponse> = /*@__PURE__*
   messageDesc(file_emomo_v1_api, 7);
 
 /**
+ * FeedbackPreviewRequest is the body of POST /api/v1/feedback/preview.
+ *
+ * @generated from message emomo.v1.FeedbackPreviewRequest
+ */
+export type FeedbackPreviewRequest = Message<"emomo.v1.FeedbackPreviewRequest"> & {
+  /**
+   * @generated from field: string description = 1;
+   */
+  description: string;
+};
+
+/**
+ * Describes the message emomo.v1.FeedbackPreviewRequest.
+ * Use `create(FeedbackPreviewRequestSchema)` to create a new message.
+ */
+export const FeedbackPreviewRequestSchema: GenMessage<FeedbackPreviewRequest> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_api, 8);
+
+/**
+ * FeedbackEnvironment is the complete allowlisted environment rendered before
+ * the user can approve a submission.
+ *
+ * @generated from message emomo.v1.FeedbackEnvironment
+ */
+export type FeedbackEnvironment = Message<"emomo.v1.FeedbackEnvironment"> & {
+  /**
+   * @generated from field: string product = 1;
+   */
+  product: string;
+
+  /**
+   * @generated from field: string version = 2;
+   */
+  version: string;
+
+  /**
+   * @generated from field: string os = 3;
+   */
+  os: string;
+
+  /**
+   * @generated from field: string arch = 4;
+   */
+  arch: string;
+
+  /**
+   * @generated from field: string agent = 5;
+   */
+  agent: string;
+};
+
+/**
+ * Describes the message emomo.v1.FeedbackEnvironment.
+ * Use `create(FeedbackEnvironmentSchema)` to create a new message.
+ */
+export const FeedbackEnvironmentSchema: GenMessage<FeedbackEnvironment> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_api, 9);
+
+/**
+ * FeedbackRecentError is optional fresh error context in a redacted preview.
+ *
+ * @generated from message emomo.v1.FeedbackRecentError
+ */
+export type FeedbackRecentError = Message<"emomo.v1.FeedbackRecentError"> & {
+  /**
+   * @generated from field: string text = 1;
+   */
+  text: string;
+
+  /**
+   * @generated from field: string occurred_at = 2;
+   */
+  occurredAt: string;
+};
+
+/**
+ * Describes the message emomo.v1.FeedbackRecentError.
+ * Use `create(FeedbackRecentErrorSchema)` to create a new message.
+ */
+export const FeedbackRecentErrorSchema: GenMessage<FeedbackRecentError> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_api, 10);
+
+/**
+ * FeedbackPreview is the full host-owned rendering projection of the
+ * Foundation Report. Every populated field must be visible before approval.
+ *
+ * @generated from message emomo.v1.FeedbackPreview
+ */
+export type FeedbackPreview = Message<"emomo.v1.FeedbackPreview"> & {
+  /**
+   * @generated from field: emomo.v1.FeedbackEnvironment environment = 1;
+   */
+  environment?: FeedbackEnvironment | undefined;
+
+  /**
+   * @generated from field: string description = 2;
+   */
+  description: string;
+
+  /**
+   * @generated from field: emomo.v1.FeedbackRecentError recent_error = 3;
+   */
+  recentError?: FeedbackRecentError | undefined;
+
+  /**
+   * @generated from field: repeated string capability_gaps = 4;
+   */
+  capabilityGaps: string[];
+};
+
+/**
+ * Describes the message emomo.v1.FeedbackPreview.
+ * Use `create(FeedbackPreviewSchema)` to create a new message.
+ */
+export const FeedbackPreviewSchema: GenMessage<FeedbackPreview> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_api, 11);
+
+/**
+ * FeedbackPreviewResponse is returned without making a relay request.
+ *
+ * @generated from message emomo.v1.FeedbackPreviewResponse
+ */
+export type FeedbackPreviewResponse = Message<"emomo.v1.FeedbackPreviewResponse"> & {
+  /**
+   * @generated from field: emomo.v1.FeedbackPreview preview = 1;
+   */
+  preview?: FeedbackPreview | undefined;
+
+  /**
+   * @generated from field: bool submission_enabled = 2;
+   */
+  submissionEnabled: boolean;
+
+  /**
+   * @generated from field: string public_fallback_url = 3;
+   */
+  publicFallbackUrl: string;
+};
+
+/**
+ * Describes the message emomo.v1.FeedbackPreviewResponse.
+ * Use `create(FeedbackPreviewResponseSchema)` to create a new message.
+ */
+export const FeedbackPreviewResponseSchema: GenMessage<FeedbackPreviewResponse> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_api, 12);
+
+/**
+ * FeedbackSubmitRequest is the body of POST /api/v1/feedback/submit. The
+ * boolean must come from the explicit confirmation action in the host UI.
+ *
+ * @generated from message emomo.v1.FeedbackSubmitRequest
+ */
+export type FeedbackSubmitRequest = Message<"emomo.v1.FeedbackSubmitRequest"> & {
+  /**
+   * @generated from field: string description = 1;
+   */
+  description: string;
+
+  /**
+   * @generated from field: bool user_approved = 2;
+   */
+  userApproved: boolean;
+};
+
+/**
+ * Describes the message emomo.v1.FeedbackSubmitRequest.
+ * Use `create(FeedbackSubmitRequestSchema)` to create a new message.
+ */
+export const FeedbackSubmitRequestSchema: GenMessage<FeedbackSubmitRequest> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_api, 13);
+
+/**
+ * FeedbackSubmitResponse returns the author-operated relay receipt.
+ *
+ * @generated from message emomo.v1.FeedbackSubmitResponse
+ */
+export type FeedbackSubmitResponse = Message<"emomo.v1.FeedbackSubmitResponse"> & {
+  /**
+   * @generated from field: string reference_url = 1;
+   */
+  referenceUrl: string;
+
+  /**
+   * @generated from field: bool deduplicated = 2;
+   */
+  deduplicated: boolean;
+};
+
+/**
+ * Describes the message emomo.v1.FeedbackSubmitResponse.
+ * Use `create(FeedbackSubmitResponseSchema)` to create a new message.
+ */
+export const FeedbackSubmitResponseSchema: GenMessage<FeedbackSubmitResponse> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_api, 14);
+
+/**
  * SearchProgressEvent is one SSE event in the stream returned by
  * POST /api/v1/search/stream. Each event is encoded as a single SSE
  * `data: <protojson>` line (the SSE `event: <name>` line carries the lowercase
@@ -336,7 +532,7 @@ export type SearchProgressEvent = Message<"emomo.v1.SearchProgressEvent"> & {
  * Use `create(SearchProgressEventSchema)` to create a new message.
  */
 export const SearchProgressEventSchema: GenMessage<SearchProgressEvent> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 8);
+  messageDesc(file_emomo_v1_api, 15);
 
 /**
  * ThinkingDelta is the payload for SEARCH_STAGE_THINKING events: incremental
@@ -361,7 +557,7 @@ export type ThinkingDelta = Message<"emomo.v1.ThinkingDelta"> & {
  * Use `create(ThinkingDeltaSchema)` to create a new message.
  */
 export const ThinkingDeltaSchema: GenMessage<ThinkingDelta> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 9);
+  messageDesc(file_emomo_v1_api, 16);
 
 /**
  * ExpansionDone is the payload for SEARCH_STAGE_QUERY_EXPANSION_DONE events.
@@ -380,7 +576,7 @@ export type ExpansionDone = Message<"emomo.v1.ExpansionDone"> & {
  * Use `create(ExpansionDoneSchema)` to create a new message.
  */
 export const ExpansionDoneSchema: GenMessage<ExpansionDone> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 10);
+  messageDesc(file_emomo_v1_api, 17);
 
 /**
  * SearchComplete is the payload for SEARCH_STAGE_COMPLETE events. Mirrors
@@ -426,7 +622,7 @@ export type SearchComplete = Message<"emomo.v1.SearchComplete"> & {
  * Use `create(SearchCompleteSchema)` to create a new message.
  */
 export const SearchCompleteSchema: GenMessage<SearchComplete> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 11);
+  messageDesc(file_emomo_v1_api, 18);
 
 /**
  * SearchError is the payload for SEARCH_STAGE_ERROR events.
@@ -445,7 +641,7 @@ export type SearchError = Message<"emomo.v1.SearchError"> & {
  * Use `create(SearchErrorSchema)` to create a new message.
  */
 export const SearchErrorSchema: GenMessage<SearchError> = /*@__PURE__*/
-  messageDesc(file_emomo_v1_api, 12);
+  messageDesc(file_emomo_v1_api, 19);
 
 /**
  * SearchStage names each step of the streaming search pipeline. The numeric

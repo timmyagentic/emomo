@@ -613,6 +613,420 @@ func (x *GetStatsResponse) GetAvailableProfiles() []string {
 	return nil
 }
 
+// FeedbackPreviewRequest is the body of POST /api/v1/feedback/preview.
+type FeedbackPreviewRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Description   string                 `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FeedbackPreviewRequest) Reset() {
+	*x = FeedbackPreviewRequest{}
+	mi := &file_emomo_v1_api_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FeedbackPreviewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FeedbackPreviewRequest) ProtoMessage() {}
+
+func (x *FeedbackPreviewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_api_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FeedbackPreviewRequest.ProtoReflect.Descriptor instead.
+func (*FeedbackPreviewRequest) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *FeedbackPreviewRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+// FeedbackEnvironment is the complete allowlisted environment rendered before
+// the user can approve a submission.
+type FeedbackEnvironment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Product       string                 `protobuf:"bytes,1,opt,name=product,proto3" json:"product,omitempty"`
+	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Os            string                 `protobuf:"bytes,3,opt,name=os,proto3" json:"os,omitempty"`
+	Arch          string                 `protobuf:"bytes,4,opt,name=arch,proto3" json:"arch,omitempty"`
+	Agent         string                 `protobuf:"bytes,5,opt,name=agent,proto3" json:"agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FeedbackEnvironment) Reset() {
+	*x = FeedbackEnvironment{}
+	mi := &file_emomo_v1_api_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FeedbackEnvironment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FeedbackEnvironment) ProtoMessage() {}
+
+func (x *FeedbackEnvironment) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_api_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FeedbackEnvironment.ProtoReflect.Descriptor instead.
+func (*FeedbackEnvironment) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *FeedbackEnvironment) GetProduct() string {
+	if x != nil {
+		return x.Product
+	}
+	return ""
+}
+
+func (x *FeedbackEnvironment) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *FeedbackEnvironment) GetOs() string {
+	if x != nil {
+		return x.Os
+	}
+	return ""
+}
+
+func (x *FeedbackEnvironment) GetArch() string {
+	if x != nil {
+		return x.Arch
+	}
+	return ""
+}
+
+func (x *FeedbackEnvironment) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+// FeedbackRecentError is optional fresh error context in a redacted preview.
+type FeedbackRecentError struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	OccurredAt    string                 `protobuf:"bytes,2,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FeedbackRecentError) Reset() {
+	*x = FeedbackRecentError{}
+	mi := &file_emomo_v1_api_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FeedbackRecentError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FeedbackRecentError) ProtoMessage() {}
+
+func (x *FeedbackRecentError) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_api_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FeedbackRecentError.ProtoReflect.Descriptor instead.
+func (*FeedbackRecentError) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *FeedbackRecentError) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *FeedbackRecentError) GetOccurredAt() string {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return ""
+}
+
+// FeedbackPreview is the full host-owned rendering projection of the
+// Foundation Report. Every populated field must be visible before approval.
+type FeedbackPreview struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Environment    *FeedbackEnvironment   `protobuf:"bytes,1,opt,name=environment,proto3" json:"environment,omitempty"`
+	Description    string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	RecentError    *FeedbackRecentError   `protobuf:"bytes,3,opt,name=recent_error,json=recentError,proto3" json:"recent_error,omitempty"`
+	CapabilityGaps []string               `protobuf:"bytes,4,rep,name=capability_gaps,json=capabilityGaps,proto3" json:"capability_gaps,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *FeedbackPreview) Reset() {
+	*x = FeedbackPreview{}
+	mi := &file_emomo_v1_api_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FeedbackPreview) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FeedbackPreview) ProtoMessage() {}
+
+func (x *FeedbackPreview) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_api_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FeedbackPreview.ProtoReflect.Descriptor instead.
+func (*FeedbackPreview) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *FeedbackPreview) GetEnvironment() *FeedbackEnvironment {
+	if x != nil {
+		return x.Environment
+	}
+	return nil
+}
+
+func (x *FeedbackPreview) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *FeedbackPreview) GetRecentError() *FeedbackRecentError {
+	if x != nil {
+		return x.RecentError
+	}
+	return nil
+}
+
+func (x *FeedbackPreview) GetCapabilityGaps() []string {
+	if x != nil {
+		return x.CapabilityGaps
+	}
+	return nil
+}
+
+// FeedbackPreviewResponse is returned without making a relay request.
+type FeedbackPreviewResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Preview           *FeedbackPreview       `protobuf:"bytes,1,opt,name=preview,proto3" json:"preview,omitempty"`
+	SubmissionEnabled bool                   `protobuf:"varint,2,opt,name=submission_enabled,json=submissionEnabled,proto3" json:"submission_enabled,omitempty"`
+	PublicFallbackUrl string                 `protobuf:"bytes,3,opt,name=public_fallback_url,json=publicFallbackUrl,proto3" json:"public_fallback_url,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *FeedbackPreviewResponse) Reset() {
+	*x = FeedbackPreviewResponse{}
+	mi := &file_emomo_v1_api_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FeedbackPreviewResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FeedbackPreviewResponse) ProtoMessage() {}
+
+func (x *FeedbackPreviewResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_api_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FeedbackPreviewResponse.ProtoReflect.Descriptor instead.
+func (*FeedbackPreviewResponse) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *FeedbackPreviewResponse) GetPreview() *FeedbackPreview {
+	if x != nil {
+		return x.Preview
+	}
+	return nil
+}
+
+func (x *FeedbackPreviewResponse) GetSubmissionEnabled() bool {
+	if x != nil {
+		return x.SubmissionEnabled
+	}
+	return false
+}
+
+func (x *FeedbackPreviewResponse) GetPublicFallbackUrl() string {
+	if x != nil {
+		return x.PublicFallbackUrl
+	}
+	return ""
+}
+
+// FeedbackSubmitRequest is the body of POST /api/v1/feedback/submit. The
+// boolean must come from the explicit confirmation action in the host UI.
+type FeedbackSubmitRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Description   string                 `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	UserApproved  bool                   `protobuf:"varint,2,opt,name=user_approved,json=userApproved,proto3" json:"user_approved,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FeedbackSubmitRequest) Reset() {
+	*x = FeedbackSubmitRequest{}
+	mi := &file_emomo_v1_api_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FeedbackSubmitRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FeedbackSubmitRequest) ProtoMessage() {}
+
+func (x *FeedbackSubmitRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_api_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FeedbackSubmitRequest.ProtoReflect.Descriptor instead.
+func (*FeedbackSubmitRequest) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *FeedbackSubmitRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *FeedbackSubmitRequest) GetUserApproved() bool {
+	if x != nil {
+		return x.UserApproved
+	}
+	return false
+}
+
+// FeedbackSubmitResponse returns the author-operated relay receipt.
+type FeedbackSubmitResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ReferenceUrl  string                 `protobuf:"bytes,1,opt,name=reference_url,json=referenceUrl,proto3" json:"reference_url,omitempty"`
+	Deduplicated  bool                   `protobuf:"varint,2,opt,name=deduplicated,proto3" json:"deduplicated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FeedbackSubmitResponse) Reset() {
+	*x = FeedbackSubmitResponse{}
+	mi := &file_emomo_v1_api_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FeedbackSubmitResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FeedbackSubmitResponse) ProtoMessage() {}
+
+func (x *FeedbackSubmitResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_api_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FeedbackSubmitResponse.ProtoReflect.Descriptor instead.
+func (*FeedbackSubmitResponse) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *FeedbackSubmitResponse) GetReferenceUrl() string {
+	if x != nil {
+		return x.ReferenceUrl
+	}
+	return ""
+}
+
+func (x *FeedbackSubmitResponse) GetDeduplicated() bool {
+	if x != nil {
+		return x.Deduplicated
+	}
+	return false
+}
+
 // SearchProgressEvent is one SSE event in the stream returned by
 // POST /api/v1/search/stream. Each event is encoded as a single SSE
 // `data: <protojson>` line (the SSE `event: <name>` line carries the lowercase
@@ -638,7 +1052,7 @@ type SearchProgressEvent struct {
 
 func (x *SearchProgressEvent) Reset() {
 	*x = SearchProgressEvent{}
-	mi := &file_emomo_v1_api_proto_msgTypes[8]
+	mi := &file_emomo_v1_api_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -650,7 +1064,7 @@ func (x *SearchProgressEvent) String() string {
 func (*SearchProgressEvent) ProtoMessage() {}
 
 func (x *SearchProgressEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[8]
+	mi := &file_emomo_v1_api_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -663,7 +1077,7 @@ func (x *SearchProgressEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchProgressEvent.ProtoReflect.Descriptor instead.
 func (*SearchProgressEvent) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{8}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SearchProgressEvent) GetStage() SearchStage {
@@ -763,7 +1177,7 @@ type ThinkingDelta struct {
 
 func (x *ThinkingDelta) Reset() {
 	*x = ThinkingDelta{}
-	mi := &file_emomo_v1_api_proto_msgTypes[9]
+	mi := &file_emomo_v1_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -775,7 +1189,7 @@ func (x *ThinkingDelta) String() string {
 func (*ThinkingDelta) ProtoMessage() {}
 
 func (x *ThinkingDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[9]
+	mi := &file_emomo_v1_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -788,7 +1202,7 @@ func (x *ThinkingDelta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ThinkingDelta.ProtoReflect.Descriptor instead.
 func (*ThinkingDelta) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{9}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ThinkingDelta) GetText() string {
@@ -815,7 +1229,7 @@ type ExpansionDone struct {
 
 func (x *ExpansionDone) Reset() {
 	*x = ExpansionDone{}
-	mi := &file_emomo_v1_api_proto_msgTypes[10]
+	mi := &file_emomo_v1_api_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -827,7 +1241,7 @@ func (x *ExpansionDone) String() string {
 func (*ExpansionDone) ProtoMessage() {}
 
 func (x *ExpansionDone) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[10]
+	mi := &file_emomo_v1_api_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -840,7 +1254,7 @@ func (x *ExpansionDone) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExpansionDone.ProtoReflect.Descriptor instead.
 func (*ExpansionDone) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{10}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ExpansionDone) GetExpandedQuery() string {
@@ -867,7 +1281,7 @@ type SearchComplete struct {
 
 func (x *SearchComplete) Reset() {
 	*x = SearchComplete{}
-	mi := &file_emomo_v1_api_proto_msgTypes[11]
+	mi := &file_emomo_v1_api_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -879,7 +1293,7 @@ func (x *SearchComplete) String() string {
 func (*SearchComplete) ProtoMessage() {}
 
 func (x *SearchComplete) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[11]
+	mi := &file_emomo_v1_api_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -892,7 +1306,7 @@ func (x *SearchComplete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchComplete.ProtoReflect.Descriptor instead.
 func (*SearchComplete) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{11}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SearchComplete) GetResults() []*SearchResult {
@@ -947,7 +1361,7 @@ type SearchError struct {
 
 func (x *SearchError) Reset() {
 	*x = SearchError{}
-	mi := &file_emomo_v1_api_proto_msgTypes[12]
+	mi := &file_emomo_v1_api_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -959,7 +1373,7 @@ func (x *SearchError) String() string {
 func (*SearchError) ProtoMessage() {}
 
 func (x *SearchError) ProtoReflect() protoreflect.Message {
-	mi := &file_emomo_v1_api_proto_msgTypes[12]
+	mi := &file_emomo_v1_api_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -972,7 +1386,7 @@ func (x *SearchError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchError.ProtoReflect.Descriptor instead.
 func (*SearchError) Descriptor() ([]byte, []int) {
-	return file_emomo_v1_api_proto_rawDescGZIP(), []int{12}
+	return file_emomo_v1_api_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SearchError) GetError() string {
@@ -1028,7 +1442,34 @@ const file_emomo_v1_api_proto_rawDesc = "" +
 	"totalMemes\x12)\n" +
 	"\x10total_categories\x18\x02 \x01(\x05R\x0ftotalCategories\x123\n" +
 	"\x15available_collections\x18\x03 \x03(\tR\x14availableCollections\x12-\n" +
-	"\x12available_profiles\x18\x04 \x03(\tR\x11availableProfiles\"\xbe\x02\n" +
+	"\x12available_profiles\x18\x04 \x03(\tR\x11availableProfiles\":\n" +
+	"\x16FeedbackPreviewRequest\x12 \n" +
+	"\vdescription\x18\x01 \x01(\tR\vdescription\"\x83\x01\n" +
+	"\x13FeedbackEnvironment\x12\x18\n" +
+	"\aproduct\x18\x01 \x01(\tR\aproduct\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x0e\n" +
+	"\x02os\x18\x03 \x01(\tR\x02os\x12\x12\n" +
+	"\x04arch\x18\x04 \x01(\tR\x04arch\x12\x14\n" +
+	"\x05agent\x18\x05 \x01(\tR\x05agent\"J\n" +
+	"\x13FeedbackRecentError\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1f\n" +
+	"\voccurred_at\x18\x02 \x01(\tR\n" +
+	"occurredAt\"\xdf\x01\n" +
+	"\x0fFeedbackPreview\x12?\n" +
+	"\venvironment\x18\x01 \x01(\v2\x1d.emomo.v1.FeedbackEnvironmentR\venvironment\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12@\n" +
+	"\frecent_error\x18\x03 \x01(\v2\x1d.emomo.v1.FeedbackRecentErrorR\vrecentError\x12'\n" +
+	"\x0fcapability_gaps\x18\x04 \x03(\tR\x0ecapabilityGaps\"\xad\x01\n" +
+	"\x17FeedbackPreviewResponse\x123\n" +
+	"\apreview\x18\x01 \x01(\v2\x19.emomo.v1.FeedbackPreviewR\apreview\x12-\n" +
+	"\x12submission_enabled\x18\x02 \x01(\bR\x11submissionEnabled\x12.\n" +
+	"\x13public_fallback_url\x18\x03 \x01(\tR\x11publicFallbackUrl\"^\n" +
+	"\x15FeedbackSubmitRequest\x12 \n" +
+	"\vdescription\x18\x01 \x01(\tR\vdescription\x12#\n" +
+	"\ruser_approved\x18\x02 \x01(\bR\fuserApproved\"a\n" +
+	"\x16FeedbackSubmitResponse\x12#\n" +
+	"\rreference_url\x18\x01 \x01(\tR\freferenceUrl\x12\"\n" +
+	"\fdeduplicated\x18\x02 \x01(\bR\fdeduplicated\"\xbe\x02\n" +
 	"\x13SearchProgressEvent\x12+\n" +
 	"\x05stage\x18\x01 \x01(\x0e2\x15.emomo.v1.SearchStageR\x05stage\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x125\n" +
@@ -1077,42 +1518,52 @@ func file_emomo_v1_api_proto_rawDescGZIP() []byte {
 }
 
 var file_emomo_v1_api_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_emomo_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_emomo_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_emomo_v1_api_proto_goTypes = []any{
-	(SearchStage)(0),              // 0: emomo.v1.SearchStage
-	(*SearchRequest)(nil),         // 1: emomo.v1.SearchRequest
-	(*SearchResponse)(nil),        // 2: emomo.v1.SearchResponse
-	(*ListMemesRequest)(nil),      // 3: emomo.v1.ListMemesRequest
-	(*ListMemesResponse)(nil),     // 4: emomo.v1.ListMemesResponse
-	(*GetMemeRequest)(nil),        // 5: emomo.v1.GetMemeRequest
-	(*GetMemeResponse)(nil),       // 6: emomo.v1.GetMemeResponse
-	(*GetCategoriesResponse)(nil), // 7: emomo.v1.GetCategoriesResponse
-	(*GetStatsResponse)(nil),      // 8: emomo.v1.GetStatsResponse
-	(*SearchProgressEvent)(nil),   // 9: emomo.v1.SearchProgressEvent
-	(*ThinkingDelta)(nil),         // 10: emomo.v1.ThinkingDelta
-	(*ExpansionDone)(nil),         // 11: emomo.v1.ExpansionDone
-	(*SearchComplete)(nil),        // 12: emomo.v1.SearchComplete
-	(*SearchError)(nil),           // 13: emomo.v1.SearchError
-	(TextPresence)(0),             // 14: emomo.v1.TextPresence
-	(*SearchResult)(nil),          // 15: emomo.v1.SearchResult
-	(*Meme)(nil),                  // 16: emomo.v1.Meme
+	(SearchStage)(0),                // 0: emomo.v1.SearchStage
+	(*SearchRequest)(nil),           // 1: emomo.v1.SearchRequest
+	(*SearchResponse)(nil),          // 2: emomo.v1.SearchResponse
+	(*ListMemesRequest)(nil),        // 3: emomo.v1.ListMemesRequest
+	(*ListMemesResponse)(nil),       // 4: emomo.v1.ListMemesResponse
+	(*GetMemeRequest)(nil),          // 5: emomo.v1.GetMemeRequest
+	(*GetMemeResponse)(nil),         // 6: emomo.v1.GetMemeResponse
+	(*GetCategoriesResponse)(nil),   // 7: emomo.v1.GetCategoriesResponse
+	(*GetStatsResponse)(nil),        // 8: emomo.v1.GetStatsResponse
+	(*FeedbackPreviewRequest)(nil),  // 9: emomo.v1.FeedbackPreviewRequest
+	(*FeedbackEnvironment)(nil),     // 10: emomo.v1.FeedbackEnvironment
+	(*FeedbackRecentError)(nil),     // 11: emomo.v1.FeedbackRecentError
+	(*FeedbackPreview)(nil),         // 12: emomo.v1.FeedbackPreview
+	(*FeedbackPreviewResponse)(nil), // 13: emomo.v1.FeedbackPreviewResponse
+	(*FeedbackSubmitRequest)(nil),   // 14: emomo.v1.FeedbackSubmitRequest
+	(*FeedbackSubmitResponse)(nil),  // 15: emomo.v1.FeedbackSubmitResponse
+	(*SearchProgressEvent)(nil),     // 16: emomo.v1.SearchProgressEvent
+	(*ThinkingDelta)(nil),           // 17: emomo.v1.ThinkingDelta
+	(*ExpansionDone)(nil),           // 18: emomo.v1.ExpansionDone
+	(*SearchComplete)(nil),          // 19: emomo.v1.SearchComplete
+	(*SearchError)(nil),             // 20: emomo.v1.SearchError
+	(TextPresence)(0),               // 21: emomo.v1.TextPresence
+	(*SearchResult)(nil),            // 22: emomo.v1.SearchResult
+	(*Meme)(nil),                    // 23: emomo.v1.Meme
 }
 var file_emomo_v1_api_proto_depIdxs = []int32{
-	14, // 0: emomo.v1.SearchRequest.text_presence:type_name -> emomo.v1.TextPresence
-	15, // 1: emomo.v1.SearchResponse.results:type_name -> emomo.v1.SearchResult
-	15, // 2: emomo.v1.ListMemesResponse.results:type_name -> emomo.v1.SearchResult
-	16, // 3: emomo.v1.GetMemeResponse.meme:type_name -> emomo.v1.Meme
-	0,  // 4: emomo.v1.SearchProgressEvent.stage:type_name -> emomo.v1.SearchStage
-	10, // 5: emomo.v1.SearchProgressEvent.thinking:type_name -> emomo.v1.ThinkingDelta
-	11, // 6: emomo.v1.SearchProgressEvent.expansion:type_name -> emomo.v1.ExpansionDone
-	12, // 7: emomo.v1.SearchProgressEvent.complete:type_name -> emomo.v1.SearchComplete
-	13, // 8: emomo.v1.SearchProgressEvent.error:type_name -> emomo.v1.SearchError
-	15, // 9: emomo.v1.SearchComplete.results:type_name -> emomo.v1.SearchResult
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	21, // 0: emomo.v1.SearchRequest.text_presence:type_name -> emomo.v1.TextPresence
+	22, // 1: emomo.v1.SearchResponse.results:type_name -> emomo.v1.SearchResult
+	22, // 2: emomo.v1.ListMemesResponse.results:type_name -> emomo.v1.SearchResult
+	23, // 3: emomo.v1.GetMemeResponse.meme:type_name -> emomo.v1.Meme
+	10, // 4: emomo.v1.FeedbackPreview.environment:type_name -> emomo.v1.FeedbackEnvironment
+	11, // 5: emomo.v1.FeedbackPreview.recent_error:type_name -> emomo.v1.FeedbackRecentError
+	12, // 6: emomo.v1.FeedbackPreviewResponse.preview:type_name -> emomo.v1.FeedbackPreview
+	0,  // 7: emomo.v1.SearchProgressEvent.stage:type_name -> emomo.v1.SearchStage
+	17, // 8: emomo.v1.SearchProgressEvent.thinking:type_name -> emomo.v1.ThinkingDelta
+	18, // 9: emomo.v1.SearchProgressEvent.expansion:type_name -> emomo.v1.ExpansionDone
+	19, // 10: emomo.v1.SearchProgressEvent.complete:type_name -> emomo.v1.SearchComplete
+	20, // 11: emomo.v1.SearchProgressEvent.error:type_name -> emomo.v1.SearchError
+	22, // 12: emomo.v1.SearchComplete.results:type_name -> emomo.v1.SearchResult
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_emomo_v1_api_proto_init() }
@@ -1122,7 +1573,7 @@ func file_emomo_v1_api_proto_init() {
 	}
 	file_emomo_v1_types_proto_init()
 	file_emomo_v1_meme_proto_init()
-	file_emomo_v1_api_proto_msgTypes[8].OneofWrappers = []any{
+	file_emomo_v1_api_proto_msgTypes[15].OneofWrappers = []any{
 		(*SearchProgressEvent_Thinking)(nil),
 		(*SearchProgressEvent_Expansion)(nil),
 		(*SearchProgressEvent_Complete)(nil),
@@ -1134,7 +1585,7 @@ func file_emomo_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emomo_v1_api_proto_rawDesc), len(file_emomo_v1_api_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   13,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -98,6 +98,12 @@ cd mobile && npm run gen
 | frontend | React 19, TypeScript, Vite 7, Framer Motion, Playwright e2e |
 | mobile | Expo SDK 54, React Native 0.81, React 19, TypeScript, AsyncStorage, Expo MediaLibrary/Sharing/FileSystem |
 
+## 用户批准的产品反馈
+
+Web 端提供“反馈”入口，但不会直接发送输入。它先调用后端生成完整脱敏预览，展示产品、版本、平台、Agent、描述、近期错误和能力缺口；只有用户点击“确认并提交这份脱敏反馈”后，后端才会创建 opaque `Approved` 并向可选的 HTTPS Relay 提交。
+
+该路径固定使用 [Awesome Agent App Features `v0.1.0`](https://github.com/timmyagentic/awesome-agent-app-features/releases/tag/v0.1.0)。默认不配置 Relay，因此只提供预览和公开 GitHub Issue fallback，不会后台提交。配置与边界见 [Agent App Features 接入说明](docs/AGENT_APP_FEATURES.md)。
+
 ## 部署
 
 - **Docker Compose（本机）**：`docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d`，会起 API 容器 + Grafana Alloy 日志采集（Qdrant 与对象存储需自备）。

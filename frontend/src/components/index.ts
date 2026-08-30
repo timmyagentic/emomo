@@ -22,3 +22,6 @@ export { default as MemeGrid } from './MemeGrid';
  * Modal component for displaying a meme in full detail view.
  */
 export { default as MemeModal } from './MemeModal';
+
+/** User-approved, server-redacted feedback flow. */
+export { default as FeedbackModal } from './FeedbackModal';
