@@ -6,6 +6,10 @@ import {
   GetMemeResponseSchema,
   GetCategoriesResponseSchema,
   GetStatsResponseSchema,
+  FeedbackPreviewRequestSchema,
+  FeedbackPreviewResponseSchema,
+  FeedbackSubmitRequestSchema,
+  FeedbackSubmitResponseSchema,
   SearchProgressEventSchema,
   SearchStage,
 } from '@gen/emomo/v1/api_pb';
@@ -67,6 +71,26 @@ export interface StatsView {
 export interface CategoryView {
   name: string;
   count?: number;
+}
+
+export interface FeedbackPreviewView {
+  environment: {
+    product: string;
+    version: string;
+    os: string;
+    arch: string;
+    agent: string;
+  };
+  description: string;
+  recentError?: { text: string; occurredAt: string };
+  capabilityGaps: string[];
+  submissionEnabled: boolean;
+  publicFallbackUrl: string;
+}
+
+export interface FeedbackReceiptView {
+  referenceUrl: string;
+  deduplicated: boolean;
 }
 
 /** UI-friendly stage slug carried alongside SearchProgressEvent. */
@@ -223,6 +247,59 @@ export async function getStats(): Promise<StatsView> {
     totalCategories: decoded.totalCategories,
     availableCollections: decoded.availableCollections,
     availableProfiles: decoded.availableProfiles,
+  };
+}
+
+/** Build the complete server-redacted feedback preview without submitting it. */
+export async function previewFeedback(description: string): Promise<FeedbackPreviewView> {
+  const request = create(FeedbackPreviewRequestSchema, { description });
+  const response = await fetch(`${API_BASE}/feedback/preview`, {
+    method: 'POST',
+    headers: getHeaders('application/json'),
+    body: JSON.stringify(toJson(FeedbackPreviewRequestSchema, request)),
+  });
+  ensureOK(response, 'Feedback preview failed');
+  const decoded = fromJson(FeedbackPreviewResponseSchema, await response.json());
+  if (!decoded.preview?.environment) {
+    throw new Error('Feedback preview was incomplete');
+  }
+  return {
+    environment: {
+      product: decoded.preview.environment.product,
+      version: decoded.preview.environment.version,
+      os: decoded.preview.environment.os,
+      arch: decoded.preview.environment.arch,
+      agent: decoded.preview.environment.agent,
+    },
+    description: decoded.preview.description,
+    recentError: decoded.preview.recentError
+      ? {
+          text: decoded.preview.recentError.text,
+          occurredAt: decoded.preview.recentError.occurredAt,
+        }
+      : undefined,
+    capabilityGaps: [...decoded.preview.capabilityGaps],
+    submissionEnabled: decoded.submissionEnabled,
+    publicFallbackUrl: decoded.publicFallbackUrl,
+  };
+}
+
+/** Submit only after the host's explicit confirmation action. */
+export async function submitFeedback(description: string): Promise<FeedbackReceiptView> {
+  const request = create(FeedbackSubmitRequestSchema, {
+    description,
+    userApproved: true,
+  });
+  const response = await fetch(`${API_BASE}/feedback/submit`, {
+    method: 'POST',
+    headers: getHeaders('application/json'),
+    body: JSON.stringify(toJson(FeedbackSubmitRequestSchema, request)),
+  });
+  ensureOK(response, 'Feedback submission failed');
+  const decoded = fromJson(FeedbackSubmitResponseSchema, await response.json());
+  return {
+    referenceUrl: decoded.referenceUrl,
+    deduplicated: decoded.deduplicated,
   };
 }
 

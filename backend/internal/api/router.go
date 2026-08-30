@@ -53,6 +53,11 @@ func SetupRouter(
 	searchHandler := handler.NewSearchHandler(searchService, publicLimits)
 	memeHandler := handler.NewMemeHandler(searchService, publicLimits)
 	adminHandler := handler.NewAdminHandler(log)
+	feedbackHandler := handler.NewFeedbackHandler(handler.FeedbackHostConfig{
+		Endpoint:          cfg.Feedback.Endpoint,
+		PublicFallbackURL: cfg.Feedback.PublicFallbackURL,
+		ProductVersion:    cfg.Feedback.ProductVersion,
+	})
 
 	// Admin page (root)
 	r.GET("/", adminHandler.AdminPage)
@@ -83,6 +88,11 @@ func SetupRouter(
 
 		// Stats
 		v1.GET("/stats", searchHandler.GetStats)
+
+		// User-approved feedback. Preview never sends; submit requires the
+		// explicit user_approved field and an optional configured Relay.
+		v1.POST("/feedback/preview", feedbackHandler.Preview)
+		v1.POST("/feedback/submit", feedbackHandler.Submit)
 	}
 
 	return r

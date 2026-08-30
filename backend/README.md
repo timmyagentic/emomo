@@ -182,6 +182,12 @@ curl http://localhost:8080/api/v1/stats
 
 ## 配置说明
 
+### 用户反馈
+
+`feedback.endpoint`（环境变量 `FEEDBACK_ENDPOINT`）是可选的 author-operated `/v1/feedback` HTTPS Relay。空值是默认且安全的 preview-only 模式：`POST /api/v1/feedback/preview` 仍返回完整脱敏报告，`submit` 不会发起网络请求并提示使用 `feedback.public_fallback_url`。
+
+配置 Endpoint 后，只有 `POST /api/v1/feedback/submit` 收到显式 `user_approved=true` 才会调用 Awesome Agent App Features 的 opaque approval 和无重定向 HTTPS client。Relay 目标仓库与凭证始终留在 Relay 服务端。
+
 - 默认配置文件：`configs/config.yaml`
 - 可通过 `CONFIG_PATH` 指定配置文件路径（默认 `configs/config.yaml`）
 - `.env` 用于注入 API keys 与运行时环境变量

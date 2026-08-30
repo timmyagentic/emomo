@@ -14,6 +14,7 @@ The backend API contract is generated from `../backend/proto/emomo/v1/` into `ge
 - **Interactive UI**: Animated transitions and hover effects using Framer Motion.
 - **Recommendations**: Displays recommended memes on the home page.
 - **Copy & Download**: Easily copy image links or download memes directly.
+- **User-approved Feedback**: Builds and displays a complete server-redacted preview before the explicit confirmation action can submit anything; an unconfigured Relay falls back to the public issue URL.
 
 ## Prerequisites
 

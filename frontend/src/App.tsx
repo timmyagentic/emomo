@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Header, SearchHero, MemeGrid, MemeModal } from './components';
+import { FeedbackModal, Header, SearchHero, MemeGrid, MemeModal } from './components';
 import SearchProgress from './components/SearchProgress';
 import {
   searchMemesStream,
@@ -41,6 +41,7 @@ function App() {
   const [textPresenceFilter, setTextPresenceFilter] = useState<TextPresenceFilter>('all');
   const [memeCount, setMemeCount] = useState(5791);
   const [selectedMeme, setSelectedMeme] = useState<DisplayMeme | null>(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_PAGE_SIZE);
   const [searchState, setSearchState] = useState<SearchState | null>(null);
@@ -303,7 +304,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header memeCount={memeCount} onLogoClick={resetToBrowse} />
+      <Header memeCount={memeCount} onLogoClick={resetToBrowse} onFeedbackClick={() => setIsFeedbackOpen(true)} />
 
       <main className="main">
         <SearchHero
@@ -365,6 +366,7 @@ function App() {
         isOpen={!!selectedMeme}
         onClose={handleModalClose}
       />
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
   );
 }

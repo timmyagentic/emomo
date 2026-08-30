@@ -14,6 +14,8 @@ interface HeaderProps {
    * Typically used to reset the view or navigate home.
    */
   onLogoClick?: () => void;
+  /** Opens the user-approved feedback flow. */
+  onFeedbackClick?: () => void;
 }
 
 /**
@@ -24,7 +26,7 @@ interface HeaderProps {
  * @param props.onLogoClick - Handler for logo click events.
  * @returns The rendered Header component.
  */
-export default function Header({ memeCount = 5791, onLogoClick }: HeaderProps) {
+export default function Header({ memeCount = 5791, onLogoClick, onFeedbackClick }: HeaderProps) {
   const formattedCount = new Intl.NumberFormat('en-US').format(memeCount);
 
   return (
@@ -56,6 +58,9 @@ export default function Header({ memeCount = 5791, onLogoClick }: HeaderProps) {
 
         {/* Right section */}
         <div className={styles.right}>
+          <button type="button" className={styles.feedback} onClick={onFeedbackClick}>
+            反馈
+          </button>
           {/* Stats */}
           <div className={styles.stats}>
             <span className={styles.statNumber}>{formattedCount}</span>

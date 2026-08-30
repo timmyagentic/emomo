@@ -14,6 +14,13 @@ server:
     search_query_max_runes: 160
     list_limit_max: 60
 
+feedback:
+  # Optional author-operated Awesome Agent App Features /v1/feedback Relay.
+  # Leave empty to keep redacted preview + public issue fallback without POSTing.
+  endpoint: ""
+  public_fallback_url: https://github.com/timmyagentic/emomo/issues/new
+  product_version: development
+
 database:
   driver: postgres
   path: ./data/memes.db

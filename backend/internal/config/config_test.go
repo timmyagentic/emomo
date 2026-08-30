@@ -102,6 +102,32 @@ func TestLoadDefaultsConfigCenter(t *testing.T) {
 	if cfg.Logging.LokiProject != "emomo" {
 		t.Fatalf("logging.loki_project = %q, want emomo", cfg.Logging.LokiProject)
 	}
+	if cfg.Feedback.Endpoint != "" {
+		t.Fatalf("feedback.endpoint = %q, want disabled by default", cfg.Feedback.Endpoint)
+	}
+	if cfg.Feedback.ProductVersion != "development" {
+		t.Fatalf("feedback.product_version = %q, want development", cfg.Feedback.ProductVersion)
+	}
+	if cfg.Feedback.PublicFallbackURL != "https://github.com/timmyagentic/emomo/issues/new" {
+		t.Fatalf("feedback.public_fallback_url = %q", cfg.Feedback.PublicFallbackURL)
+	}
+}
+
+func TestLoadBindsFeedbackEnv(t *testing.T) {
+	t.Setenv("FEEDBACK_ENDPOINT", "https://feedback.example.com/v1/feedback")
+	t.Setenv("FEEDBACK_PUBLIC_FALLBACK_URL", "https://example.com/fallback")
+	t.Setenv("FEEDBACK_PRODUCT_VERSION", "v2.3.4")
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Feedback.Endpoint != "https://feedback.example.com/v1/feedback" || cfg.Feedback.PublicFallbackURL != "https://example.com/fallback" || cfg.Feedback.ProductVersion != "v2.3.4" {
+		t.Fatalf("feedback env was not bound: %#v", cfg.Feedback)
+	}
 }
 
 func TestLoadBindsConfigCenterEnv(t *testing.T) {

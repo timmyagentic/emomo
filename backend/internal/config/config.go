@@ -15,6 +15,7 @@ import (
 // Config aggregates application configuration loaded from files and environment.
 type Config struct {
 	Server       ServerConfig       `mapstructure:"server"`
+	Feedback     FeedbackConfig     `mapstructure:"feedback"`
 	Database     DatabaseConfig     `mapstructure:"database"`
 	Qdrant       QdrantConfig       `mapstructure:"qdrant"`
 	Storage      StorageConfig      `mapstructure:"storage"`
@@ -30,6 +31,15 @@ type Config struct {
 	// the caller can log it once a logger is configured. It is set only when the
 	// config center is enabled but not required and the remote fetch failed.
 	ConfigCenterLoadError error `mapstructure:"-"`
+}
+
+// FeedbackConfig controls the optional user-approved Foundation feedback host
+// adapter. An empty endpoint keeps preview and public fallback available while
+// disabling relay submission.
+type FeedbackConfig struct {
+	Endpoint          string `mapstructure:"endpoint"`
+	PublicFallbackURL string `mapstructure:"public_fallback_url"`
+	ProductVersion    string `mapstructure:"product_version"`
 }
 
 // ServerConfig defines HTTP server settings.
@@ -318,6 +328,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.public_api.search_top_k_max", 100)
 	v.SetDefault("server.public_api.search_query_max_runes", 160)
 	v.SetDefault("server.public_api.list_limit_max", 60)
+	v.SetDefault("feedback.endpoint", "")
+	v.SetDefault("feedback.public_fallback_url", "https://github.com/timmyagentic/emomo/issues/new")
+	v.SetDefault("feedback.product_version", "development")
 
 	// Database defaults
 	v.SetDefault("database.driver", "sqlite")
@@ -425,6 +438,9 @@ func bindEnvVars(v *viper.Viper) {
 	v.BindEnv("server.public_api.search_top_k_max", "PUBLIC_API_SEARCH_TOP_K_MAX")
 	v.BindEnv("server.public_api.search_query_max_runes", "PUBLIC_API_SEARCH_QUERY_MAX_RUNES")
 	v.BindEnv("server.public_api.list_limit_max", "PUBLIC_API_LIST_LIMIT_MAX")
+	v.BindEnv("feedback.endpoint", "FEEDBACK_ENDPOINT")
+	v.BindEnv("feedback.public_fallback_url", "FEEDBACK_PUBLIC_FALLBACK_URL")
+	v.BindEnv("feedback.product_version", "FEEDBACK_PRODUCT_VERSION")
 
 	// Database
 	v.BindEnv("database.driver", "DATABASE_DRIVER")
