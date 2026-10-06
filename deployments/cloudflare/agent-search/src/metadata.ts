@@ -53,7 +53,9 @@ export function indexRow(input: JsonValue): IndexRow {
   if (annotation && annotation.memeId !== meme.id) throw new Error('Annotation belongs to another meme.');
   const description = bounded(annotation?.description ?? '', 8192);
   const ocr = normalizedOCR(bounded(annotation?.ocrText ?? '', 4096));
-  const textPresence = !annotation ? 1 : /[\p{L}\p{N}]/u.test(ocr) ? 2 : 3;
+  // Existing explicit analyzer labels are the source of truth for filters.
+  // Some retained annotations classify visible text without transcribing it.
+  const textPresence = !annotation ? 1 : annotation.labels ? (annotation.labels.hasText ? 2 : 3) : /[\p{L}\p{N}]/u.test(ocr) ? 2 : 3;
   return {
     id: meme.id,
     meme_json: toJsonString(MemeSchema, create(MemeSchema, meme), { useProtoFieldName: true, enumAsInteger: true }),

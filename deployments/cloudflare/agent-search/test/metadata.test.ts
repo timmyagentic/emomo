@@ -40,6 +40,16 @@ test('canonical metadata is reused, unknown OCR stays unknown, no signed URLs or
   assert.ok(importSQL(indexRow({ ...input, annotation: { meme_id: 'cat-1', description: "it's a cat" } })).includes("it''s a cat"));
 });
 
+test('stored text-presence labels survive import even when OCR is missing or disagrees', () => {
+  // The actual retained library contains label-only annotations, including
+  // has_text=true with no OCR. Deriving the filter from OCR loses that fact.
+  assert.equal(indexRow({ ...input, annotation: { meme_id: 'cat-1', labels: { has_text: true } } }).text_presence, 2);
+  const withoutText = indexRow({ ...input, annotation: { meme_id: 'cat-1', labels: { has_text: false }, ocr_text: 'word' } });
+  assert.equal(withoutText.text_presence, 3);
+  assert.equal(withoutText.ocr_text, 'word');
+  assert.equal(indexRow({ ...input, annotation: { meme_id: 'cat-1', ocr_text: 'word' } }).text_presence, 2);
+});
+
 test('offline importer builds private SQL, refuses overwrite and removes failed partial output', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'emomo-index-'));
   t.after(() => rm(directory, { recursive: true, force: true }));

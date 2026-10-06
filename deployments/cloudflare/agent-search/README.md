@@ -17,11 +17,11 @@
 
 这是可重建的 D1 检索副本，原 PostgreSQL/Qdrant/R2 保留，图片不搬迁。无需恢复 HF、重建向量或重新生成描述。新图片的文字标注必须由外部人工/使用者自己的 Agent 提供，云端不自动补标。
 
-scripts/export-metadata.sql 按现有 PostgreSQL 表结构只读导出，每图选最近的 annotation，不包含来源私人信息、向量或连接凭据。执行前核对真实表和分析器覆盖；真实 PostgreSQL 执行尚未验证。通过现有安全连接，在仓库外保存 JSONL：
+scripts/export-metadata.sql 在明确的 repeatable-read 只读事务中导出，每图选最近的 annotation，不包含来源私人信息、向量或连接凭据。2026-10-06 已对真实 PostgreSQL 执行并导出 12,895 行，全量本地 D1 导入、CLI 搜索/详情/真实图片下载通过；完整覆盖与缺口见 [图库导入审计](../../../docs/LIBRARY_IMPORT.md)。后续导入前仍需重新核对数据覆盖。通过现有安全连接，在仓库外保存 JSONL：
 
 ```sh
 umask 077
-psql -X -A -t -v ON_ERROR_STOP=1 -f scripts/export-metadata.sql > /tmp/emomo-metadata.jsonl
+psql -X -q -A -t -v ON_ERROR_STOP=1 -f scripts/export-metadata.sql > /tmp/emomo-metadata.jsonl
 ```
 
 每行使用原 protobuf 字段；内部导入格式不是新 HTTP DTO：
@@ -30,7 +30,7 @@ psql -X -A -t -v ON_ERROR_STOP=1 -f scripts/export-metadata.sql > /tmp/emomo-met
 {"meme":{"id":"sample-id","storage_key":"sample.png","image_info":{"width":512,"height":512,"format":2},"tags":[],"category":""},"annotation":{"meme_id":"sample-id","description":"猫咪露出无语的表情","ocr_text":""}}
 ```
 
-annotation 可缺省/null，text presence 此时为 unknown。None/无文字等 OCR 哨兵不进索引；词汇为空的图不会命中。以下步骤仅操作本机：
+annotation 可缺省/null，text presence 此时为 unknown。已有 annotation.labels.has_text 决定有字/无字筛选，即使 OCR 为空也保留明确标记；没有 labels 才从 OCR 推导。None/无文字等 OCR 哨兵不进索引；词汇为空的图不会命中。以下步骤仅操作本机：
 
 ```sh
 npm ci
@@ -50,4 +50,4 @@ EMOMO_API_URL=http://127.0.0.1:8787/agent/v1 emomo search "无语 猫" --limit 8
 
 使用最新稳定 Miniflare v4 4.20260730.0 + Wrangler 4.116.0，避开 v5 alpha。本机运行/测试兼容日期 2026-07-30；生产配置为 2026-10-06，生产运行时仍需验证。最新官方类型/配置 schema 已对照，Env 由 Wrangler 生成。
 
-默认 AGENT_API_ENABLED=false，无生产路由/preview URL，D1 为本机 UUID 占位。dry-run 不创建资源。生产需单独授权创建 D1、导入已有文字元数据、验证真实查询，再将 api.emomo.net 的唯一 Custom Domain 从旧网关切到新 Worker 并启用。详见 [启用清单](../../../docs/AGENT_NATIVE.md)。旧 api-gateway 代理模型搜索，不能作为零模型服务或自动兜底。
+默认 AGENT_API_ENABLED=false，无生产路由/preview URL，D1 为本机 UUID 占位。dry-run 不创建资源。生产需单独授权创建 D1、导入已有文字元数据、验证真实查询。emomo.net 当前是域名出售页，需先确定长期保留的 API/图片域名，再绑定或切换其唯一 Custom Domain 并启用。详见 [启用清单](../../../docs/AGENT_NATIVE.md)。旧 api-gateway 代理模型搜索，不能作为零模型服务或自动兜底。
