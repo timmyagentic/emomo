@@ -6,7 +6,7 @@ import { installSkill, SKILL_SOURCE } from './skill.js';
 const PACKAGE = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const GLOBAL = ['api-url', 'timeout'];
 const COMMANDS = {
-  search: { positional: 'query', flags: ['limit', 'category', 'text', 'profile', 'collection'], usage: 'emomo search "想下班但还要开会" --limit 8' },
+  search: { positional: 'query', flags: ['limit', 'category', 'text', 'profile', 'collection'], usage: 'emomo search "下班 开会" --limit 8' },
   get: { positional: 'id', flags: [], usage: 'emomo get <meme-id>' },
   download: { positional: 'id', flags: ['dir'], usage: 'emomo download <meme-id> --dir /tmp/emomo' },
   categories: { flags: [], usage: 'emomo categories' },
@@ -63,10 +63,10 @@ function help() {
   return {
     name: 'emomo',
     version: PACKAGE.version,
-    description: 'Search real memes, inspect candidates, and download static images for an Agent.',
+    description: 'Search real memes with keywords, inspect candidates, and download static images for an Agent.',
     output: 'One JSON object on stdout. Exit 0 means success; exit 1 means error. --json is optional.',
     commands: Object.entries(COMMANDS).map(([command, spec]) => ({ command, usage: spec.usage, flags: spec.flags })),
-    globalOptions: { '--api-url': 'HTTPS REST API base; defaults to EMOMO_API_URL or /agent/v1 on the public Emomo API. A local Go backend uses http://127.0.0.1:8080/api/v1.', '--timeout': 'Request timeout in milliseconds, 100–120000; default 30000.', '--help': 'Print this JSON command catalog.' },
+    globalOptions: { '--api-url': 'HTTPS REST API base; defaults to EMOMO_API_URL or /agent/v1 on the public Emomo API. Local text search uses http://127.0.0.1:8787/agent/v1.', '--timeout': 'Request timeout in milliseconds, 100–120000; default 30000.', '--help': 'Print this JSON command catalog.' },
     environment: ['EMOMO_API_URL', 'EMOMO_API_TOKEN', 'EMOMO_IMAGE_HOSTS', 'CODEX_HOME'],
     defaultApiUrl: DEFAULT_API_URL,
   };

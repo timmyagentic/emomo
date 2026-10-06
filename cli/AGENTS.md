@@ -2,7 +2,7 @@
 
 The CLI is an installable, dependency-free Node.js 22+ client of the existing REST API. Agent output is one JSON envelope on stdout, including failures; exit codes are 0/1. Keep `schemaVersion`, error codes, and candidate fields stable.
 
-The backend owns protobuf DTOs. This client sends their existing snake_case fields and projects their responses into a compact Agent view; do not introduce a competing backend schema or expose infrastructure secrets. The default Agent endpoint is `/agent/v1`; old web/mobile `/api/v1` remains paused in Agent gateway mode.
+The canonical backend proto schemas own HTTP DTOs. This client sends their existing snake_case fields and projects their responses into a compact Agent view; do not introduce a competing schema or expose infrastructure secrets. The default endpoint is `/agent/v1`; the new independent text-search Worker never calls cloud models and keeps old web/mobile `/api/v1` unavailable. The zero-model guarantee does not apply to arbitrary custom API instances.
 
 Run `npm run check` and `npm test`. Tests use local protocol fixtures, including actual npm pack/install and image bytes. They are not proof of production search availability. Validate substantive skill changes with the available skill frontmatter validator and review the actual CLI workflow.
 

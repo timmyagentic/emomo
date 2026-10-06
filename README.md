@@ -2,7 +2,7 @@
 
 > Agent-native 表情包搜索 — CLI + skill + 共享云端图库
 
-Emomo 让 Agent 用自然语言搜索现有表情包、选择候选并下载真实图片。新入口是独立 CLI 和随包分发的 skill，共享 Go 后端与既有图库。React 网站和 Expo 移动端源码保留，旧业务入口已停用。
+Emomo 让 Agent 用自然语言搜索现有表情包、选择候选并下载真实图片。新入口是独立 CLI 和随包分发的 skill，云端使用 Worker + D1 文字检索，复用既有 R2 图片及已保存的描述/OCR/标签。新版云端不调用 LLM 或 embedding，不收集 Agent 模型凭证。旧 Go 后端、React 网站和 Expo 移动端源码保留。
 
 ## Agent 快速上手
 
@@ -11,14 +11,14 @@ Emomo 让 Agent 用自然语言搜索现有表情包、选择候选并下载真�
 ```sh
 npm install --global ./cli
 emomo skill install --agent codex
-emomo search "想下班但还要开会" --limit 5
+emomo search "下班 开会" --limit 5
 ```
 
 随后告诉 Agent：“用 Emomo 给我找张想下班但还要开会的表情包。”CLI 默认输出稳定 JSON，skill 指导选图和下载；无需给 Agent 模型或数据库管理密钥。也支持 Claude 和通用 `.agents/skills` 目录。
 
 **当前生产搜索仍暂停，新包尚未公开发布。** 本地安装不恢复云端服务，调用停服 API 会明确返回 `SERVICE_PAUSED`。安装、配置和输出契约见 [cli/README.md](cli/README.md)；共享搜索启用与验收见 [docs/AGENT_NATIVE.md](docs/AGENT_NATIVE.md)。
 
-现有默认检索链路以 Qwen3-VL 多模态 image embedding 为主：导入时直接为图片生成 image 向量，并为 OCR/描述/tags 写入 keyword/BM25 sparse-only 向量；搜索时 image route 权重 0.7，keyword route 权重 0.3。VLM 描述和 OCR 作为展示元数据与 keyword 辅助信号保留；dense caption embedding 仍默认关闭，待 caption 策略验证后再启用。
+旧 Go 后端保留的默认检索链路以 Qwen3-VL 多模态 image embedding 为主：导入时直接为图片生成 image 向量，并为 OCR/描述/tags 写入 keyword/BM25 sparse-only 向量；搜索时 image route 权重 0.7，keyword route 权重 0.3。VLM 描述和 OCR 作为展示元数据与 keyword 辅助信号保留；dense caption embedding 仍默认关闭，待 caption 策略验证后再启用。
 
 资源约束：表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
 

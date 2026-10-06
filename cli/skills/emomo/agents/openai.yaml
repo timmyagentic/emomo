@@ -1,4 +1,4 @@
 interface:
   display_name: "Emomo 表情包搜索"
-  short_description: "用自然语言搜索共享表情包图库，选出合适的真实图片并下载供 Agent 展示"
+  short_description: "Agent 生成关键词搜索共享图库，再看图选择和下载；Emomo 云端不调用模型"
   default_prompt: "用 $emomo 帮我找一张表达想下班但还要开会的表情包。"

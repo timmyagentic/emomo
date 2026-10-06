@@ -1,0 +1,27 @@
+{
+  "name": "emomo-agent-search",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "wrangler dev --local --compatibility-date 2026-07-30",
+    "gen:sync": "node scripts/sync-proto.mjs",
+    "gen:check": "node scripts/sync-proto.mjs --check",
+    "index:build": "tsx scripts/build-index.ts",
+    "test": "tsx --test test/*.test.ts",
+    "types:generate": "wrangler types --strict-vars=false",
+    "typecheck": "npm run types:generate && tsc --noEmit",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist",
+    "check": "npm run gen:check && npm run typecheck && npm test && npm run deploy:dry-run"
+  },
+  "dependencies": { "@bufbuild/protobuf": "2.16.0" },
+  "devDependencies": {
+    "@types/node": "25.9.2",
+    "esbuild": "0.28.1",
+    "miniflare": "4.20260730.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.2",
+    "wrangler": "4.116.0"
+  }
+}

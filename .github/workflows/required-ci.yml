@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   agent-cli-required:
-    name: Agent CLI and gateway checks
+    name: Agent CLI and search checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,6 +31,14 @@ jobs:
       - name: Install gateway dependencies
         working-directory: deployments/cloudflare/api-gateway
         run: npm ci
+
+      - name: Install deterministic search dependencies
+        working-directory: deployments/cloudflare/agent-search
+        run: npm ci
+
+      - name: Verify deterministic search and installed CLI against D1
+        working-directory: deployments/cloudflare/agent-search
+        run: npm run check
 
       - name: Test and typecheck Agent gateway
         working-directory: deployments/cloudflare/api-gateway

@@ -1,49 +1,44 @@
-# Emomo Agent-native 入口
+# Emomo Agent-native：云端零模型调用
 
-用户只安装 CLI 和 skill，向 Agent 说“找张想下班但还要开会的表情包”。Agent 使用自己的理解和视觉能力组织查询、选择候选，Emomo 复用已有云端图库进行检索并提供真实图片。
+用户安装 CLI + skill，用自己的 Agent 理解需求、改写关键词、看图选图。新版 Emomo 云端仅做文字检索，**不调用 LLM 或 embedding**，也不收集 Agent 的 token/模型凭证。
 
 ```text
-用户 → Agent + emomo skill → emomo CLI → /agent/v1 网关
-                                         ↓
-                                私有 Go 搜索 API
-                                         ↓
-                              现有 PostgreSQL / Qdrant
-Agent ← 选图 / 下载 PNG、JPEG、WebP ← 现有 R2 图片
+用户 → 自己的 Agent + skill → 关键词 → emomo CLI
+                                           ↓
+                                /agent/v1 独立 Worker
+                                           ↓
+                                  D1 FTS5 / BM25
+Agent ← 查看候选 / 下载真实图片 ← 现有 R2 图片
 ```
 
-网站、移动端不参与这个流程。无需迁移或重新嵌入现有图库，不把服务端 HF、模型、数据库或对象存储密钥交给 Agent。CLI 是无状态客户端；skill 定义查询、候选检查、选图和失败处理。
+例如“表面答应但内心崩溃”：Agent 查询“敷衍 好的 崩溃”，云端查已有描述/OCR/标签，Agent 挑图。没有结果时云端返回空结果，不调用模型兜底。新增图片标注由外部人工/使用者自己的 Agent 提供，不能自动恢复云端 VLM 摄入。
 
-## 接口边界
+## 成本与数据
 
-Cloudflare 网关 `SERVICE_MODE=agent` 时：
+这消除的是新版搜索链路的 **AI 账单风险**。Workers、D1、R2、日志、域名和保留的其他资源仍可能产生费用；限流/缓存不是账户总额硬上限。使用者自己的 Agent 额度与费用归使用者。任意自定义 API、旧 Go 服务或另行运行旧摄入脚本不能宣称零模型费用。
 
-| 公共入口 | 上游映射 |
-|---|---|
-| `POST /agent/v1/search` | `POST /api/v1/search` |
-| `GET /agent/v1/memes/:id` | `GET /api/v1/memes/:id` |
-| `GET /agent/v1/categories` | `GET /api/v1/categories` |
-| `GET /agent/v1/stats` | `GET /api/v1/stats` |
+新服务位于 deployments/cloudflare/agent-search：无模型 SDK/密钥、AI binding、外部 fetch 或 HF 代理，发布 bundle 不导入旧后端/网关。默认 API 禁用，无生产路由。旧 api-gateway 仅保留历史实现，不能作为新服务或自动兜底。
 
-旧 `/api/v1` 无论 Agent API 是否启用都保持 410；其他路径包括 `/health`、根管理页面、整库列表和 `/search/stream` 不对外转发。Agent 模式不允许浏览器跨域来源；CLI 请求无需 CORS。搜索复用原有限流和请求体上限，默认候选数 8，拒绝空白/过长查询及非法候选数量。
+原 PostgreSQL/Qdrant/R2 数据保留，新增可重建的 D1 检索副本。图片不搬迁，已有文字不重新生成。当前 tags/category 可能为空，主要依赖描述与 OCR；爬虫搜索词仍作为出处，不当作图片事实。
 
-`AGENT_API_ENABLED` 默认 false，所以部署这份网关也不会自动恢复搜索。只有显式 `SERVICE_MODE=legacy` 才恢复旧路由；变量缺失或拼错也会保留 Agent 接口边界。旧路由兼容模式只用于明确恢复旧客户端的单独操作；此改造不需要它。
+中文按确定性单字/相邻双字索引，英文按词，BM25 排序。score 为归一化文字相关性。词不在元数据里就可能零命中；Agent 可改写一次并看图判断，不能保证覆盖旧向量/相似图检索的全部能力。
 
-## 启用共享搜索前
+## 接口与验证
 
-以下是生产启用清单，不是已完成的生产验证。当前网站、API 与 HF 后端已暂停，仓库已归档，本地包还没有公开发布。
+沿用 canonical protobuf HTTP DTO。仅开放 search、单图详情、类别与统计。旧 /api/v1 410，整库列表、SSE、管理及浏览器 Origin 关闭。每 IP 30 次/60 秒，请求体 8 KiB、查询 160 字/最多 64 个检索词、最多 100 个候选，成功缓存 60 秒。详见 [新服务 README](../deployments/cloudflare/agent-search/README.md)。
 
-1. 核对现有 PostgreSQL、Qdrant 的数据和服务状态。确认搜索后端可正常读取它们，不运行重新摄入、迁移或数据清理。
-2. 在单独授权的启用步骤恢复私有搜索后端，检查启动日志、现有集合和真实搜索。HF 仍保持 private。
-3. Agent 已负责查询组织和候选判断，可考虑把服务端 `QUERY_EXPANSION_ENABLED=false`、`AGENTIC_SEARCH_ENABLED=false`，避免重复调用规划/重排模型；嵌入检索仍需服务端配置的 embedding 能力。用真实查询比较质量后决定，不宣称模型费用归零。
-4. 部署已验证的 Agent 模式网关，保留现有 `HF_TOKEN` secret、限流 binding 与上游配置；使用 `--keep-vars` 等方式时注意它不能替代对最终两个模式变量的核对。生产最终应为 `SERVICE_MODE=agent`、`AGENT_API_ENABLED=true`。
-5. 用真实安装包运行 `emomo doctor`、语义搜索及图片下载；确认图片链接能用。不得先关掉 CLI 所需的 R2 公共图片入口。若以后改为签名图片访问，需要先验证签名链接与下载行为。
-6. 同时回归旧 `/api/v1/search`、`/api/v1/memes` 仍为 410；网站保持暂停或独立页面，不依赖旧业务 API。域名邮箱规则不变。
-7. 确认 CLI+skill 的版本和安装包后再决定公开发布渠道。解除 GitHub 归档、创建/合并 PR、发布 npm 和生产启用都分别记录实际结果，不能用本地测试替代。
+本地测试使用真实 workerd + D1，阻断全部外部 HTTP 并验证计数为零；覆盖中文/OCR/过滤/边界、失败无模型兜底、索引更新，实际 npm 包隔离安装 → skill → CLI 搜索/详情/图片下载。本机 Node 24，Node 22 CI 已配置。本机稳定运行时兼容日期 2026-07-30；生产 2026-10-06 日期仍需生产验证。
 
-## 验收层次
+这些证明机制，不代表真实图库召回质量、线上可用性或账户零成本。
 
-- 本地 CLI / 安装包：真实安装、输出契约、元数据、下载、skill 安装可以在不访问生产的情况下验证。
-- 网关边界：旧客户端暂停、新路径映射、访问范围、参数和限流用聚焦测试验证。
-- 生产搜索：必须用现有真实图库实测。API 返回 410 时应报告未启用，不生成假结果。
+## 单独授权后的启用清单
 
-此次只增加 Agent 入口，不删除前端/移动端源码和历史数据，不改邮箱或共享的其他 Cloudflare 资源。
+以下是计划，**尚未执行**。生产继续保持停服，本地包尚未发布。不恢复 HF 或旧模型后端。
+
+1. 通过现有安全连接只读导出图片元数据和已生成标注，保留原始数据备份。scripts/export-metadata.sql 按现有表结构准备；真实 PostgreSQL 执行 UNVERIFIED。
+2. 离线转换并核对 ID 数、描述/OCR 缺失比例、图片 key/格式及 URL。用中文短词、对话意图改写、OCR 原文和无文字图验证真实前 8 个候选。实际覆盖与召回质量 UNVERIFIED。
+3. 单独授权后创建 D1、填写实际 ID、只导入副本。远程导入 UNVERIFIED。核对索引查询计划和读写计量，评估保留 PostgreSQL/Qdrant 的成本，不提前删除原数据或资源。
+4. 部署独立 Worker，先保持禁用；确认仅 D1 与限流 binding、无模型 secret/AI binding/旧上游。实测生产兼容日期。将 api.emomo.net 的唯一 Custom Domain 从旧网关切到新 Worker。
+5. 显式启用 Agent API，用候选安装包验证 doctor、真实检索、详情和下载；确认旧 /api/v1 仍 410。模型提供商无新服务调用及真实费用还需运行期观测。
+6. 故障时禁用 Agent API，保留数据；禁止自动恢复旧代理/模型链路。网站可以独立存在，域名邮箱及其他共享资源不变。
+7. 单独决定 GitHub 解归档、PR、npm 发布和公开安装渠道，分别记录证据。

@@ -144,7 +144,7 @@ export class EmomoClient {
 
   async request(path, { method = 'GET', body } = {}) {
     const url = new URL(`${this.base.href.replace(/\/$/, '')}/${path}`);
-    const headers = { Accept: 'application/json', 'User-Agent': 'emomo-cli/0.1.0' };
+    const headers = { Accept: 'application/json', 'User-Agent': 'emomo-cli/0.1.1' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     const response = await this.fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
@@ -220,7 +220,7 @@ export class EmomoClient {
     let response;
     for (let hop = 0; hop <= 3; hop++) {
       // API Authorization is deliberately never attached to image requests.
-      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': 'emomo-cli/0.1.0' } });
+      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': 'emomo-cli/0.1.1' } });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
         await response.body?.cancel();

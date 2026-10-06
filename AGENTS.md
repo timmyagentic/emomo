@@ -5,6 +5,7 @@ This is the emomo monorepo with an Agent CLI and the retained backend/web/mobile
 ## Subproject Map
 
 - [cli/AGENTS.md](cli/AGENTS.md) — Agent CLI + 搜索 skill
+- [deployments/cloudflare/agent-search/AGENTS.md](deployments/cloudflare/agent-search/AGENTS.md) — 独立文字检索，不调用云端模型
 - [backend/AGENTS.md](backend/AGENTS.md) — Go 后端（API + 摄入流水线）
 - [frontend/AGENTS.md](frontend/AGENTS.md) — React + Vite 前端
 - [mobile/AGENTS.md](mobile/AGENTS.md) — Expo + React Native 移动端
