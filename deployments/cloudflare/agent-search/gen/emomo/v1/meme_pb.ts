@@ -248,4 +248,3 @@ export type SearchResult = Message<"emomo.v1.SearchResult"> & {
  */
 export const SearchResultSchema: GenMessage<SearchResult> = /*@__PURE__*/
   messageDesc(file_emomo_v1_meme, 3);
-

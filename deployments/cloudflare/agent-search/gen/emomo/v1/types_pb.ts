@@ -208,4 +208,3 @@ export enum TextPresence {
  */
 export const TextPresenceSchema: GenEnum<TextPresence> = /*@__PURE__*/
   enumDesc(file_emomo_v1_types, 2);
-
