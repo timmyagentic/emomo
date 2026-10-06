@@ -8,7 +8,10 @@
 /backend/api
 /backend/ingest
 bin/
+!/cli/bin/
+!/cli/bin/emomo.js
 dist/
+/cli/*.tgz
 
 # Test binary
 *.test
