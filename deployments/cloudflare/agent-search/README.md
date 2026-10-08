@@ -51,3 +51,23 @@ EMOMO_API_URL=http://127.0.0.1:8787/agent/v1 emomo search "无语 猫" --limit 8
 使用最新稳定 Miniflare v4 4.20260730.0 + Wrangler 4.116.0，避开 v5 alpha。本机运行/测试兼容日期 2026-07-30；生产配置为 2026-10-06，生产运行时仍需验证。最新官方类型/配置 schema 已对照，Env 由 Wrangler 生成。
 
 默认 AGENT_API_ENABLED=false，无生产路由/preview URL，D1 为本机 UUID 占位。dry-run 不创建资源。生产需单独授权创建 D1、导入已有文字元数据、验证真实查询。emomo.net 当前是域名出售页，需先确定长期保留的 API/图片域名，再绑定或切换其唯一 Custom Domain 并启用。详见 [启用清单](../../../docs/AGENT_NATIVE.md)。旧 api-gateway 代理模型搜索，不能作为零模型服务或自动兜底。
+
+
+## 首期静态快照导入（2026-10-08）
+
+首期只做 PNG、JPEG、静态 WebP，所有 GIF（包括单帧 GIF）与动画排除；完整原件和私有快照仍保留。
+
+```sh
+npm run static:prepare -- /path/to/private-snapshot /path/to/new-static-bundle
+npm run static:verify -- /path/to/static-bundle /path/to/new-receipts /path/to/query-cases.json
+```
+
+prepare 验证整个规范快照，从中生成 canonical meme/annotation JSONL、D1 SQL、对象清单和完整静态图片字节。ID 为 collection 与本地 ID 的组合，object key 使用 collection 与 SHA-256。输出目录拒绝覆盖，图像不裁切或重编码。准备包仍是私有副本，publicReleaseReady=false，没有云端上传或发布命令。
+
+内部导入输入支持 `text_presence`（1未知、2有字、3无字）及 `search_aliases`。显式文字状态不能与明确 labels 矛盾；缺 OCR 的新快照记录保留 unknown。审核别名/场景进入 FTS，不写入公共 Meme.tags；原描述/OCR、审核标签/主体继续复用。旧数据库导出没有这些附加字段时保持旧标签逻辑，未修改 HTTP proto。
+
+默认搜索不混入 category=object_sticker。要搜索物件，CLI 显式传 `--category object_sticker`；stats 统计仍包括所有已导入静态记录。旧类别/旧记录继续正常检索。缓存键增加静态策略前缀，避免复用旧混合类别结果；尚未实现持续更新的服务端图库 revision。
+
+verify 使用真实本地 workerd/D1，临时 HTTP 桥仅监听127.0.0.1，CLI显式选择该地址（不会改用户默认配置）。它阻断/计数 Worker 出站 HTTP，校验全体图片哈希、canonical 行与 SQL 的一致性，真实 npm 离线安装 → skill → CLI 搜索/选图/详情/下载、三种格式、拒绝覆盖、未知文字、GIF未导入和缺图错误。运行结束关闭服务和临时 D1；receipt 及下载保存于指定新目录。图像查看可使用保存的文件，未提供浏览器网页验收。
+
+查询用例 JSON 是数组：`[{"userQuery":"用户原话","query":"Agent关键词","expectedIds":["first-batch-local-205"],"category":"usable"}]`。通过标准为前8条存在预期候选，不要求第一条总是最好；未知描述范围仍由Agent看图选择。实际私有样例留在外置盘，不进入Git。

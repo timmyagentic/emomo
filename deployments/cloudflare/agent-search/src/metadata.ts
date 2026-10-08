@@ -37,7 +37,7 @@ function normalizedOCR(text: string): string {
 // Offline input: one selected existing annotation per canonical meme, no models.
 export function indexRow(input: JsonValue): IndexRow {
   if (!input || typeof input !== 'object' || Array.isArray(input) || !input.meme ||
-      Object.keys(input).some(key => key !== 'meme' && key !== 'annotation')) throw new Error('Expected meme and optional annotation.');
+      Object.keys(input).some(key => !['meme', 'annotation', 'text_presence', 'search_aliases'].includes(key))) throw new Error('Expected meme and optional annotation.');
   const meme = fromJson(MemeSchema, input.meme);
   if (!ID.test(meme.id)) throw new Error('Invalid meme id.');
   validateStorageKey(meme.storageKey);
@@ -55,7 +55,15 @@ export function indexRow(input: JsonValue): IndexRow {
   const ocr = normalizedOCR(bounded(annotation?.ocrText ?? '', 4096));
   // Existing explicit analyzer labels are the source of truth for filters.
   // Some retained annotations classify visible text without transcribing it.
-  const textPresence = !annotation ? 1 : annotation.labels ? (annotation.labels.hasText ? 2 : 3) : /[\p{L}\p{N}]/u.test(ocr) ? 2 : 3;
+  const inferredPresence = !annotation ? 1 : annotation.labels ? (annotation.labels.hasText ? 2 : 3) : /[\p{L}\p{N}]/u.test(ocr) ? 2 : 3;
+  // Private reviewed inputs can preserve explicit UNKNOWN without discarding their description.
+  // These are index input fields, not a second public HTTP schema.
+  const override = input.text_presence;
+  if (override !== undefined && ![1, 2, 3].includes(override as number)) throw new Error('Invalid explicit text presence.');
+  if (override !== undefined && annotation?.labels && override !== (annotation.labels.hasText ? 2 : 3)) throw new Error('Text presence contradicts explicit labels.');
+  const aliases = input.search_aliases ?? [];
+  if (!Array.isArray(aliases) || aliases.length > 256 || aliases.some(alias => typeof alias !== 'string' || [...alias].length > 128 || alias.includes('\0'))) throw new Error('Invalid search aliases.');
+  const textPresence = typeof override === 'number' ? override : inferredPresence;
   return {
     id: meme.id,
     meme_json: toJsonString(MemeSchema, create(MemeSchema, meme), { useProtoFieldName: true, enumAsInteger: true }),
@@ -65,7 +73,7 @@ export function indexRow(input: JsonValue): IndexRow {
     text_presence: textPresence,
     ocr_terms: indexTerms(ocr),
     description_terms: indexTerms(description),
-    tag_terms: indexTerms(meme.tags.join(' ')),
+    tag_terms: indexTerms([...meme.tags, ...aliases].join(' ')),
   };
 }
 

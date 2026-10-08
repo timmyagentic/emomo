@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "wrangler dev --local --compatibility-date 2026-07-30",
     "gen:sync": "node scripts/sync-proto.mjs",
@@ -13,9 +15,13 @@
     "types:generate": "wrangler types --strict-vars=false",
     "typecheck": "npm run types:generate && tsc --noEmit",
     "deploy:dry-run": "wrangler deploy --dry-run --outdir dist",
-    "check": "npm run gen:check && npm run typecheck && npm test && npm run deploy:dry-run"
+    "check": "npm run gen:check && npm run typecheck && npm test && npm run deploy:dry-run",
+    "static:prepare": "tsx scripts/prepare-static.ts",
+    "static:verify": "tsx scripts/verify-static.ts"
   },
-  "dependencies": { "@bufbuild/protobuf": "2.16.0" },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.16.0"
+  },
   "devDependencies": {
     "@types/node": "25.9.2",
     "esbuild": "0.28.1",

@@ -188,3 +188,20 @@ test('the bundled dependency graph contains only canonical protobuf and determin
   assert.ok(bundleInputs.every(path => path.startsWith('src/') || path.startsWith('gen/') || path.startsWith('node_modules/@bufbuild/protobuf/')));
   assert.equal(outboundCalls, 0);
 });
+
+test('reviewed unknown text remains filterable and object stickers require explicit category', async () => {
+  const db = await mf.getD1Database('DB');
+  await db.batch([
+    { meme: { id: 'static-unknown', storage_key: 'u.png', category: 'usable' }, annotation: { meme_id:'static-unknown', description:'测试未知文字状态' }, text_presence:1 },
+    { meme: { id: 'object-sticker', storage_key: 'o.png', category: 'object_sticker' }, annotation: { meme_id:'object-sticker', description:'测试物件贴图' }, text_presence:1 },
+  ].map(input => db.prepare(importSQL(indexRow(input)))));
+  const defaults = await request('/agent/v1/search',{ query:'测试' });
+  const defaultIDs=JSON.parse(await defaults.text()).results.map((r: {meme:{id:string}})=>r.meme.id);
+  assert.ok(defaultIDs.includes('static-unknown')); assert.ok(!defaultIDs.includes('object-sticker'));
+  const objects=await request('/agent/v1/search',{query:'物件',category:'object_sticker'});
+  assert.equal(JSON.parse(await objects.text()).results[0].meme.id,'object-sticker');
+  const unknown=await request('/agent/v1/search',{query:'未知',text_presence:1});
+  assert.equal(JSON.parse(await unknown.text()).results[0].text_presence,1);
+  const noText=await request('/agent/v1/search',{query:'未知',text_presence:3});
+  assert.equal(JSON.parse(await noText.text()).total,0); assert.equal(outboundCalls,0);
+});

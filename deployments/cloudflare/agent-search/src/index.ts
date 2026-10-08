@@ -76,7 +76,7 @@ async function search(request: Request, env: Env): Promise<Response> {
       bm25(meme_fts, 4.0, 1.0, 2.0) AS rank
     FROM meme_fts JOIN memes m ON m.rowid=meme_fts.rowid
     WHERE meme_fts MATCH ?
-      AND (?='' OR m.category=?) AND (?=0 OR m.text_presence=?)
+      AND ((?='' AND m.category<>'object_sticker') OR m.category=?) AND (?=0 OR m.text_presence=?)
     ORDER BY rank ASC, m.id ASC LIMIT ?
   `).bind(expression, parsed.category, parsed.category, parsed.textPresence, parsed.textPresence, topK).all<SearchRow>();
   const results = rows.results.map(row => create(SearchResultSchema, {
@@ -130,7 +130,7 @@ export default {
       // Query text is not put in cache URLs or logs. Bound before hashing.
       const content = expected === 'POST' ? await body(request) : '';
       const normalized = expected === 'POST' ? new Request(request.url, { method: 'POST', headers: request.headers, body: content }) : request;
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.IMAGE_BASE_URL}\n${path}\n${content}`));
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`static-catalog-v1\n${env.IMAGE_BASE_URL}\n${path}\n${content}`));
       const hash = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
       const key = new Request(`${url.origin}/__emomo-cache/${hash}`);
       const cached = await caches.default.match(key);

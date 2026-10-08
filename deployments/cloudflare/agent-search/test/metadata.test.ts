@@ -65,3 +65,13 @@ test('offline importer builds private SQL, refuses overwrite and removes failed 
   await assert.rejects(run(failed));
   await assert.rejects(readFile(failed), { code: 'ENOENT' });
 });
+
+test('private reviewed text states and aliases survive without turning aliases into public facts', () => {
+  const row = indexRow({ ...input, text_presence: 1, search_aliases: ['阴阳怪气'], annotation: { meme_id: 'cat-1', description: '完整描述', ocr_text: '' } });
+  assert.equal(row.text_presence, 1); assert.match(row.tag_terms, /阴阳/);
+  assert.deepEqual(JSON.parse(row.meme_json).tags ?? [], []);
+  for (const text_presence of [0, 4, '1']) assert.throws(() => indexRow({ ...input, text_presence }));
+  assert.throws(() => indexRow({ ...input, text_presence: 1, annotation: { meme_id:'cat-1', labels: { has_text:true } } }));
+  assert.throws(() => indexRow({ ...input, search_aliases: ['x'.repeat(129)] }));
+  assert.throws(() => indexRow({ ...input, search_aliases: [17] }));
+});

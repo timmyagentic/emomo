@@ -163,3 +163,14 @@ CLI 0.3.0 同包安装独立 `emomo-library`，提供 prepare / validate / diff�
 这实现了优先顺序 1 中的本地版本、校验、差异基础。快照内记录沿用本地图库元数据，尚未生成云端 canonical 导入数据；批准版本选择、修订历史、下架清单、发布进度和服务缓存版本仍待实现。记录无 OCR 时保持本地 unknown，未改为 without_text。
 
 GIF/动画不会转成第一帧；目前远程静态链路不兼容的 ID 和未核实公开传播授权的 ID 单独列在 review.json。publicReleaseReady 固定 false，明确批准不能由这个工具代替。快照不依赖开发 worktree，但与原件同外置盘的副本不等于异地备份。该工具只验证结构/字节，不替代画面审核和原始图片解码结果。
+
+
+## 2026-10-08 首期静态共享链路准备
+
+用户进一步决定第一期放弃GIF，先不开发。该决策替代上一步先补GIF远程支持的计划；GIF单帧也排除，原件不清理。709项静态（673表情、36物件）用于首期本地准备。
+
+`deployments/cloudflare/agent-search` 的 `static:prepare` 从已校验私有快照生成 canonical JSONL、D1 SQL、静态对象清单和完整字节副本；仅本机、拒绝覆盖。无OCR时内部 text_presence 明确保留unknown；查询别名/场景只入确定性文字索引，不成为公共事实tags。默认搜索排除object_sticker，显式分类才能查询物件。
+
+`static:verify` 可以用指定真实导入包和查询用例重跑安装CLI→本地D1→详情→源字节下载，并保存验收证据。验证结束关闭服务，不更改本机默认图库。具体运行步骤见 [共享搜索README](../deployments/cloudflare/agent-search/README.md)。规范档案、导入包、私有源信息与验收下载不进入Git。
+
+这仍不是生产发布。当前共享服务默认禁用，图片和索引尚未远程上传。持续目录版本缓存、发布批准版本、远程计量/兼容、上线授权和运行验收仍待处理；公共素材权限UNVERIFIED，准备副本不能替代发布许可。
