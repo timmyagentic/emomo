@@ -44,5 +44,5 @@ test('packed npm install includes the CLI and skill, and performs search -> deta
   const download = await invoke(['download', detail.data.meme.id, '--dir', join(temporary, 'images')]);
   assert.deepEqual(await readFile(download.data.path), PNG);
   assert.equal(download.data.mimeType, 'image/png');
-  assert.equal((await invoke(['capabilities'])).data.version, '0.2.0');
+  assert.equal((await invoke(['capabilities'])).data.version, '0.3.0');
 });

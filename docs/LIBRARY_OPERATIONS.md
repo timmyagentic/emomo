@@ -154,3 +154,12 @@ D1 Worker API 的 batch 在 D1 内有事务/失败回滚语义。它不会同时
 当前尚缺明确批准版本选择、草稿/下架档案、发布 ID/重试记录、显式删除计划、目录版本缓存、远程备份与恢复工具。现有 Supabase Data API 暴露问题仍等待此前单独确认，本次分析没有获得配置变更授权。[Supabase Data API 安全说明](https://supabase.com/docs/guides/api/securing-your-api)
 
 代码依据：[当前只读 CLI](../cli/src/cli.js)、[离线索引构建器](../deployments/cloudflare/agent-search/scripts/build-index.ts)、[metadata 校验与 upsert](../deployments/cloudflare/agent-search/src/metadata.ts)、[FTS 触发器](../deployments/cloudflare/agent-search/migrations/0001_text_index.sql)、[搜索与缓存](../deployments/cloudflare/agent-search/src/index.ts)。实际图库与原始备份证据见 [图库导入审计](LIBRARY_IMPORT.md)。
+
+
+## 2026-10-08 本地维护落地
+
+CLI 0.3.0 同包安装独立 `emomo-library`，提供 prepare / validate / diff；实现见 [library.js](../cli/src/library.js)。它从已审核本地 catalog 生成有 collection 作用域、revision 名称及内容摘要的独立私有快照，完整复制图片及动画字节，拒绝覆盖。validate 校验记录、格式魔数、相对资产路径和 SHA-256；diff 明确新增、修订字段、图片更换、计划移除、词表变化及新资产体积。同 hash 的资产复用，移除仅为计划，不影响原件。它没有公开发布、上传或网络模型调用。
+
+这实现了优先顺序 1 中的本地版本、校验、差异基础。快照内记录沿用本地图库元数据，尚未生成云端 canonical 导入数据；批准版本选择、修订历史、下架清单、发布进度和服务缓存版本仍待实现。记录无 OCR 时保持本地 unknown，未改为 without_text。
+
+GIF/动画不会转成第一帧；目前远程静态链路不兼容的 ID 和未核实公开传播授权的 ID 单独列在 review.json。publicReleaseReady 固定 false，明确批准不能由这个工具代替。快照不依赖开发 worktree，但与原件同外置盘的副本不等于异地备份。该工具只验证结构/字节，不替代画面审核和原始图片解码结果。

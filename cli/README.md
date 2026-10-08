@@ -1,13 +1,13 @@
 # Emomo Agent CLI
 
-Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。0.2.0 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
+Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。0.3.0 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
 
 ## 安装
 
 ```sh
 cd cli
 npm pack
-npm install --global --ignore-scripts ./timmyagentic-emomo-cli-0.2.0.tgz
+npm install --global --ignore-scripts ./timmyagentic-emomo-cli-0.3.0.tgz
 emomo skill install --agent codex
 ```
 
@@ -68,3 +68,22 @@ npm test
 ```
 
 测试含远程协议、真实npm打包安装、本地离线搜索/详情/GIF下载、缺盘不远程fallback、SHA损坏、路径穿越/符号链接、物件/动画/文字状态与不覆盖行为。定向样例通过不是独立准确率评测，也不是生产云搜索验证。
+
+
+## 私有图库维护
+
+同一安装包另提供 `emomo-library`。消费搜索命令和维护命令分开，维护工具只操作本机指定的目录，没有上传、删除、模型调用或发布命令。
+
+```sh
+emomo-library prepare --catalog /path/to/catalog --dir /path/to/new-snapshot --collection first-batch --revision v1
+emomo-library validate /path/to/new-snapshot
+emomo-library diff /path/to/v1 /path/to/v2
+```
+
+快照含完整原图/动画、records.json、词表、校验和及审核清单。已有目录包括空目录都拒绝覆盖；独立复制资产，不链接源图，精确重复资产只保存一次。collection 给本地 ID 提供作用域，不同批次须使用不同 collection，不能因编号相同误合并。contentRevision 由记录、词表及 collection 确定，相同内容再次制作快照保持相同版本摘要。
+
+validate 核对记录结构、文件魔数、格式及每个资产 SHA-256，拒绝越界路径/符号链接；不重新解码或生成图片，不宣称重新确认了所有画面标签。diff 报告新增、字段变化、图像更换、移除计划、词表变化、需要的新资产及字节数。移除计划不会删除源图库或任何云端记录。外置盘需要挂载；快照仅是独立本地副本，未证明异地灾难恢复。
+
+review.json 是可重新计算的便览，validate 输出才是当前验证结果。公开传播授权及远程兼容缺口按 ID 报告；GIF 和动画仍完整保留，但当前远程静态 API/下载器尚未支持它们。publicReleaseReady 固定为 false，此工具不能批准公开发布。
+
+这是私有维护档案格式，未修改 canonical protobuf HTTP DTO。无网络请求，元数据不包含源文件绝对路径，图库不得放入 Git/npm 安装包。源规范记录未经授权不能清理；默认消费图库仍由 `emomo catalog use` 明确选择。
