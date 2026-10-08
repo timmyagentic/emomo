@@ -126,11 +126,12 @@ async function readBounded(response, maximum) {
   return Buffer.concat(chunks);
 }
 
-function identifyImage(bytes) {
+export function identifyImage(bytes, { allowGif = false } = {}) {
   if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return { extension: 'png', mimeType: 'image/png' };
   if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return { extension: 'jpg', mimeType: 'image/jpeg' };
   if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') return { extension: 'webp', mimeType: 'image/webp' };
-  throw new EmomoError('INVALID_IMAGE', 'The download is not a supported static PNG, JPEG, or WebP image.');
+  if (allowGif && ['GIF87a', 'GIF89a'].includes(bytes.toString('ascii', 0, 6))) return { extension: 'gif', mimeType: 'image/gif' };
+  throw new EmomoError('INVALID_IMAGE', 'The image is not a supported PNG, JPEG, WebP, or permitted GIF.');
 }
 
 export class EmomoClient {
@@ -144,7 +145,7 @@ export class EmomoClient {
 
   async request(path, { method = 'GET', body } = {}) {
     const url = new URL(`${this.base.href.replace(/\/$/, '')}/${path}`);
-    const headers = { Accept: 'application/json', 'User-Agent': 'emomo-cli/0.1.1' };
+    const headers = { Accept: 'application/json', 'User-Agent': 'emomo-cli/0.2.0' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     const response = await this.fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
@@ -220,7 +221,7 @@ export class EmomoClient {
     let response;
     for (let hop = 0; hop <= 3; hop++) {
       // API Authorization is deliberately never attached to image requests.
-      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': 'emomo-cli/0.1.1' } });
+      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': 'emomo-cli/0.2.0' } });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
         await response.body?.cancel();
@@ -242,6 +243,11 @@ export class EmomoClient {
     const bytes = await readBounded(response, MAX_IMAGE_BYTES);
     const image = identifyImage(bytes);
     if (image.mimeType !== contentType) throw new EmomoError('INVALID_IMAGE', 'The image content does not match its declared type.');
+    return saveImage(bytes, image, id, directory, meme.url);
+  }
+}
+
+export async function saveImage(bytes, image, id, directory, sourceUrl) {
     const destination = resolve(directory);
     const filename = `${id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 100)}.${image.extension}`;
     const path = join(destination, filename);
@@ -262,6 +268,5 @@ export class EmomoClient {
       await file?.close();
       await unlink(temporary).catch(() => {});
     }
-    return { id, path, mimeType: image.mimeType, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), sourceUrl: meme.url };
-  }
+    return { id, path, mimeType: image.mimeType, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), sourceUrl };
 }

@@ -1,18 +1,24 @@
 {
   "name": "@timmyagentic/emomo-cli",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Agent-first CLI and skill for Emomo meme search",
   "type": "module",
   "bin": {
     "emomo": "bin/emomo.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
-  "files": ["bin", "src", "skills", "README.md", "LICENSE"],
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "test": "node --test test/cli.test.js test/skill.test.js test/install.test.js",
-    "check": "node --check bin/emomo.js && node --check src/cli.js && node --check src/client.js && node --check src/skill.js && node --check src/error.js"
+    "test": "node --test test/*.test.js",
+    "check": "node --check bin/emomo.js && node --check src/cli.js && node --check src/client.js && node --check src/skill.js && node --check src/error.js && node --check src/local.js && node --check src/config.js"
   },
   "license": "MIT",
   "repository": {

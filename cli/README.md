@@ -1,90 +1,70 @@
 # Emomo Agent CLI
 
-用 CLI 和 skill 接入共享表情包图库。Agent 理解对话、组织关键词、查看候选并挑选图片；新版 Emomo 云端仅做文字检索和返回静态图片，不调用 LLM、embedding 或自动 OCR，不收集 Agent 的模型凭证。用户无需安装网站、移动 App，或配置模型/数据库管理凭据。
+Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。0.2.0 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
 
 ## 安装
-
-需要 Node.js 22 或更高版本。CLI 没有运行时 npm 依赖，skill 随包分发。
-
-从仓库检出安装：
-
-```sh
-npm install --global ./cli
-emomo skill install --agent codex
-```
-
-或者安装已构建的本地包：
 
 ```sh
 cd cli
 npm pack
-npm install --global ./timmyagentic-emomo-cli-0.1.1.tgz
+npm install --global --ignore-scripts ./timmyagentic-emomo-cli-0.2.0.tgz
 emomo skill install --agent codex
 ```
 
-这是可安装的本地包；还没有发布到 npm，不能把 `npm install -g @timmyagentic/emomo-cli` 当成已经可用的公开安装入口。
+本版本是本地构建包，没有发布到 npm。CLI包不包含私有图库或模型凭证。skill随包分发，支持`--agent claude`、`--agent agents`或`--dir <skills-directory>`；已有不同内容不会覆盖。
 
-`--agent claude` 安装到 `~/.claude/skills/emomo`；`--agent agents` 安装到 `~/.agents/skills/emomo`。Codex 使用 `$CODEX_HOME/skills`，未设置时使用 `~/.codex/skills`。也可用 `--dir <skills-directory>` 指定位置。已有不同内容的 skill 不会被覆盖，相同版本重复安装不会改写。安装后，让 Agent 加载 `$emomo`，必要时开启新会话。
+## 使用本地图库
 
-## 搜索和获取图片
+选择已经生成的独立图库目录：
 
 ```sh
+emomo catalog use /path/to/catalog
 emomo doctor
-emomo search "敷衍 好的 崩溃" --limit 8
-emomo search "无语 猫" --text without --limit 5
-emomo get <搜索返回的-id>
-emomo download <搜索返回的-id> --dir /tmp/emomo-selection
+emomo search '阴阳怪气地同意' --limit 5
+emomo search '疑惑' --subject 猫
+emomo search '猜拳' --media animation
+emomo search '饺子' --include-objects
+emomo get <返回的-id>
+emomo download <返回的-id> --dir /path/to/new-selection
 ```
 
-下载返回绝对路径、图片 MIME 类型、字节数和 SHA-256。Agent 可以检查并展示该文件。图片支持 PNG、JPEG、WebP，拒绝把 HTML 错误页保存成图片，也拒绝覆盖同名文件。
+本机配置默认在`~/.config/emomo/config.json`，可用`EMOMO_CONFIG_DIR`或`XDG_CONFIG_HOME`指定位置。每次调用可用`--catalog <directory>`或`EMOMO_CATALOG`覆盖。目录包含manifest、SQLite索引及assets完整图片，可整体复制移动后重新`catalog use`，不依赖原始工作树、Python、源图片绝对路径、后台服务或监听端口。
 
-`emomo categories` 获取可用分类；`emomo stats` 获取图库数量和检索 profile；`emomo capabilities` 或 `emomo --help` 获取命令目录。共享服务仅提供 keyword profile，collection 留空或 keyword；其他向量 profile 会报错。类别/标签可能为空；词不在元数据里就可能零命中，Agent 可改写一次或看图选择，云端没有语义兜底。
+图片默认完整保留，不裁切或拆分。GIF原始帧保留，`image.frames`和`mediaKind`说明动画；`previewOnly=true`说明静态首帧，不能当原动画。取图前校验SHA-256，复制完整字节，原件不改动、已有输出不覆盖。PNG/JPEG/WebP/GIF均可来自本地图库；远程图片保留既有静态格式边界。
 
-## 配置与停服状态
+本地`get`返回验证过的`meme.localPath`供Agent看图；`download`返回`data.path`、MIME、大小和SHA。搜索保留原候选字段`id/url/description/category/tags/score/textPresence/image`，本地追加`imageText/subjects/scenarios/mediaKind/previewOnly/quality/contentFlags/publicReleaseClearance/match`。`url`在本地是file URL；Agent应使用get返回的实际路径或download进行检查，不把file URL当公网上的可分享地址。
 
-默认地址：`https://api.emomo.net/agent/v1`。网关的 Agent 模式只开放搜索、单图详情、类别和统计；旧 `/api/v1` 网站/移动端接口继续返回 410。不提供整库列表、SSE 模型推理过程或后台管理入口。
+`--media image|preview|animation`、`--subject`、`--intent`仅支持本地模式。默认只搜usable；`--include-objects`加入object_sticker，或`--category object_sticker`单独搜物件。`--text with`只使用已转录文字，`--text unknown`为文字状态未确定；没有OCR不等于确认无文字，因此本地`--text without`返回`text_absence_unverified`而不误称无文字。模型profile不可用，只有keyword/local。
 
-**当前生产 API 仍处于停服状态。** 本代码和安装包不会自行恢复生产服务。新 `deployments/cloudflare/agent-search` 配置默认 `AGENT_API_ENABLED=false`，无生产路由，D1 为本机占位。正式启用需单独导入已有文字元数据、启用新服务并验证真实搜索，不恢复 HF/旧模型后端。仓库中的 `docs/AGENT_NATIVE.md` 记录完整启用清单。
+口语理解由调用者Agent承担。例如“有点懵”→“不明白”，“我裂开了”→“我整个头大”，“笑不活了”→“哈哈哈 大笑”。引擎提供有限词表和确定性匹配理由，不调用模型，不声称自动理解所有句子。当前图库的礼貌拒绝、道歉、生日祝福返回gallery_gap。零结果和语气不适合都应真实说明。公开发布权限未核实不等于完成版权审核。
 
-本地运行新文字检索服务并导入已有元数据后：
+## 从已审阅元数据生成本地图库
 
 ```sh
-EMOMO_API_URL=http://127.0.0.1:8787/agent/v1 emomo search "下班 开会" --limit 3
+emomo catalog import /path/to/metadata.json --vocabulary /path/to/vocabulary.json --dir /path/to/new-catalog
 ```
 
-| 配置 | 含义 |
-|---|---|
-| `EMOMO_API_URL` / `--api-url` | API 基地址，HTTPS；显式本机开发实例允许 HTTP |
-| `EMOMO_API_TOKEN` | 选用实例要求的调用令牌，仅发给 API，不写入磁盘或发送给图片域名 |
-| `EMOMO_IMAGE_HOSTS` | 显式替换可信图片主机名单，逗号分隔；默认 `r2.emomo.net,*.r2.dev,*.r2.cloudflarestorage.com` |
-| `--timeout` | 请求超时毫秒，默认 30000，可设 100–120000 |
+此命令是显式管理操作，不自动选择新图库。元数据数组沿用本地整理字段`id/category/description/image_text/subjects/intent_tags/scenarios/query_aliases/content_flags/quality/media_kind/preview_only/width/height/frames/file_path/sha256/public_release_clearance`。`file_path`是源完整图片绝对路径，SHA须匹配。只接受usable/object_sticker；隔离和排除记录不导入。复制后的catalog只存相对asset路径、注释及匿名sourceId，不携带原始本机路径。vocabulary的`intents`、`subjects`映射名称到同义词数组，`gaps`映射明确缺口短语到说明；不包含模型调用。
 
-API 不跟随重定向，避免把调用令牌转发给其他域名。图片重定向最多 3 次，逐次校验协议和可信主机。本地测试图片仅允许使用显式本机 API 的同源 HTTP 地址。JSON 响应上限 2 MiB、图片上限 25 MiB。
+导入不覆盖已有目录，采用临时目录和完整校验后发布。本地catalog读取验证索引摘要；图片路径不能穿越catalog或通过符号链接逃逸。缺盘、损坏、缺图均明确报错，绝不偷偷转向远程API。
 
-零模型调用保证属于新版 Emomo 共享服务；任意 `EMOMO_API_URL` 自定义实例由该实例决定。存储/请求/数据库和使用者自己的 Agent 仍有各自成本。新服务的 score 是归一化 BM25 相关性。
-
-## Agent 输出契约
-
-所有命令均在 stdout 输出 **一个 JSON 对象**，默认如此；`--json` 是兼容选项。成功退出码 0，失败退出码 1，不在 JSON 前后混入日志。
-
-```json
-{"schemaVersion":1,"ok":true,"command":"search","data":{"query":"想下班","expandedQuery":"","total":0,"results":[]}}
-```
-
-候选包含 `id`、`url`、`description`、`category`、`tags`、`score`、`textPresence` 和 `image`。它是 CLI 的投影格式，不是新后端 protobuf DTO；请求仍发送后端现有的 `query` / `top_k` / `text_presence` 等字段。
-
-```json
-{"schemaVersion":1,"ok":false,"error":{"code":"SERVICE_PAUSED","message":"Emomo is offline. Do not retry searches or restart infrastructure automatically.","retryable":false,"httpStatus":410}}
-```
-
-`SERVICE_PAUSED`、`UNAUTHORIZED`、`FORBIDDEN` 应直接说明不可用并停止。`RATE_LIMITED` 可能包含 `retryAfterSeconds`。CLI 不自动重试搜索。其他常见错误包括 `INVALID_ARGUMENT`、`INVALID_RESPONSE`、`TIMEOUT`、`NETWORK_ERROR`、`FILE_EXISTS`、`IMAGE_HOST_NOT_ALLOWED`。
-
-## 验证
+## 远程API模式
 
 ```sh
-cd cli
+emomo search '下班 开会' --api-url https://example.com/agent/v1
+```
+
+选择顺序：`--catalog`；显式`--api-url`；`EMOMO_CATALOG`；`EMOMO_API_URL`；已保存catalog；默认远程API。`--catalog`与`--api-url`同时提供报错。默认远程地址仍是`https://api.emomo.net/agent/v1`。本地图库安装不部署或恢复生产服务。
+
+远程鉴权保留`EMOMO_API_TOKEN`，只发给API；图片域名保留`EMOMO_IMAGE_HOSTS`校验，不转发Token。HTTPS/显式本机HTTP、响应大小、重定向、停服/鉴权/限流与不自动重试行为保持。零模型保证适用于本地模式和新的共享服务，不能代替任意自定义API的保证。
+
+## 输出与验证
+
+stdout始终一个`schemaVersion:1` JSON envelope，`ok:true`退出0，`ok:false`退出1。错误无原始文件系统/凭据内容；新增`LOCAL_CATALOG_UNAVAILABLE`、`LOCAL_IMAGE_UNAVAILABLE`、`INVALID_CATALOG`、`IMAGE_INTEGRITY_ERROR`、`CATALOG_EXISTS`。
+
+```sh
 npm run check
 npm test
 ```
 
-测试覆盖现有 protojson 协议、停服/鉴权/限流、图片下载和令牌边界，以及真实 `npm pack` → 隔离安装 → skill 安装 → 搜索/详情/下载。测试使用明确标记的本地协议样本，新服务另有真实本地 workerd/D1 的 CLI 验收；不证明真实图库覆盖率或生产已经恢复。
+测试含远程协议、真实npm打包安装、本地离线搜索/详情/GIF下载、缺盘不远程fallback、SHA损坏、路径穿越/符号链接、物件/动画/文字状态与不覆盖行为。定向样例通过不是独立准确率评测，也不是生产云搜索验证。
