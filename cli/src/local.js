@@ -4,6 +4,7 @@ import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EmomoError } from './error.js';
 import { identifyImage, saveImage } from './client.js';
+import { refinedSearch } from './refined-search.js';
 
 const MAX_IMAGE = 25 * 1024 * 1024;
 const MAX_METADATA = 32 * 1024 * 1024;
@@ -34,7 +35,8 @@ async function jsonFile(path) {
 function vocabulary(value = {}) {
   const intents = value.intents ?? {}, subjects = value.subjects ?? {}, gaps = value.gaps ?? {};
   if (![intents, subjects, gaps].every(plain) || !Object.values(intents).every(array) || !Object.values(subjects).every(array) || !Object.values(gaps).every(x => typeof x === 'string')) throw bad();
-  return { intents, subjects, gaps };
+  if (value.searchMode !== undefined && value.searchMode !== 'facets') throw bad();
+  return { intents, subjects, gaps, ...(value.searchMode ? { searchMode: value.searchMode } : {}) };
 }
 function record(row) {
   if (!plain(row) || !['string', 'number'].includes(typeof row.id) || !/^[\w-]{1,150}$/.test(String(row.id)) || !TYPES.has(row.category) || typeof row.file_path !== 'string' || !isAbsolute(row.file_path) || !/^[a-f0-9]{64}$/.test(row.sha256 ?? '') || typeof row.description !== 'string') throw bad();
@@ -43,7 +45,9 @@ function record(row) {
   if (!['image', 'preview', 'animation'].includes(row.media_kind) || (row.frames > 1) !== (row.media_kind === 'animation')) throw bad();
   if (row.media_kind === 'animation' && row.preview_only) throw bad();
   if (row.image_text !== undefined && typeof row.image_text !== 'string') throw bad();
-  return { id: `local-${row.id}`, sourceId: String(row.id), description: row.description, imageText: row.image_text ?? '', category: row.category,
+  if (row.canonical_id !== undefined && (!/^[\w-]{1,150}$/.test(row.canonical_id) || typeof row.searchable !== 'boolean' || !['verified_visible_text','normalized_repetition','partially_illegible'].includes(row.ocr_review))) throw bad();
+  if (row.ocr_review === 'partially_illegible' && row.image_text) throw bad();
+  return { ...(row.canonical_id !== undefined ? { canonicalId: `local-${row.canonical_id}`, searchable: row.searchable, ocrReview: row.ocr_review } : {}), id: `local-${row.id}`, sourceId: String(row.id), description: row.description, imageText: row.image_text ?? '', category: row.category,
     tags: row.intent_tags ?? [], subjects: row.subjects ?? [], scenarios: row.scenarios ?? [], aliases: row.query_aliases ?? [], contentFlags: row.content_flags ?? [],
     quality: row.quality ?? '', mediaKind: row.media_kind, previewOnly: row.media_kind === 'preview',
     image: { width: row.width, height: row.height, frames: row.frames }, sha256: row.sha256, publicReleaseClearance: row.public_release_clearance ?? 'UNVERIFIED', asset: '' };
@@ -51,13 +55,22 @@ function record(row) {
 
 export async function importCatalog(source, directory, vocabularyPath) {
   const rows = await jsonFile(resolve(source));
+  return importRows(rows, directory, vocabularyPath ? await jsonFile(resolve(vocabularyPath)) : {});
+}
+
+export async function importRows(rows, directory, lexiconInput = {}) {
   if (!Array.isArray(rows) || !rows.length || rows.length > 100000) throw bad();
-  const lexicon = vocabulary(vocabularyPath ? await jsonFile(resolve(vocabularyPath)) : {});
+  const lexicon = vocabulary(lexiconInput);
   const eligible = rows.filter(row => TYPES.has(row?.category));
   if (!eligible.length) throw bad();
   // Preflight all rows before creating a staging directory. Input is private data, never bundled with the npm package.
   const items = eligible.map(record);
   if (new Set(items.map(r => r.id)).size !== items.length) throw bad();
+  const byId = new Map(items.map(r => [r.id, r]));
+  for (const r of items) if (r.canonicalId !== undefined) {
+    const primary = byId.get(r.canonicalId);
+    if (!primary || primary.canonicalId !== primary.id || !primary.searchable || r.searchable !== (r.id === r.canonicalId)) throw bad();
+  }
   const target = resolve(directory), parent = dirname(target);
   await mkdir(parent, { recursive: true });
   const stage = await mkdtemp(join(parent, '.emomo-catalog-'));
@@ -80,7 +93,7 @@ export async function importCatalog(source, directory, vocabularyPath) {
     const index = db.prepare('INSERT INTO search(rowid,caption,description,subjects,intents,aliases) VALUES(?,?,?,?,?,?)');
     items.forEach((r, i) => {
       insert.run(i + 1, r.category, r.mediaKind, r.imageText ? 1 : 0, JSON.stringify(r));
-      index.run(i + 1, ...[r.imageText, r.description, r.subjects.join(' '), r.tags.join(' '), r.aliases.join(' ')].map(v => tokens(v).join(' ')));
+      if (r.searchable !== false) index.run(i + 1, ...[r.imageText, r.description, r.subjects.join(' '), r.tags.join(' '), r.aliases.join(' ')].map(v => tokens(v).join(' ')));
     });
     db.exec('COMMIT'); db.close(); db = undefined;
     await writeFile(join(stage, 'manifest.json'), JSON.stringify({ schemaVersion: 1, format: 'emomo-local-catalog', items: items.length, name: 'Reviewed local gallery', lexicon, indexSha256: hash(await readFile(join(stage, 'search.sqlite3'))) }) + '\n', { mode: 0o600 });
@@ -125,7 +138,7 @@ export class LocalCatalog {
   }
   candidate(r, score = 0) {
     if (!plain(r) || typeof r.id !== 'string' || !/^[\w-]+$/.test(r.id) || typeof r.asset !== 'string' || isAbsolute(r.asset) || r.asset.split(/[\\/]/).includes('..')) throw bad();
-    return { id: r.id, url: pathToFileURL(join(this.root, r.asset)).href, description: r.description, category: r.category, tags: r.tags, score,
+    return { ...(r.canonicalId ? { canonicalId: r.canonicalId, searchable: r.searchable, ocrReview: r.ocrReview } : {}), id: r.id, url: pathToFileURL(join(this.root, r.asset)).href, description: r.description, category: r.category, tags: r.tags, score,
       textPresence: r.imageText ? 'with_text' : 'unknown', image: r.image, imageText: r.imageText, subjects: r.subjects, scenarios: r.scenarios,
       mediaKind: r.mediaKind, previewOnly: r.previewOnly, quality: r.quality, contentFlags: r.contentFlags, publicReleaseClearance: r.publicReleaseClearance };
   }
@@ -143,10 +156,10 @@ export class LocalCatalog {
   }
   async search(query, { limit = 8, category, textPresence, profile, collection, media, subject, intent, includeObjects = false } = {}) {
     if (profile && profile !== 'keyword' || collection && collection !== 'local') throw new EmomoError('INVALID_ARGUMENT', 'Local catalogs support the keyword profile and local collection only.');
+    if (this.lexicon.searchMode === 'facets') return refinedSearch(this, query, { limit, category, textPresence, media, subject, intent, includeObjects });
     const q = normalize(query.trim());
     const gap = Object.entries(this.lexicon.gaps).find(([term]) => q.includes(normalize(term)));
-    const politeRefusal = q.includes('拒绝') && ['别伤人','不伤人','温和','礼貌','委婉','客气'].some(t => q.includes(t));
-    if (gap || politeRefusal) return { query, expandedQuery: '', total: 0, results: [], reason: 'gallery_gap', detail: gap?.[1] ?? '当前图库缺少已确认的礼貌拒绝素材', source: 'local' };
+    if (gap) return { query, expandedQuery: '', total: 0, results: [], reason: 'gallery_gap', detail: gap[1], source: 'local' };
     const intents = Object.entries(this.lexicon.intents).filter(([, aliases]) => aliases.some(a => q.includes(normalize(a)))).map(([name]) => name);
     if (intent && !intents.includes(intent)) intents.push(intent);
     const subjects = this.subjectTerms(q);
@@ -194,7 +207,8 @@ export class LocalCatalog {
     const bytes = await readFile(localPath);
     if (bytes.length > MAX_IMAGE || hash(bytes) !== item.sha256) throw new EmomoError('IMAGE_INTEGRITY_ERROR', 'The local image no longer matches its catalog hash.');
     identifyImage(bytes, { allowGif: true });
-    return { meme: { ...this.candidate(item), localPath, sha256: item.sha256 } };
+    const versions = item.canonicalId ? this.db.prepare("SELECT data FROM items WHERE json_extract(data,'$.canonicalId') = ? ORDER BY id").all(item.canonicalId).map(row => { const r = JSON.parse(row.data); return { id: r.id, canonicalId: r.canonicalId, sha256: r.sha256, image: r.image }; }) : undefined;
+    return { meme: { ...this.candidate(item), localPath, sha256: item.sha256, ...(versions ? { versions } : {}) } };
   }
   async download(id, directory) {
     const item = this.item(id), { meme } = await this.get(id);
@@ -206,7 +220,7 @@ export class LocalCatalog {
   async categories() { const rows = this.db.prepare('SELECT DISTINCT category FROM items ORDER BY category').all(); return { categories: rows.map(r => r.category), total: rows.length }; }
   async stats() {
     const counts = this.db.prepare('SELECT category,count(*) AS n FROM items GROUP BY category').all();
-    return { totalMemes: String(counts.reduce((n, r) => n + r.n, 0)), defaultSearchMemes: String(counts.find(r => r.category === 'usable')?.n ?? 0), totalCategories: counts.length, availableProfiles: ['keyword'], availableCollections: ['local'], source: 'local', modelsUsed: [] };
+    return { totalMemes: String(counts.reduce((n, r) => n + r.n, 0)), defaultSearchMemes: String(this.db.prepare("SELECT count(*) AS n FROM items WHERE category='usable' AND coalesce(json_extract(data,'$.searchable'),1) = 1").get().n), totalCategories: counts.length, availableProfiles: ['keyword'], availableCollections: ['local'], source: 'local', modelsUsed: [] };
   }
   async verify() {
     const items = this.db.prepare('SELECT data FROM items').all();

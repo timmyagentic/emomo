@@ -1,4 +1,5 @@
 export interface LibraryRecord {
+  canonicalId?: string; searchable?: boolean; ocrReview?: 'verified_visible_text' | 'normalized_repetition' | 'partially_illegible';
   id: string; sourceId: string; description: string; imageText: string; category: 'usable' | 'object_sticker';
   tags: string[]; subjects: string[]; scenarios: string[]; aliases: string[]; contentFlags: string[];
   quality: string; mediaKind: 'image' | 'preview' | 'animation'; previewOnly: boolean;
@@ -9,7 +10,7 @@ export interface LibrarySnapshot {
   root: string;
   manifest: { schemaVersion: number; format: string; collection: string; revision: string; contentRevision: string; records: number };
   rows: LibraryRecord[];
-  vocabulary: { intents: Record<string,string[]>; subjects: Record<string,string[]>; gaps: Record<string,string> };
+  vocabulary: { searchMode?: 'facets'; intents: Record<string,string[]>; subjects: Record<string,string[]>; gaps: Record<string,string> };
   report: Record<string,unknown>;
 }
 export function validateSnapshot(directory: string): Promise<LibrarySnapshot>;

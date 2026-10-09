@@ -1,13 +1,13 @@
 # Emomo Agent CLI
 
-Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。0.3.0 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
+Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。0.4.0 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
 
 ## 安装
 
 ```sh
 cd cli
 npm pack
-npm install --global --ignore-scripts ./timmyagentic-emomo-cli-0.3.0.tgz
+npm install --global --ignore-scripts ./timmyagentic-emomo-cli-0.4.0.tgz
 emomo skill install --agent codex
 ```
 
@@ -87,3 +87,21 @@ validate 核对记录结构、文件魔数、格式及每个资产 SHA-256，拒
 review.json 是可重新计算的便览，validate 输出才是当前验证结果。公开传播授权及远程兼容缺口按 ID 报告；GIF 和动画仍完整保留，但当前远程静态 API/下载器尚未支持它们。publicReleaseReady 固定为 false，此工具不能批准公开发布。
 
 这是私有维护档案格式，未修改 canonical protobuf HTTP DTO。无网络请求，元数据不包含源文件绝对路径，图库不得放入 Git/npm 安装包。源规范记录未经授权不能清理；默认消费图库仍由 `emomo catalog use` 明确选择。
+
+
+## 精修 JSONL 接入 Agent
+
+```sh
+emomo catalog import-reviewed /path/to/metadata.jsonl --dir /path/to/new-reviewed-catalog
+emomo doctor --catalog /path/to/new-reviewed-catalog
+emomo catalog use /path/to/new-reviewed-catalog
+emomo search "猫 生气" --limit 5
+emomo get <returned-id>
+emomo download <returned-id> --dir /path/to/new-downloads
+```
+
+精修导入检查 `id/canonical_id/disposition/decision/searchable/ocr_review/search_text/image_text/tags/path/sha256/width/height/frames`。只接收单帧记录；canonical 主图进入默认搜索，duplicate_alias 完整复制并可 get/download，excluded 不导入。`get` 的 `versions` 列出同组 ID、尺寸和哈希；`canonicalId` 指向主图。原始元数据与图片保持不变。每个 ID 在选定图库内稳定，不跨不同图库混用。
+
+只有确认或明确归一化的主要文字进入索引。`partially_illegible` 的文字不进入索引也不作为可靠 imageText 返回，仍保留视觉标签和 ocrReview。无主要文字不证明整图无水印，因此 `--text without` 仍保守返回 text_absence_unverified。
+
+精修库使用多个关键词条件同时匹配及常用同义词，返回 match.terms。Agent 负责把对话改写成少量检索词并看图判断语气；检索分数不是意图置信度。负面/反讽内容可能命中同主题，不能直接把第一名当作适合发送的表情。旧版目录继续使用其既有词表；缺口只由该库显式词表声明。

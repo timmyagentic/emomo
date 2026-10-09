@@ -11,25 +11,20 @@ Use the installed `emomo` CLI. Every command emits one JSON envelope; check `ok`
 
 Translate the user's intended reaction and tone into short search terms using your own reasoning. The search engine does keyword and curated synonym matching, not model inference. Keep important Chinese phrases and distinguish genuine agreement, sarcasm, politeness, and rough jokes. Do not send private conversation history or Agent/model credentials to an API.
 
-Examples grounded in the first library:
-
-- “笑不活了” → `哈哈哈 大笑`
-- “有点懵，没看懂” → `不明白`
-- “我裂开了” → `我整个头大`
-- “敷衍地同意” → `阴阳怪气地同意`
-- “红包收到了，感谢大佬” → `谢谢红包`
-- “先睡了，明天聊” → `晚安`
+Use short queries that preserve the intended reaction, then add a subject if requested. For example, “对方催进度，想表达收到但有点无奈” can start with `收到`, followed by `收到 无奈` if needed. Inspect the image: an office-fire joke may suit a friend but not a sincere professional acknowledgment. Keep politeness, negation and sarcasm in your selection judgment; lexical matches do not guarantee tone.
 
 Search a small set, then inspect the actual images before deciding:
 
 ```sh
-emomo search "阴阳怪气地同意" --limit 5
+emomo search "收到" --subject 露比 --limit 5
 emomo search "疑惑" --subject 猫 --limit 5
 emomo search "猜拳" --media animation
 emomo get <returned-id>
 ```
 
-`--subject`, `--intent`, `--media image|preview|animation`, and `--include-objects` are local catalog options. Ordinary reaction search excludes object stickers; use `--include-objects` when the user wants a food or object sticker. `--text with` requires transcribed text. In the first local library, lack of OCR is unknown, not confirmed text absence; `--text without` therefore does not claim text-free results. Remote APIs retain their existing category/text filters.
+`--subject`, `--intent`, `--media image|preview|animation`, and `--include-objects` are local catalog options. Ordinary reaction search excludes object stickers; use `--include-objects` when the user wants a food or object sticker. `--text with` requires transcribed text. Lack of transcribed main text is unknown, not confirmed whole-image text absence; `--text without` therefore does not claim text-free results. Remote APIs retain their existing category/text filters.
+
+Reviewed catalogs collapse duplicates in search. `get` exposes `canonicalId` and `versions` so another complete version can be retrieved by ID; IDs belong to the selected catalog. `ocrReview=partially_illegible` means only reviewed visual tags are searchable and uncertain text is omitted. Do not infer text-free images from an empty `imageText`.
 
 Judge the returned description, visible text, tags, `match` reasons, and image together. A score is a deterministic retrieval rank, not intent confidence. If available, use your visual tools on `emomo get`'s validated absolute `data.meme.localPath`. For a remote image or a file to attach, download the selected ID:
 
@@ -47,9 +42,9 @@ Show the requested number of actual selected images with brief context. Never in
 
 Try a more specific phrase or a useful synonym when the initial query is weak. The calling Agent performs this reformulation; the CLI does not call a model. An exact visible phrase can work better than several broad emotions.
 
-Zero results are valid. Inspect `data.reason` and `data.detail`. The current first library lacks confirmed polite refusal, apology and birthday greeting images; `gallery_gap` must not be filled with rude refusals or generic smiles. If the desired tone is missing, state that limitation. Do not repeatedly scan the library or invent a cloud-model fallback.
+Zero results are valid. Inspect `data.reason` and `data.detail`. Coverage belongs to the selected library. Do not carry old-library gaps into another library; `gallery_gap` is an explicit catalog declaration, while `no_match` only means the current query found nothing. Neither should be filled with a rude or unrelated image. If the desired tone is missing, state that limitation. Do not repeatedly scan the library or invent a cloud-model fallback.
 
-The first library's `publicReleaseClearance=UNVERIFIED` is a provenance limitation, not a finding that the image is safe for public redistribution. Ordinary local selection does not publish the library. Sending selected files to another person or channel follows the user's authorization for that destination.
+An image's `publicReleaseClearance=UNVERIFIED` is a provenance limitation, not a finding that the image is safe for public redistribution. Ordinary local selection does not publish the library. Sending selected files to another person or channel follows the user's authorization for that destination.
 
 ## Library selection and installation
 

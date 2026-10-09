@@ -28,12 +28,13 @@ async function contained(root, asset) {
   return path;
 }
 function validateRows(rows) {
-  const allowed = new Set(['id','sourceId','description','imageText','category','tags','subjects','scenarios','aliases','contentFlags','quality','mediaKind','previewOnly','image','sha256','publicReleaseClearance','asset']);
+  const allowed = new Set(['id','sourceId','description','imageText','category','tags','subjects','scenarios','aliases','contentFlags','quality','mediaKind','previewOnly','image','sha256','publicReleaseClearance','asset','canonicalId','searchable','ocrReview']);
   if (!Array.isArray(rows) || !rows.length || rows.length > 100000) throw fail();
   const ids = new Set();
   for (const r of rows) {
     if (!r || Object.keys(r).some(k => !allowed.has(k)) || !key(r.id) || ids.has(r.id) || !digest(r.sha256) || !['usable','object_sticker'].includes(r.category)) throw fail();
     ids.add(r.id);
+    if (r.canonicalId !== undefined && (!key(r.canonicalId) || typeof r.searchable !== 'boolean' || !['verified_visible_text','normalized_repetition','partially_illegible'].includes(r.ocrReview) || r.ocrReview === 'partially_illegible' && r.imageText)) throw fail();
     for (const f of ['sourceId','description','imageText','quality','publicReleaseClearance']) if (typeof r[f] !== 'string' || r[f].length > 16384) throw fail();
     for (const f of ['tags','subjects','scenarios','aliases','contentFlags']) if (!Array.isArray(r[f]) || r[f].length > 256 || r[f].some(v => typeof v !== 'string' || v.length > 2048)) throw fail();
     if (!r.image || Object.keys(r.image).some(k => !['width','height','frames','format'].includes(k)) || !['png','jpeg','webp','gif'].includes(r.image.format)) throw fail();
@@ -42,10 +43,15 @@ function validateRows(rows) {
     const extension = r.image.format === 'jpeg' ? 'jpg' : r.image.format;
     if (r.asset !== `assets/${r.sha256}.${extension}`) throw fail();
   }
+  const byId = new Map(rows.map(r => [r.id,r]));
+  for (const r of rows) if (r.canonicalId !== undefined) {
+    const primary = byId.get(r.canonicalId);
+    if (!primary || primary.canonicalId !== primary.id || !primary.searchable || r.searchable !== (r.id === r.canonicalId)) throw fail();
+  }
 }
 function summary(rows) {
   const assets = new Set(rows.map(r => r.asset));
-  return { records: rows.length, usable: rows.filter(r => r.category === 'usable').length, objects: rows.filter(r => r.category === 'object_sticker').length,
+  return { records: rows.length, defaultSearchMemes: rows.filter(r => r.category === 'usable' && r.searchable !== false).length, duplicateAliases: rows.filter(r => r.searchable === false).length, usable: rows.filter(r => r.category === 'usable').length, objects: rows.filter(r => r.category === 'object_sticker').length,
     uniqueAssets: assets.size, animations: rows.filter(r => r.image.frames > 1).length,
     publicReleaseUnverified: rows.filter(r => r.publicReleaseClearance !== 'CLEARED').map(r => r.id),
     remoteCompatibilityBlocked: rows.filter(r => r.image.format === 'gif' || r.image.frames > 1).map(r => r.id),

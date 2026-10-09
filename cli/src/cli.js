@@ -3,6 +3,7 @@ import { EmomoClient, DEFAULT_API_URL } from './client.js';
 import { EmomoError, publicError } from './error.js';
 import { installSkill, SKILL_SOURCE } from './skill.js';
 import { LocalCatalog, importCatalog } from './local.js';
+import { importReviewed } from './refined-import.js';
 import { selectCatalog, useCatalog } from './config.js';
 
 const PACKAGE = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
@@ -16,6 +17,7 @@ const COMMANDS = {
   doctor: { flags: [], usage: 'emomo doctor' },
   capabilities: { flags: [], usage: 'emomo capabilities' },
   'catalog import': { positional: 'metadata.json', flags: ['dir', 'vocabulary'], usage: 'emomo catalog import <metadata.json> --dir <new-catalog-directory> [--vocabulary <vocabulary.json>]' },
+  'catalog import-reviewed': { positional: 'metadata.jsonl', flags: ['dir'], usage: 'emomo catalog import-reviewed <metadata.jsonl> --dir <new-catalog-directory>' },
   'catalog use': { positional: 'directory', flags: [], usage: 'emomo catalog use <catalog-directory>' },
   'catalog path': { flags: [], usage: 'emomo catalog path' },
   'skill install': { flags: ['agent', 'dir'], usage: 'emomo skill install --agent codex' },
@@ -88,6 +90,10 @@ export async function run(argv, { env = process.env } = {}) {
   if (command === 'catalog import') {
     if (!flags.dir?.trim()) throw new EmomoError('INVALID_ARGUMENT', 'Choose a new catalog directory with --dir.');
     return { command, data: await importCatalog(words[0], flags.dir, flags.vocabulary) };
+  }
+  if (command === 'catalog import-reviewed') {
+    if (!flags.dir?.trim()) throw new EmomoError('INVALID_ARGUMENT', 'Choose a new catalog directory with --dir.');
+    return { command, data: await importReviewed(words[0], flags.dir) };
   }
   if (command === 'catalog use') return { command, data: await useCatalog(words[0], env) };
   if (command === 'catalog path') return { command, data: { path: await selectCatalog(flags, env) ?? null } };
