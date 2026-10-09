@@ -19,7 +19,7 @@ Skill 支持 Codex、Claude Code 和通用 Agent 目录。所有命令输出 JSO
 
 ## 模式
 
-- **公开图库**：`https://api.timmyagentic.si/agent/v1`，Worker + D1 FTS5/BM25，图片从 `images.timmyagentic.si` 下载。PNG、JPEG、静态 WebP；每 IP 30 次/分钟，匿名只读。多个关键词 OR 召回，不保证理解所有语义。
+- **公开图库**：`https://api.timmyagentic.si/agent/v1`，Worker + D1 FTS5/BM25，图片从 `images.timmyagentic.si` 下载。PNG、JPEG、静态 WebP；每个边缘节点按 IP 约 30 次/分钟，匿名只读。多个关键词 OR 召回，不保证理解所有语义。
 - **本地图库**：离线 SQLite，支持完整图片、动画、审核标签和重复版本。缺盘不自动回退云端。见 [CLI 文档](cli/README.md)。
 
 ## 仓库
