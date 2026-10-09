@@ -14,7 +14,7 @@
 - 字面词 OR 查询，BM25 排序：OCR 权重 4、描述 1、标签 2。score 单调归一化，不能解释为语义概率；未知同义词不会自动匹配，Agent 可改写一次。
 - 沿用 canonical protobuf HTTP DTO，gen/ 同步 frontend/gen/ 生成输出，唯一 schema 源是 backend/proto/。total 为返回候选数。OCR 用于检索，原候选 DTO 没有 OCR 字段，未扩展 HTTP schema。
 - 仅 search、单图详情、categories、stats，profile 为 keyword，collection 留空或 keyword。旧 /api/v1 返回 410，整库列表、SSE、管理及浏览器 Origin 关闭。类别最多列出 100 项。
-- 查询 1–160 字/最多 64 词、默认 8 / 最多 100 候选、请求体 8 KiB；SQL 参数绑定，FTS 运算符不能注入。每 IP 30 次/60 秒；成功响应缓存 60 秒，搜索缓存键只用请求哈希；错误不缓存。缓存读前限流。
+- 查询 1–160 字/最多 64 词、默认 8 / 最多 100 候选、请求体 8 KiB；SQL 参数绑定，FTS 运算符不能注入。每个 Cloudflare 边缘节点按 IP 约 30 次/60 秒，计数最终一致，不是全局硬上限；Worker 内部成功响应缓存 60 秒，搜索缓存键只用请求哈希；错误不缓存。缓存读前限流。
 - 原图由 CLI 直接下载，Worker 不读写/代理图片。图片基地址由运维配置，key 逐段编码；离线输入拒绝公开/签名 URL。匿名接口缓存不区分用户，未引入调用者鉴权功能。
 
 ## 离线导入
