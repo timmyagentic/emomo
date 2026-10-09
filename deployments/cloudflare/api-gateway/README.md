@@ -1,70 +1,77 @@
-# emomo Cloudflare API Gateway
+# Emomo Agent API Gateway
 
-This Worker exposes the public API surface used by the emomo web/mobile clients
-while keeping the Hugging Face Space private. The Worker stores the Hugging Face
-token as a Cloudflare secret and injects it only on server-side upstream
-requests.
+This Worker exposes a small retrieval API for the Emomo CLI and skill, while
+keeping the Hugging Face backend private. `HF_TOKEN` stays in a Cloudflare secret
+and is injected only into server-side upstream requests.
 
-## Public Endpoint
+## Agent mode and paused service
 
-- `https://api.emomo.net/api/v1`
+The checked-in configuration uses `SERVICE_MODE=agent` and
+`AGENT_API_ENABLED=false`. Deploying these defaults keeps searches paused.
+Enabling the Agent API requires an authorized production activation and a
+working private backend; local tests do not prove live library availability.
 
-Allowed upstream routes:
+When enabled, these routes map to the backend's existing protojson API:
 
-- `GET /health`
-- `GET /api/v1/stats`
-- `GET /api/v1/categories`
-- `GET /api/v1/memes?limit=&offset=&category=`
-- `GET /api/v1/memes/:id`
-- `POST /api/v1/search`
-- `POST /api/v1/search/stream`
+| Public route | Private upstream route |
+| --- | --- |
+| `POST /agent/v1/search` | `POST /api/v1/search` |
+| `GET /agent/v1/memes/:id` | `GET /api/v1/memes/:id` |
+| `GET /agent/v1/categories` | `GET /api/v1/categories` |
+| `GET /agent/v1/stats` | `GET /api/v1/stats` |
 
-All other paths, methods, and unsupported query parameters are rejected at the
-gateway.
+Old `/api/v1` requests always return 410 in Agent mode, even with the Agent API
+enabled. Root/admin pages, `/health`, bulk meme listing, and streaming search
+are not exposed. The configured CORS allowlist is empty, so browser origins
+receive no cross-origin access grant. CLI requests do not require CORS.
 
-## Anti-crawling Controls
+Only explicit `SERVICE_MODE=legacy` restores the previous web/mobile routing
+behavior for a separately authorized operation. Missing or misspelled mode
+variables retain the Agent boundary. Legacy mode is not used by this migration.
 
-The gateway is the public boundary for web and mobile clients. It intentionally
-does not expose an unbounded meme catalog export:
+## Request bounds
 
-- `GET /api/v1/memes` is limited to the first `MAX_LIST_WINDOW` items
-  (`120` by default), so callers cannot page through the entire catalog by
-  increasing `offset`.
-- Search requests are capped by `MAX_SEARCH_TOP_K` (`100` by default).
-- POST bodies are read and rejected at `MAX_REQUEST_BODY_BYTES`, even when the
-  client omits `Content-Length`.
-- All public data routes use the `EMOMO_RATE_LIMITER` Cloudflare Rate Limiting
-  binding. The default `wrangler.jsonc` setting allows 120 requests per 60
-  seconds per route family and `CF-Connecting-IP`.
+- Search queries contain 1–160 characters. Candidates default to 8 and must be a
+  positive integer no larger than `MAX_SEARCH_TOP_K` (100 by default).
+- POST bodies are bounded by `MAX_REQUEST_BODY_BYTES` (65536), including bodies
+  without `Content-Length`.
+- Existing `EMOMO_RATE_LIMITER` settings allow 120 requests per 60 seconds per
+  route family and `CF-Connecting-IP`.
+- Stats and categories use the existing short-lived edge cache. Detailed meme
+  retrieval and searches remain uncached.
+- Unsupported methods and query parameters are rejected before upstream access.
 
-## Setup
+## Local validation
 
-```bash
+```sh
 cd deployments/cloudflare/api-gateway
-npm install
-npx wrangler login
-npm run secret:put:hf-token
-npm run deploy
-```
-
-Use a rotated Hugging Face token. Do not paste a token into source code,
-`wrangler.jsonc`, Expo config, or any `EXPO_PUBLIC_*` / `VITE_*` variable.
-
-The route in `wrangler.jsonc` uses a Cloudflare Workers Custom Domain for
-`api.emomo.net`. The `emomo.net` zone must be active in Cloudflare, and
-`api.emomo.net` must not already have a conflicting CNAME record.
-
-## Validation
-
-```bash
+npm ci
 npm test
 npm run typecheck
-npm run check
-curl https://api.emomo.net/api/v1/stats
+npm run deploy:dry-run
 ```
 
-After deployment, mobile production builds should use:
+Tests cover the legacy guards, Agent-only routes, paused defaults, validation
+and rate limiting, plus a real CLI process calling the Worker handler and a
+local private-backend fixture. Fixtures are not real-library search evidence.
 
-```text
-EXPO_PUBLIC_API_BASE=https://api.emomo.net/api/v1
-```
+`wrangler types` generates `Env` from the config. The dry run builds the Worker
+without deploying it. Do not resume the Hugging Face Space or publish a Worker
+as part of local validation.
+
+## Production activation
+
+Follow [the repository activation checklist](../../../docs/AGENT_NATIVE.md)
+after authorization. Restore and verify the private search backend first,
+preserve the existing secret and rate-limit binding, and explicitly verify the
+final mode variables: `SERVICE_MODE=agent`, `AGENT_API_ENABLED=true`.
+
+The Custom Domain stays `api.emomo.net`. A live acceptance run must check
+installed-CLI health, real semantic search, and a real image download, then
+confirm that old `/api/v1` requests still return 410. Keep R2 image URLs
+available to the CLI. Website, mobile app, and email services have independent
+lifecycles.
+
+Never put a Hugging Face token in source, config, CLI packages, task documents,
+or frontend environment variables. Public npm publication and GitHub unarchive
+are separate delivery actions.

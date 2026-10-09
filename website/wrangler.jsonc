@@ -1,0 +1,8 @@
+{
+  "name": "emomo-official",
+  "compatibility_date": "2026-10-09",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": { "directory": "./public", "not_found_handling": "404-page" },
+  "routes": [{ "pattern": "timmyagentic.si", "custom_domain": true }, { "pattern": "www.timmyagentic.si", "custom_domain": true }]
+}

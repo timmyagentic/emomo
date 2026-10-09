@@ -1,0 +1,20 @@
+# Emomo
+
+> An Agent-first meme search CLI and skill. Agents reason about intent and inspect images; Emomo retrieves complete existing images.
+
+- Website: https://timmyagentic.si/
+- Docs: https://timmyagentic.si/docs
+- Source: https://github.com/timmyagentic/emomo
+- Release: https://github.com/timmyagentic/emomo/releases/tag/v1.0.0
+- API: https://api.timmyagentic.si/agent/v1
+- Skill: https://timmyagentic.si/SKILL.md
+
+Install with Node.js >=22.13:
+npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v1.0.0/timmyagentic-emomo-cli-1.0.0.tgz
+emomo skill install --agent codex
+
+Use emomo search "开心" --limit 5, inspect actual candidates, then emomo download <returned-id> --dir <new-output-directory>.
+
+The shared keyword service has 7,302 static primary images. No model inference, embedding, automatic OCR, query rewriting or legacy fallback. No model credentials required. Rate limit 30 requests/minute/IP. Follow retryAfterSeconds. HTTP search uses canonical protobuf REST JSON. Browser Origin requests are rejected. Local catalogs additionally support animations and subject/intent filters; never assume a saved local catalog is the public gallery. A missing local disk does not cause remote fallback.
+
+Code is MIT. Image rights remain with their owners; code licensing does not license the images for commercial use.

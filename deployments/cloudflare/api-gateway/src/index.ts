@@ -93,23 +93,47 @@ const UPSTREAM_RESPONSE_HEADERS_TO_STRIP = [
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const corsHeaders = getCorsHeaders(request, env);
+    const agentMode = String(env.SERVICE_MODE) !== 'legacy';
+    let routedRequest = request;
+
+    if (agentMode) {
+      const pathname = new URL(request.url).pathname;
+      if (/^\/api\/v1(?:\/|$)/.test(pathname)) {
+        return pausedResponse(corsHeaders);
+      }
+      const mapped = mapAgentRequest(request);
+      if (!mapped) {
+        return jsonError(404, 'not_found', 'This Agent API route is not exposed.', corsHeaders);
+      }
+      if (String(env.AGENT_API_ENABLED) !== 'true') {
+        return pausedResponse(corsHeaders);
+      }
+      routedRequest = mapped;
+    }
 
     if (request.method === 'OPTIONS') {
-      return handleOptions(request, corsHeaders);
+      return handleOptions(routedRequest, corsHeaders);
     }
 
     if (!env.HF_TOKEN) {
       return jsonError(500, 'missing_gateway_secret', 'Gateway is missing HF_TOKEN.', corsHeaders);
     }
 
-    const route = matchRoute(request);
+    const route = matchRoute(routedRequest);
     if (!route) {
       return jsonError(404, 'not_found', 'This API route is not exposed by the gateway.', corsHeaders);
     }
 
-    const validation = await validateRequest(request, route, env);
+    const validation = await validateRequest(routedRequest, route, env);
     if (validation.error) {
       return jsonError(validation.error.status, validation.error.code, validation.error.message, corsHeaders);
+    }
+    if (agentMode && routedRequest.method === 'POST') {
+      const agentValidation = validateAgentSearchBody(validation.body, env);
+      if (agentValidation.error) {
+        return jsonError(agentValidation.error.status, agentValidation.error.code, agentValidation.error.message, corsHeaders);
+      }
+      validation.body = agentValidation.body;
     }
 
     const rateLimitError = await enforceRateLimit(request, route, env);
@@ -124,7 +148,7 @@ export default {
       }
     }
 
-    const upstreamRequest = buildUpstreamRequest(request, env, validation.body);
+    const upstreamRequest = buildUpstreamRequest(routedRequest, env, validation.body);
     const upstreamResponse = await fetch(upstreamRequest);
     const response = buildClientResponse(
       upstreamResponse,
@@ -140,6 +164,51 @@ export default {
     return response;
   },
 };
+
+// The Agent surface shares the existing backend DTOs, without reopening legacy
+// clients, streaming LLM traces, bulk browsing, or administrative routes.
+function mapAgentRequest(request: Request): Request | undefined {
+  const url = new URL(request.url);
+  if (!/^\/agent\/v1\/(?:search|categories|stats|memes\/[a-zA-Z0-9_-]+)$/.test(url.pathname)) {
+    return undefined;
+  }
+  url.pathname = url.pathname.replace(/^\/agent\/v1/, '/api/v1');
+  return new Request(url.toString(), request);
+}
+
+function pausedResponse(corsHeaders: HeadersInit): Response {
+  return new Response(JSON.stringify({ error: 'SERVICE_PAUSED', message: 'Emomo is temporarily offline.' }), {
+    status: 410,
+    headers: {
+      ...Object.fromEntries(new Headers(corsHeaders)),
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Emomo-Service-State': 'paused',
+    },
+  });
+}
+
+function validateAgentSearchBody(body: Uint8Array | undefined, env: Env): ValidationResult {
+  let payload: unknown;
+  try { payload = JSON.parse(new TextDecoder().decode(body)); } catch {
+    return { error: { status: 400, code: 'invalid_json', message: 'Search body must be a JSON object.' } };
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { error: { status: 400, code: 'invalid_search', message: 'Search body must be a JSON object.' } };
+  }
+  const record = payload as Record<string, unknown>;
+  if (typeof record.query !== 'string' || !record.query.trim() || [...record.query.trim()].length > 160) {
+    return { error: { status: 400, code: 'invalid_query', message: 'Search query must contain 1–160 characters.' } };
+  }
+  const topK = record.top_k ?? record.topK ?? 8;
+  if (typeof topK !== 'number' || !Number.isInteger(topK) || topK < 1 || topK > parsePositiveInteger(env.MAX_SEARCH_TOP_K, 100)) {
+    return { error: { status: 400, code: 'invalid_top_k', message: 'Search top_k must be a positive integer within the gateway limit.' } };
+  }
+  record.query = record.query.trim();
+  record.top_k = topK;
+  delete record.topK;
+  return { body: new TextEncoder().encode(JSON.stringify(record)) };
+}
 
 function handleOptions(request: Request, corsHeaders: HeadersInit): Response {
   const requestedMethod = request.headers.get('Access-Control-Request-Method')?.toUpperCase();

@@ -10,6 +10,42 @@ permissions:
   contents: read
 
 jobs:
+  agent-cli-required:
+    name: Agent CLI and search checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Check and test installable CLI
+        working-directory: cli
+        run: |
+          npm run check
+          npm test
+
+      - name: Install gateway dependencies
+        working-directory: deployments/cloudflare/api-gateway
+        run: npm ci
+
+      - name: Install deterministic search dependencies
+        working-directory: deployments/cloudflare/agent-search
+        run: npm ci
+
+      - name: Verify deterministic search and installed CLI against D1
+        working-directory: deployments/cloudflare/agent-search
+        run: npm run check
+
+      - name: Test and typecheck Agent gateway
+        working-directory: deployments/cloudflare/api-gateway
+        run: |
+          npm test
+          npm run typecheck
+
   backend-required:
     name: Backend required checks
     runs-on: ubuntu-latest
