@@ -1,3 +1,5 @@
+> 2026-10-10 更新：1.0 正式入口为 https://timmyagentic.si 与 https://api.timmyagentic.si/agent/v1。当前发布与运维以 [PUBLIC_RELEASE.md](PUBLIC_RELEASE.md) 为准；下文是迁移设计与历史验收记录，旧域名/暂停状态不代表当前新版服务。
+
 # Emomo Agent-native：云端零模型调用
 
 用户安装 CLI + skill，用自己的 Agent 理解需求、改写关键词、看图选图。新版 Emomo 云端仅做文字检索，**不调用 LLM 或 embedding**，也不收集 Agent 的 token/模型凭证。

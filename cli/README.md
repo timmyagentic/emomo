@@ -1,17 +1,15 @@
 # Emomo Agent CLI
 
-Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。0.4.0 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
+Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。1.0.0 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
 
 ## 安装
 
 ```sh
-cd cli
-npm pack
-npm install --global --ignore-scripts ./timmyagentic-emomo-cli-0.4.0.tgz
+npm install --global --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v1.0.0/timmyagentic-emomo-cli-1.0.0.tgz
 emomo skill install --agent codex
 ```
 
-本版本是本地构建包，没有发布到 npm。CLI包不包含私有图库或模型凭证。skill随包分发，支持`--agent claude`、`--agent agents`或`--dir <skills-directory>`；已有不同内容不会覆盖。
+正式包随 [GitHub Release](https://github.com/timmyagentic/emomo/releases/tag/v1.0.0) 分发，当前未发布到 npm registry。CLI包不包含私有图库或模型凭证。skill随包分发，支持`--agent claude`、`--agent agents`或`--dir <skills-directory>`；已有不同内容不会覆盖。
 
 ## 使用本地图库
 
@@ -54,7 +52,7 @@ emomo catalog import /path/to/metadata.json --vocabulary /path/to/vocabulary.jso
 emomo search '下班 开会' --api-url https://example.com/agent/v1
 ```
 
-选择顺序：`--catalog`；显式`--api-url`；`EMOMO_CATALOG`；`EMOMO_API_URL`；已保存catalog；默认远程API。`--catalog`与`--api-url`同时提供报错。默认远程地址仍是`https://api.emomo.net/agent/v1`。本地图库安装不部署或恢复生产服务。
+选择顺序：`--catalog`；显式`--api-url`；`EMOMO_CATALOG`；`EMOMO_API_URL`；已保存catalog；默认远程API。`--catalog`与`--api-url`同时提供报错。默认远程地址仍是`https://api.timmyagentic.si/agent/v1`。本地图库安装不部署或恢复生产服务。
 
 远程鉴权保留`EMOMO_API_TOKEN`，只发给API；图片域名保留`EMOMO_IMAGE_HOSTS`校验，不转发Token。HTTPS/显式本机HTTP、响应大小、重定向、停服/鉴权/限流与不自动重试行为保持。零模型保证适用于本地模式和新的共享服务，不能代替任意自定义API的保证。
 

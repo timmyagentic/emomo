@@ -4,6 +4,10 @@
 
 这消除了新版搜索服务的模型调用费用；Workers、D1、R2、日志、域名及保留的其他服务仍可能收费。限流和缓存不是账户账单硬上限。任意自定义 CLI API、旧 Go 服务及另行运行旧摄入流水线不在零模型保证内。
 
+## 1.0 正式服务
+
+官网 https://timmyagentic.si，API https://api.timmyagentic.si/agent/v1，图片 https://images.timmyagentic.si。正式配置已启用，使用独立 D1。公开索引为 7,302 张审核主图，重复版本不导入，不确定 OCR 不索引。发布流程见 [PUBLIC_RELEASE](../../../docs/PUBLIC_RELEASE.md)。以下旧库导出记录仅作历史参考。
+
 ## 检索契约
 
 - 复用已有 description、OCR、事实 tags，不把爬虫来源词作为图片语义标签。中文使用确定性单字/相邻双字索引，查询双字词；“无语”与单字“猫”可检索。英文按词归一化，无模型分词。
@@ -50,7 +54,7 @@ EMOMO_API_URL=http://127.0.0.1:8787/agent/v1 emomo search "无语 猫" --limit 8
 
 使用最新稳定 Miniflare v4 4.20260730.0 + Wrangler 4.116.0，避开 v5 alpha。本机运行/测试兼容日期 2026-07-30；生产配置为 2026-10-06，生产运行时仍需验证。最新官方类型/配置 schema 已对照，Env 由 Wrangler 生成。
 
-默认 AGENT_API_ENABLED=false，无生产路由/preview URL，D1 为本机 UUID 占位。dry-run 不创建资源。生产需单独授权创建 D1、导入已有文字元数据、验证真实查询。emomo.net 当前是域名出售页，需先确定长期保留的 API/图片域名，再绑定或切换其唯一 Custom Domain 并启用。详见 [启用清单](../../../docs/AGENT_NATIVE.md)。旧 api-gateway 代理模型搜索，不能作为零模型服务或自动兜底。
+当前配置 AGENT_API_ENABLED=true，绑定 api.timmyagentic.si 与专用生产 D1。后续生产变更仍需明确授权。emomo.net 出售页及旧模型后台保持独立；旧 api-gateway 不能作为零模型服务或自动兜底。
 
 
 ## 首期静态快照导入（2026-10-08）
@@ -62,7 +66,7 @@ npm run static:prepare -- /path/to/private-snapshot /path/to/new-static-bundle
 npm run static:verify -- /path/to/static-bundle /path/to/new-receipts /path/to/query-cases.json
 ```
 
-prepare 验证整个规范快照，从中生成 canonical meme/annotation JSONL、D1 SQL、对象清单和完整静态图片字节。ID 为 collection 与本地 ID 的组合，object key 使用 collection 与 SHA-256。输出目录拒绝覆盖，图像不裁切或重编码。准备包仍是私有副本，publicReleaseReady=false，没有云端上传或发布命令。
+prepare 验证整个规范快照，从中生成 canonical meme/annotation JSONL、D1 SQL、对象清单和完整静态图片字节。重复别名排除，partially_illegible OCR 不导入。ID 为 collection 与本地 ID 的组合，object key 使用 collection 与 SHA-256。输出目录拒绝覆盖，图像不裁切或重编码。准备包仍是私有副本，publicReleaseReady=false，没有云端上传或发布命令。
 
 内部导入输入支持 `text_presence`（1未知、2有字、3无字）及 `search_aliases`。显式文字状态不能与明确 labels 矛盾；缺 OCR 的新快照记录保留 unknown。审核别名/场景进入 FTS，不写入公共 Meme.tags；原描述/OCR、审核标签/主体继续复用。旧数据库导出没有这些附加字段时保持旧标签逻辑，未修改 HTTP proto。
 

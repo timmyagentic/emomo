@@ -47,3 +47,9 @@ test('real snapshot converter preserves asset bytes and private modes, refuses o
  await writeFile(join(snapshot,record.asset),'corrupt');await assert.rejects(()=>prepareStatic(snapshot,join(root,'bad')));
  await assert.rejects(()=>stat(join(root,'bad')),{code:'ENOENT'});
 });
+
+// Regression: public imports must not resurrect duplicate variants or uncertain OCR.
+test('uncertain OCR is omitted from static index projection', () => {
+ const row=indexRow(staticRecord('reviewed',{...record,imageText:'uncertain words',ocrReview:'partially_illegible'}));
+ assert.equal(row.ocr_text,'');assert.equal(row.text_presence,1);
+});

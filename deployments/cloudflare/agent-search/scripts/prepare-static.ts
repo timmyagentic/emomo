@@ -13,7 +13,7 @@ export function staticRecord(collection: string, row: LibraryRecord): JsonValue 
   const id = `${collection}-${row.id}`;
   if (!ID.test(id)) throw new Error('Collection-qualified image ID exceeds canonical limits.');
   const extension = row.image.format === 'jpeg' ? 'jpg' : row.image.format;
-  const text = row.imageText.trim();
+  const text = row.ocrReview === 'partially_illegible' ? '' : row.imageText.trim();
   return {
     meme: { id, storage_key: `collections/${collection}/${row.sha256}.${extension}`, content_hash: row.sha256,
       image_info: { width: row.image.width, height: row.image.height, format: formats[row.image.format] },
@@ -26,7 +26,7 @@ export function staticRecord(collection: string, row: LibraryRecord): JsonValue 
 }
 export async function prepareStatic(source: string, output: string) {
   const snapshot = await validateSnapshot(source);
-  const selected = snapshot.rows.filter(row => row.image.frames === 1 && row.mediaKind !== 'animation' && row.image.format !== 'gif');
+  const selected = snapshot.rows.filter(row => row.searchable !== false && row.image.frames === 1 && row.mediaKind !== 'animation' && row.image.format !== 'gif');
   if (!selected.length) throw new Error('No eligible static records.');
   const inputs = selected.map(row => staticRecord(snapshot.manifest.collection, row));
   const rows = inputs.map(indexRow);
@@ -53,7 +53,7 @@ export async function prepareStatic(source: string, output: string) {
     const report = { schemaVersion: 1, kind: 'emomo-static-preparation', collection: snapshot.manifest.collection,
       sourceContentRevision: snapshot.manifest.contentRevision, records: rows.length,
       usable: selected.filter(r => r.category === 'usable').length, objects: selected.filter(r => r.category === 'object_sticker').length,
-      excluded: snapshot.rows.filter(r => !selected.includes(r)).map(r => ({ id: r.id, reason: 'GIF_OR_ANIMATION_DEFERRED' })),
+      excluded: snapshot.rows.filter(r => !selected.includes(r)).map(r => ({ id: r.id, reason: r.searchable === false ? 'DUPLICATE_ALIAS' : 'GIF_OR_ANIMATION_DEFERRED' })),
       textWith: rows.filter(r => r.text_presence === 2).length, textUnknown: rows.filter(r => r.text_presence === 1).length,
       uniqueAssets: written.size, totalBytes: [...new Map(objects.map(o=>[o.key,o.bytes])).values()].reduce((a,b)=>a+b,0),
       metadataSha256: digest(metadata), sqlSha256: digest(sql), publicReleaseReady: false, networkCalls: 0, modelsUsed: [] };

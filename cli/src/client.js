@@ -3,7 +3,7 @@ import { link, mkdir, open, unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { EmomoError } from './error.js';
 
-export const DEFAULT_API_URL = 'https://api.emomo.net/agent/v1';
+export const DEFAULT_API_URL = 'https://api.timmyagentic.si/agent/v1';
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 const FORMATS = new Map([[1, 'jpeg'], [2, 'png'], [3, 'webp'], ['IMAGE_FORMAT_JPEG', 'jpeg'], ['IMAGE_FORMAT_PNG', 'png'], ['IMAGE_FORMAT_WEBP', 'webp']]);
@@ -135,7 +135,7 @@ export function identifyImage(bytes, { allowGif = false } = {}) {
 }
 
 export class EmomoClient {
-  constructor({ baseUrl = DEFAULT_API_URL, token, timeoutMs = 30000, imageHosts = ['r2.emomo.net', '*.r2.dev', '*.r2.cloudflarestorage.com'] } = {}) {
+  constructor({ baseUrl = DEFAULT_API_URL, token, timeoutMs = 30000, imageHosts = ['images.timmyagentic.si', 'r2.emomo.net', '*.r2.dev', '*.r2.cloudflarestorage.com'] } = {}) {
     this.base = apiUrl(baseUrl);
     this.token = token;
     this.timeoutMs = timeoutMs;

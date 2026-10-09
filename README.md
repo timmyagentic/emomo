@@ -1,143 +1,47 @@
-# Emomo
+# Emomo — 给你的 Agent，一点表情
 
-> Agent-native 表情包搜索 — CLI + skill + 共享云端图库
+[官网](https://timmyagentic.si) · [文档](https://timmyagentic.si/docs) · [v1.0.0](https://github.com/timmyagentic/emomo/releases/tag/v1.0.0)
 
-Emomo 让 Agent 用自然语言搜索现有表情包、选择候选并下载真实图片。新入口是独立 CLI 和随包分发的 skill，云端使用 Worker + D1 文字检索，复用既有 R2 图片及已保存的描述/OCR/标签。新版云端不调用 LLM 或 embedding，不收集 Agent 模型凭证。旧 Go 后端、React 网站和 Expo 移动端源码保留。
+Agent 理解语境、看图选择，Emomo 提供关键词搜索、详情和完整原图。公开图库含 7,302 张审核主图；467 张重复版本不重复进入公开索引。共享搜索服务不调用模型，不需要模型密钥。
 
-## Agent 快速上手
+## 开始
 
-需要 Node.js 22+。在此仓库检出中安装：
+需要 Node.js 22.13+。正式包随 GitHub Release 分发，尚未发布到 npm registry。
 
 ```sh
-npm install --global ./cli
+npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v1.0.0/timmyagentic-emomo-cli-1.0.0.tgz
 emomo skill install --agent codex
-emomo search "下班 开会" --limit 5
+emomo search "开心" --limit 5
+emomo download <返回的-id> --dir ./memes
 ```
 
-随后告诉 Agent：“用 Emomo 给我找张想下班但还要开会的表情包。”CLI 默认输出稳定 JSON，skill 指导选图和下载；无需给 Agent 模型或数据库管理密钥。也支持 Claude 和通用 `.agents/skills` 目录。
+Skill 支持 Codex、Claude Code 和通用 Agent 目录。所有命令输出 JSON，下载返回绝对路径、MIME、字节数与 SHA-256。请先检查图片再选择，分数不是语义置信度。
 
-**当前生产搜索仍暂停，新包尚未公开发布。** 本地安装不恢复云端服务，调用停服 API 会明确返回 `SERVICE_PAUSED`。安装、配置和输出契约见 [cli/README.md](cli/README.md)；共享搜索启用与验收见 [docs/AGENT_NATIVE.md](docs/AGENT_NATIVE.md)。
+## 模式
 
-旧 Go 后端保留的默认检索链路以 Qwen3-VL 多模态 image embedding 为主：导入时直接为图片生成 image 向量，并为 OCR/描述/tags 写入 keyword/BM25 sparse-only 向量；搜索时 image route 权重 0.7，keyword route 权重 0.3。VLM 描述和 OCR 作为展示元数据与 keyword 辅助信号保留；dense caption embedding 仍默认关闭，待 caption 策略验证后再启用。
+- **公开图库**：`https://api.timmyagentic.si/agent/v1`，Worker + D1 FTS5/BM25，图片从 `images.timmyagentic.si` 下载。PNG、JPEG、静态 WebP；每 IP 30 次/分钟，匿名只读。多个关键词 OR 召回，不保证理解所有语义。
+- **本地图库**：离线 SQLite，支持完整图片、动画、审核标签和重复版本。缺盘不自动回退云端。见 [CLI 文档](cli/README.md)。
 
-资源约束：表情包资源只支持静态图片；GIF 文件不再支持，也不会被摄入。
+## 仓库
 
-当前关系库收敛为四张核心表：`memes`、`meme_annotations`、`meme_vectors`，外加只记录来源/出处、不参与检索的 `meme_metadata`。protobuf message schema 定义在 [backend/proto/emomo/v1/](backend/proto/emomo/v1/)，拆为 `types.proto` / `meme.proto` / `api.proto`。在本项目里，protobuf 的边界是 API DTO、前后端生成类型、跨边界封闭枚举，以及少量结构化 DB JSON 值（当前仅 `memes.image_info`、`meme_annotations.labels`）；关系表结构、迁移、运行时配置和 UI 状态不归 protobuf 管。生成代码集中在 [backend/gen/](backend/gen/)（Go）与 [frontend/gen/](frontend/gen/)（TS），均以 `linguist-generated=true` 标记。数据库结构详见 [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)。
+| 路径 | 用途 |
+| --- | --- |
+| `cli/` | 零运行时依赖 CLI、Skill、本地图库工具 |
+| `deployments/cloudflare/agent-search/` | 确定性公开文字检索 |
+| `website/` | 新官网、安装与接口文档 |
+| `backend/`、`frontend/`、`mobile/` | 保留的旧产品源码，不是本次公开服务 |
 
-Supabase/PostgreSQL 部署中这四张核心表不启用 Row Level Security；前端不直接访问 Supabase 表，而是通过 Go API 访问数据，访问控制在服务端数据库连接层完成。
+HTTP DTO 以 `backend/proto/` 为唯一源。旧模型后台不会作为搜索兜底；旧 HF 自动推送已改为手动触发。发布运行说明见 [正式发布](docs/PUBLIC_RELEASE.md)。
 
-## 仓库结构
+## 开发验证
 
-```
-emomo/
-├── cli/          # Agent CLI + 可安装搜索 skill
-├── backend/      # Go + Gin + Qdrant + GORM，REST API + 摄入流水线
-├── frontend/     # React 19 + Vite + Framer Motion，单页应用
-├── mobile/       # Expo + React Native，iOS / Android 搜索 App
-├── deployments/  # 跨服务的 Docker Compose 编排（API + Grafana Alloy）
-├── docs/         # 跨服务设计与使用文档
-├── scripts/
-│   └── start.sh  # 本机一键起后端 + 前端
-├── render.yaml   # Render 部署配置（rootDir: backend）
-└── railway.json  # Railway 部署配置（dockerfilePath: backend/Dockerfile）
+```sh
+cd cli && npm run check && npm test
+cd ../deployments/cloudflare/agent-search && npm ci && npm run check
 ```
 
-每个子项目都有自己的 `README.md` / `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`，说明该子项目的本地开发与约定：
+检查包含真实本地 workerd/D1 与 npm 包安装。生产可用性以线上验收为准，测试 fixture 不等于真实图库覆盖证明。
 
-- 后端：[backend/README.md](backend/README.md)
-- 前端：[frontend/README.md](frontend/README.md)
-- 移动端：[mobile/README.md](mobile/README.md)
+## 许可
 
-## 快速上手
-
-以下是保留的后端及旧客户端开发方式，不会恢复线上服务。
-
-### 一键起前后端
-
-```bash
-./scripts/start.sh
-```
-
-脚本会先启 backend（`go run ./cmd/api`，端口 8080），再启 frontend（`npm run dev`，端口 5173）。需要先在 [backend/.env](backend/.env.example) 填好 API keys（Qdrant、对象存储、VLM、embedding 等）。
-
-### 单独运行某一块
-
-```bash
-# 后端
-cd backend
-cp .env.example .env   # 首次：填好 API keys
-go run ./cmd/api
-
-# 前端
-cd frontend
-cp .env.example .env   # 首次：默认指向 http://localhost:8080/api/v1
-npm install
-npm run dev
-
-# 移动端
-cd mobile
-npm install
-npm run gen
-EXPO_PUBLIC_API_BASE=http://localhost:8080/api/v1 npm run start
-```
-
-### Qwen3-VL 多模态向量摄入
-
-数据导入只支持 `backend/scripts/import-data.sh` 这一种入口。默认配置会使用 `qwen3vl` profile 写入 image 向量和 keyword/BM25 sparse-only 向量；caption dense 向量可以通过显式 `-e qwen3vl_caption` 做实验性回填，但不是默认导入链路：
-
-```bash
-cd backend
-./scripts/import-data.sh -p ./data/memes
-# 或显式指定 profile:
-./scripts/import-data.sh -p ./data/memes --profile qwen3vl
-```
-
-详见 [docs/MULTI_EMBEDDING.md](docs/MULTI_EMBEDDING.md) 与 [backend/configs/config.yaml](backend/configs/config.yaml)。
-
-### 更新 protobuf 消息 schema
-
-修改 `backend/proto/emomo/v1/` 下任意 `.proto` 后，需要同时重新生成后端 Go 与前端 TS：
-
-```bash
-# Go → backend/gen/
-cd backend && GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate
-
-# TS → frontend/gen/
-cd frontend && npm run gen
-
-# TS → mobile/gen/
-cd mobile && npm run gen
-```
-
-## 技术栈速览
-
-| 子项目 | 关键技术 |
-|--------|---------|
-| backend | Go 1.26.2, Gin, GORM, Qdrant (gRPC), S3/R2, Qwen3-VL 多模态 embeddings, OpenAI-compatible VLM/OCR 辅助分析, BM25 hybrid 检索, Grafana Alloy + Loki |
-| frontend | React 19, TypeScript, Vite 7, Framer Motion, Playwright e2e |
-| mobile | Expo SDK 54, React Native 0.81, React 19, TypeScript, AsyncStorage, Expo MediaLibrary/Sharing/FileSystem |
-
-## 部署
-
-- **Docker Compose（本机）**：`docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d`，会起 API 容器 + Grafana Alloy 日志采集（Qdrant 与对象存储需自备）。
-- **Render**：根的 [render.yaml](render.yaml) 把后端服务的 rootDir 设为 `backend/`。
-- **Railway**：根的 [railway.json](railway.json) 指向 `backend/Dockerfile`。
-- **Hugging Face Space**：[`.github/workflows/sync_to_hf.yml`](.github/workflows/sync_to_hf.yml) 在每次 push 到 main 时把 `backend/` 子树拆出来 force-push 到 Space 的 `main` 分支，所以 Space 看到的根就是 `backend/`。
-
-## 贡献约定
-
-- 提交信息使用 Conventional Commits（`feat:`、`fix:`、`chore:` 等）；跨子项目的改动在正文里按目录分点说明。
-- AI agents 协作约定见各子项目的 [AGENTS.md](backend/AGENTS.md) / [frontend/AGENTS.md](frontend/AGENTS.md) 与本仓库根的 [AGENTS.md](AGENTS.md)。
-- 不提交 secrets，使用各子项目下的 `.env` 与 `.env.example`。
-
-## 更多文档
-
-- [docs/QUICK_START.md](docs/QUICK_START.md)
-- [docs/INGEST.md](docs/INGEST.md)
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- [docs/MULTI_EMBEDDING.md](docs/MULTI_EMBEDDING.md)
-- [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)
-
-## License
-
-[MIT](LICENSE)
+代码为 MIT。图片权利属于各自权利人，不适用代码许可证，也不提供商用授权承诺。权利人可通过 [Issue](https://github.com/timmyagentic/emomo/issues) 提供图片 ID 请求处理。

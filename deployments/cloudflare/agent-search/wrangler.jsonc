@@ -6,16 +6,16 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
-  // No production route. Activation requires an explicit domain cutover.
+  "routes": [{ "pattern": "api.timmyagentic.si", "custom_domain": true }],
   "vars": {
-    "AGENT_API_ENABLED": "false",
-    "IMAGE_BASE_URL": "https://r2.emomo.net"
+    "AGENT_API_ENABLED": "true",
+    "IMAGE_BASE_URL": "https://images.timmyagentic.si"
   },
   "d1_databases": [{
     "binding": "DB",
     "database_name": "emomo-agent-index",
-    // Local-only placeholder: replace after separately authorized provisioning.
-    "database_id": "00000000-0000-0000-0000-000000000000",
+    // Dedicated production read model.
+    "database_id": "576f07ac-6950-41fe-922f-637cface62f8",
     "remote": false,
     "migrations_dir": "migrations"
   }],
