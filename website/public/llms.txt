@@ -5,12 +5,14 @@
 - Website: https://timmyagentic.si/
 - Docs: https://timmyagentic.si/docs
 - Source: https://github.com/timmyagentic/emomo
-- Release: https://github.com/timmyagentic/emomo/releases/tag/v1.0.0
+- Release: https://github.com/timmyagentic/emomo/releases/tag/v1.0.0-beta1
 - API: https://api.timmyagentic.si/agent/v1
 - Skill: https://timmyagentic.si/SKILL.md
 
-Install with Node.js >=22.13:
-npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v1.0.0/timmyagentic-emomo-cli-1.0.0.tgz
+One-prompt installation: read https://timmyagentic.si/install.md and perform its installation and verification steps.
+
+Manual installation with Node.js >=22.13:
+npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v1.0.0-beta1/timmyagentic-emomo-cli-1.0.0-beta1.tgz
 emomo skill install --agent codex
 
 Use emomo search "开心" --limit 5, inspect actual candidates, then emomo download <returned-id> --dir <new-output-directory>.

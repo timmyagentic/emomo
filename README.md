@@ -1,15 +1,21 @@
 # Emomo — 给你的 Agent，一点表情
 
-[官网](https://timmyagentic.si) · [文档](https://timmyagentic.si/docs) · [v1.0.0](https://github.com/timmyagentic/emomo/releases/tag/v1.0.0)
+[官网](https://timmyagentic.si) · [文档](https://timmyagentic.si/docs) · [v1.0.0-beta1](https://github.com/timmyagentic/emomo/releases/tag/v1.0.0-beta1)
 
 Agent 理解语境、看图选择，Emomo 提供关键词搜索、详情和完整原图。公开图库含 7,302 张审核主图；467 张重复版本不重复进入公开索引。共享搜索服务不调用模型，不需要模型密钥。
 
 ## 开始
 
-需要 Node.js 22.13+。正式包随 GitHub Release 分发，尚未发布到 npm registry。
+需要 Node.js 22.13+。预发布包随 GitHub Release 分发，尚未发布到 npm registry。
+
+把这一句话发给有终端权限的 Agent，即可让它执行安装、Skill 配置与验证：
+
+> 请阅读 https://timmyagentic.si/install.md，直接为当前 Agent 安装并配置 Emomo，完成后验证搜索和图片下载。
+
+手动安装：
 
 ```sh
-npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v1.0.0/timmyagentic-emomo-cli-1.0.0.tgz
+npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v1.0.0-beta1/timmyagentic-emomo-cli-1.0.0-beta1.tgz
 emomo skill install --agent codex
 emomo search "开心" --limit 5
 emomo download <返回的-id> --dir ./memes
@@ -31,7 +37,7 @@ Skill 支持 Codex、Claude Code 和通用 Agent 目录。所有命令输出 JSO
 | `website/` | 新官网、安装与接口文档 |
 | `backend/`、`frontend/`、`mobile/` | 保留的旧产品源码，不是本次公开服务 |
 
-HTTP DTO 以 `backend/proto/` 为唯一源。旧模型后台不会作为搜索兜底；旧 HF 自动推送已改为手动触发。发布运行说明见 [正式发布](docs/PUBLIC_RELEASE.md)。
+HTTP DTO 以 `backend/proto/` 为唯一源。旧模型后台不会作为搜索兜底；旧 HF 自动推送已改为手动触发。发布运行说明见 [Beta 预发布](docs/PUBLIC_RELEASE.md)。
 
 ## 开发验证
 

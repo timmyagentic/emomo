@@ -1,10 +1,14 @@
-# Emomo 1.0 public release
+> v1.0.0 was withdrawn at the user's request. The current version is v1.0.0-beta1 and must be marked as a GitHub prerelease.
+
+# Emomo 1.0.0-beta1 prerelease
+
+The installation entry point is a copyable prompt linking to https://timmyagentic.si/install.md. Agents execute the documented install, Skill setup and live verification rather than asking users to paste shell commands.
 
 The current product is the Agent CLI + skill and deterministic search service. The official site is https://timmyagentic.si; API is https://api.timmyagentic.si/agent/v1; original images use https://images.timmyagentic.si. The emomo.net domain-sale site remains independent.
 
 ## Distribution
 
-The dependency-free Node.js >=22.13 CLI is distributed as `timmyagentic-emomo-cli-1.0.0.tgz` on GitHub Release `v1.0.0`, with SHA-256 checksums. It is not published to the npm registry. Install the release URL with `npm install -g --ignore-scripts`. Skill instructions ship in that archive and at the website's `/SKILL.md`.
+The dependency-free Node.js >=22.13 CLI is distributed as `timmyagentic-emomo-cli-1.0.0-beta1.tgz` on GitHub Release `v1.0.0-beta1`, with SHA-256 checksums. It is not published to the npm registry. Install the release URL with `npm install -g --ignore-scripts`. Skill instructions ship in that archive and at the website's `/SKILL.md`.
 
 ## Production components
 
