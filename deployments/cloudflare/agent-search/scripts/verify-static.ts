@@ -71,10 +71,11 @@ try {
   }
   assert.equal(rows.map(importSQL).join('\n')+'\n',sql);
   const workerRoot=fileURLToPath(new URL('../',import.meta.url).href);
-  const bundle=await build({entryPoints:[join(workerRoot,'src/index.ts')],write:false,bundle:true,format:'esm',platform:'browser',target:'es2022',metafile:true});
+  const bundle=await build({entryPoints:[join(workerRoot,'src/index.ts')],write:false,bundle:true,format:'esm',platform:'browser',target:'es2022',metafile:true,external:['cloudflare:workers']});
   const inputs=Object.keys(bundle.metafile!.inputs);
   assert.ok(inputs.every(p=>{const rel=relative(workerRoot,resolve(p));return rel.startsWith('src/')||rel.startsWith('gen/')||rel.startsWith('node_modules/@bufbuild/protobuf/');}));
   mf=new Miniflare({modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],
+    durableObjects:{PER_IP_LIMITER:{className:'PerIpLimiter',useSQLite:true}},
     bindings:{AGENT_API_ENABLED:'true',IMAGE_BASE_URL:origin},d1Databases:{DB:'actual-static-index'},
     ratelimits:{EMOMO_RATE_LIMITER:{namespace_id:'1100',simple:{limit:30,period:60}}},
     outboundService:()=>{calls++;return new MFResponse('External HTTP prohibited',{status:502});}});

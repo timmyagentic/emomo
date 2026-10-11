@@ -1,3 +1,5 @@
+import { enforceInterval, uncached } from './rate-limit.js';
+export { PerIpLimiter } from './rate-limit.js';
 import { create, fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { SearchRequestSchema, SearchResponseSchema, GetMemeResponseSchema, GetCategoriesResponseSchema, GetStatsResponseSchema } from '../gen/emomo/v1/api_pb.js';
 import { MemeSchema, SearchResultSchema } from '../gen/emomo/v1/meme_pb.js';
@@ -127,6 +129,10 @@ export default {
         response.headers.set('retry-after', '60');
         return response;
       }
+      if (path === '/agent/v1/search') {
+        const denied = await enforceInterval(request, env.PER_IP_LIMITER);
+        if (denied) return denied;
+      }
       // Query text is not put in cache URLs or logs. Bound before hashing.
       const content = expected === 'POST' ? await body(request) : '';
       const normalized = expected === 'POST' ? new Request(request.url, { method: 'POST', headers: request.headers, body: content }) : request;
@@ -134,10 +140,10 @@ export default {
       const hash = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
       const key = new Request(`${url.origin}/__emomo-cache/${hash}`);
       const cached = await caches.default.match(key);
-      if (cached) return cached;
+      if (cached) return uncached(cached);
       const response = await serve(normalized, path, env);
       if (response.ok) ctx.waitUntil(caches.default.put(key, response.clone()).catch(() => { console.warn(JSON.stringify({ event: 'cache_write_failed' })); }));
-      return response;
+      return uncached(response);
     } catch (error) {
       if (error instanceof HttpError) return json({ error: error.message }, error.status);
       console.error(JSON.stringify({ event: 'index_unavailable' }));

@@ -6,6 +6,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { execFile } from 'node:child_process';
@@ -31,6 +32,7 @@ const options = (enabled: string, imageBase = 'https://r2.emomo.net') => ({
   compatibilityFlags: ['nodejs_compat'],
   bindings: { AGENT_API_ENABLED: enabled, IMAGE_BASE_URL: imageBase },
   d1Databases: { DB: 'local-index' },
+  durableObjects: { PER_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } },
   ratelimits: { EMOMO_RATE_LIMITER: { namespace_id: '1002', simple: { limit: 30, period: 60 as const } } },
   // Block every external HTTP request and prove success without one.
   outboundService: () => { outboundCalls++; return new MFResponse('External HTTP forbidden in this test', { status: 502 }); },
@@ -38,7 +40,7 @@ const options = (enabled: string, imageBase = 'https://r2.emomo.net') => ({
 
 before(async () => {
   temporary = await mkdtemp(join(tmpdir(), 'emomo-d1-'));
-  const bundle = await build({ entryPoints: ['src/index.ts'], write: false, bundle: true, format: 'esm', platform: 'browser', target: 'es2022', metafile: true });
+  const bundle = await build({ entryPoints: ['src/index.ts'], write: false, bundle: true, format: 'esm', platform: 'browser', target: 'es2022', metafile: true, external: ['cloudflare:workers'] });
   script = bundle.outputFiles[0].text;
   bundleInputs = Object.keys(bundle.metafile!.inputs);
   mf = new Miniflare(options('true'));
@@ -113,7 +115,7 @@ test('bounds, unknown profiles, malformed bodies and query operators cannot bypa
     assert.equal(response.status, input.query === '* NEAR()' ? 200 : 400);
   }
   for (const [body, type, status] of [['{', 'application/json', 400], ['x', 'text/plain', 415], ['x'.repeat(8193), 'application/json', 413]] as const) {
-    assert.equal((await mf.dispatchFetch('https://emomo.test/agent/v1/search', { method: 'POST', headers: { 'content-type': type, 'cf-connecting-ip': '192.0.2.2' }, body })).status, status);
+    assert.equal((await mf.dispatchFetch('https://emomo.test/agent/v1/search', { method: 'POST', headers: { 'content-type': type, 'cf-connecting-ip': `192.0.2.${clientIP++}` }, body })).status, status);
   }
   assert.equal(outboundCalls, 0);
 });
@@ -144,14 +146,18 @@ test('disabled and unavailable D1 states do not call any fallback; rate limiter 
 
 test('actual installed CLI searches local D1, gets real metadata and downloads an image with no Worker outbound HTTP', { timeout: 30000 }, async () => {
   let local: Miniflare;
+  const id = createHash('sha256').update(PNG).digest('hex');
+  const imageKey = `collections/reviewed/${id}.png`;
+  const downloadBundle = await build({ entryPoints: ['src/download.ts'], write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
+  const images = new Miniflare({ modules: true, script: downloadBundle.outputFiles[0].text, compatibilityDate: '2026-07-30', r2Buckets: { IMAGES: 'cli-images' }, durableObjects: { DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } }, ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1004', simple: { limit: 30, period: 60 } } } });
+  await (await images.getR2Bucket('IMAGES') as unknown as R2Bucket).put(imageKey, new Uint8Array(PNG));
   const server = createServer(async (incoming, outgoing) => {
     try {
-      if (incoming.url === '/cat-1.png') { outgoing.writeHead(200, { 'content-type': 'image/png' }); outgoing.end(PNG); return; }
       const chunks: Buffer[] = [];
       for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
-      const response = await local.dispatchFetch(`${origin}${incoming.url}`, {
+      const response = await (incoming.url === `/${imageKey}` ? images : local).dispatchFetch(`${origin}${incoming.url}`, {
         method: incoming.method,
-        headers: { 'content-type': incoming.headers['content-type'] || 'application/json' },
+        headers: { 'content-type': incoming.headers['content-type'] || 'application/json', 'cf-connecting-ip': '198.51.100.1' },
         body: incoming.method === 'POST' ? Buffer.concat(chunks) : undefined,
       });
       outgoing.writeHead(response.status, Object.fromEntries(response.headers));
@@ -168,7 +174,7 @@ test('actual installed CLI searches local D1, gets real metadata and downloads a
     const db = await local.getD1Database('DB');
     const schema = await readFile(fileURLToPath(new URL('../migrations/0001_text_index.sql', import.meta.url).href), 'utf8');
     await db.batch(schema.split('-- statement').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)));
-    await db.prepare(importSQL(indexRow({ meme: { id: 'cat-1', storage_key: 'cat-1.png', image_info: { width: 1, height: 1, format: 2 } }, annotation: { meme_id: 'cat-1', description: '一只猫咪露出无语的表情' } }))).run();
+    await db.prepare(importSQL(indexRow({ meme: { id, storage_key: imageKey, image_info: { width: 1, height: 1, format: 2 } }, annotation: { meme_id: id, description: '一只猫咪露出无语的表情' } }))).run();
     const cleanEnv = developmentEnv(temporary);
     const packed = JSON.parse((await execute('npm', ['pack', '--ignore-scripts', '--pack-destination', temporary, '--json'], { cwd: cli, env: cleanEnv })).stdout)[0];
     const prefix = join(temporary, 'installed');
@@ -179,12 +185,18 @@ test('actual installed CLI searches local D1, gets real metadata and downloads a
     const installed = await invoke(['skill', 'install']);
     assert.match(await readFile(join(installed.data.path, 'SKILL.md'), 'utf8'), /keyword|关键词/i);
     const result = await invoke(['search', '无语 猫', '--limit', '3']);
-    assert.equal(result.data.results[0].id, 'cat-1');
-    assert.equal((await invoke(['get', 'cat-1'])).data.meme.id, 'cat-1');
-    const image = await invoke(['download', 'cat-1', '--dir', join(temporary, 'images')]);
+    assert.equal(result.data.results[0].id, id);
+    assert.equal((await invoke(['get', id])).data.meme.id, id);
+    const image = await invoke(['download', id, '--dir', join(temporary, 'images')]);
     assert.deepEqual(await readFile(image.data.path), PNG);
+    await assert.rejects(() => invoke(['download', id, '--dir', join(temporary, 'second-download')]), error => {
+      const output = JSON.parse((error as { stdout: string }).stdout);
+      assert.equal(output.error.code, 'RATE_LIMITED');
+      assert.equal(output.error.retryAfterSeconds, 1);
+      return true;
+    });
     assert.equal(outboundCalls, 0);
-  } finally { server.closeAllConnections(); server.close(); await local.dispose(); }
+  } finally { server.closeAllConnections(); server.close(); await local.dispose(); await images.dispose(); }
 });
 
 test('the bundled dependency graph contains only canonical protobuf and deterministic source modules', () => {
@@ -207,4 +219,36 @@ test('reviewed unknown text remains filterable and object stickers require expli
   assert.equal(JSON.parse(await unknown.text()).results[0].text_presence,1);
   const noText=await request('/agent/v1/search',{query:'未知',text_presence:3});
   assert.equal(JSON.parse(await noText.text()).total,0); assert.equal(outboundCalls,0);
+});
+
+test('strict per-IP search interval serializes bursts before shared cache and ignores spoofed forwarding headers', async () => {
+  const search = (ip: string, forwarded = '203.0.113.1') => mf.dispatchFetch('https://emomo.test/agent/v1/search', {
+    method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip, 'x-forwarded-for': forwarded }, body: JSON.stringify({ query: '猫' }),
+  });
+  // Warm the shared query cache from a different client first.
+  assert.equal((await search('198.51.100.50')).status, 200);
+  const burst = await Promise.all(Array.from({ length: 20 }, (_, i) => search('198.51.100.51', `203.0.113.${i}`)));
+  assert.equal(burst.filter(r => r.status === 200).length, 1);
+  assert.equal(burst.filter(r => r.status === 429).length, 19);
+  for (const response of burst) {
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    if (response.status === 429) assert.equal(response.headers.get('retry-after'), '1');
+  }
+  assert.equal((await search('198.51.100.52')).status, 200);
+  assert.equal((await mf.dispatchFetch('https://emomo.test/agent/v1/memes/cat-1', { headers: { 'cf-connecting-ip': '198.51.100.51' } })).status, 200);
+  await new Promise(resolve => setTimeout(resolve, 1050));
+  assert.equal((await search('198.51.100.51')).status, 200);
+});
+
+test('missing trusted identity and missing durable binding fail closed even with cached search results', async () => {
+  const init = { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '', 'x-forwarded-for': '198.51.100.60' }, body: JSON.stringify({ query: '猫' }) };
+  // Miniflare supplies loopback CF-Connecting-IP automatically; strip it inside a test-only entrypoint.
+  const missingIdentityBundle = await build({ stdin: { contents: "import handler from './src/index.ts'; export { PerIpLimiter } from './src/rate-limit.ts'; export default { fetch(r,e,c) { r = new Request(r); r.headers.delete('cf-connecting-ip'); return handler.fetch(r,e,c); } };", resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
+  const missingIdentity = new Miniflare({ ...options('true'), script: missingIdentityBundle.outputFiles[0].text });
+  try { assert.equal((await missingIdentity.dispatchFetch('https://emomo.test/agent/v1/search', init)).status, 503); }
+  finally { await missingIdentity.dispose(); }
+  const broken = new Miniflare({ ...options('true'), durableObjects: {} });
+  try {
+    assert.equal((await broken.dispatchFetch('https://emomo.test/agent/v1/search', { ...init, headers: { ...init.headers, 'cf-connecting-ip': '198.51.100.61' } })).status, 503);
+  } finally { await broken.dispose(); }
 });

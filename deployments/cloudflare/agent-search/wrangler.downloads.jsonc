@@ -1,0 +1,54 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "emomo-image-downloads",
+  "main": "src/download.ts",
+  "compatibility_date": "2026-10-11",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "images.timmyagentic.si",
+      "custom_domain": true
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "emomo-reviewed-public",
+      "remote": false
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DOWNLOAD_IP_LIMITER",
+        "class_name": "PerIpLimiter"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-per-ip-limit",
+      "new_sqlite_classes": [
+        "PerIpLimiter"
+      ]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "DOWNLOAD_RATE_LIMITER",
+      "namespace_id": "1004",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  }
+}

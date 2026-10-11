@@ -1,3 +1,5 @@
 worker-configuration.d.ts
 *.jsonl
 index-data*.sql
+download-configuration.d.ts
+dist-downloads/

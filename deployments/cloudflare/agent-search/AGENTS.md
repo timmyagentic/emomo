@@ -1,6 +1,6 @@
 # Deterministic Agent search
 
-This independent Worker serves the canonical Emomo protobuf REST DTOs from a D1 text index. It must never call a model, proxy the legacy backend, use an AI binding, or make an outbound fetch. Do not add automatic OCR, captioning, embeddings, query expansion, reranking or a model fallback. User Agents do that work in their own sessions. Existing images remain in R2 and are downloaded directly by the CLI.
+This independent Worker serves the canonical Emomo protobuf REST DTOs from a D1 text index. It must never call a model, proxy the legacy backend, use an AI binding, or make an outbound fetch. Do not add automatic OCR, captioning, embeddings, query expansion, reranking or a model fallback. User Agents do that work in their own sessions. Images remain in R2. The CLI downloads full bytes through the separate rate-limited image Worker; the search Worker never proxies images.
 
 `gen/` is synchronized generated output from the canonical backend proto schemas (via `frontend/gen/`); use `npm run gen:sync` after canonical regeneration. No competing HTTP DTOs. Internal index input and D1 table shapes are not HTTP contracts. These migrations belong only to the new D1 read model; do not change the legacy PostgreSQL schema/data or its GORM migration ownership.
 

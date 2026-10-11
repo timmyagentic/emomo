@@ -19,6 +19,8 @@
     "remote": false,
     "migrations_dir": "migrations"
   }],
+  "durable_objects": { "bindings": [{ "name": "PER_IP_LIMITER", "class_name": "PerIpLimiter" }] },
+  "migrations": [{ "tag": "v1-per-ip-limit", "new_sqlite_classes": ["PerIpLimiter"] }],
   "ratelimits": [{
     "name": "EMOMO_RATE_LIMITER",
     "namespace_id": "1002",
