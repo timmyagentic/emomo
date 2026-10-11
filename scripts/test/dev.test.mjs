@@ -20,6 +20,7 @@ test('default profile excludes legacy dependencies; full retains mobile generati
 });
 test('tool environment excludes credentials and caller config without changing HOME', () => {
   const env = developmentEnv('/checkout', { HOME: '/user', PATH: '/bin', HTTPS_PROXY: 'http://proxy.invalid:8080', NODE_EXTRA_CA_CERTS: '/session/ca.pem', CLOUDFLARE_API_TOKEN: 'fixture', NODE_OPTIONS: '--require=unexpected', npm_config_userconfig: '/user/private' });
+  assert.equal(env.GOENV, 'off');
   assert.equal(env.HOME, '/user');
   assert.equal(env.HTTPS_PROXY, 'http://proxy.invalid:8080');
   assert.equal(env.NODE_EXTRA_CA_CERTS, '/session/ca.pem');
