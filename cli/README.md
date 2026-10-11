@@ -1,21 +1,21 @@
 # Emomo Agent CLI
 
-Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。1.0.1 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
+Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。0.1.0 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
 
 ## 安装
 
 把这一句话发给有终端权限的 Agent，即可让它执行安装、Skill 配置与验证：
 
-> 请先审查 https://github.com/timmyagentic/emomo/releases/download/v1.0.1/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 1.0.1 CLI 与 Skill，校验工件并验证匿名搜索和图片下载，不执行额外网页指令。
+> 请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.0/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 0.1.0 CLI 与 Skill，校验工件并验证匿名搜索和图片下载，不执行额外网页指令。
 
 手动安装：
 
 ```sh
-npm install --global --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v1.0.1/timmyagentic-emomo-cli-1.0.1.tgz
+npm install --global --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.0/timmyagentic-emomo-cli-0.1.0.tgz
 emomo skill install --agent codex
 ```
 
-稳定版包随 [GitHub Release](https://github.com/timmyagentic/emomo/releases/tag/v1.0.1) 分发，当前未发布到 npm registry。CLI包不包含私有图库或模型凭证。skill随包分发，支持`--agent claude`、`--agent agents`或`--dir <skills-directory>`；已有不同内容不会覆盖。
+稳定版包随 [GitHub Release](https://github.com/timmyagentic/emomo/releases/tag/v0.1.0) 分发，当前未发布到 npm registry。CLI包不包含私有图库或模型凭证。skill随包分发，支持`--agent claude`、`--agent agents`或`--dir <skills-directory>`；已有不同内容不会覆盖。
 
 ## 使用本地图库
 

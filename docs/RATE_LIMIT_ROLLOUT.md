@@ -1,6 +1,6 @@
 # Search and original-image protection
 
-Implementation and local validation do not prove production activation. This change needs an authorized production cutover, with recorded Worker version IDs and live checks. The existing CLI 1.0.1 protocol and image URLs stay compatible; no package release or image/index reimport is needed.
+Implementation and local validation do not prove production activation. This change needs an authorized production cutover, with recorded Worker version IDs and live checks. The existing CLI 0.1.0 protocol and image URLs stay compatible; no package release or image/index reimport is needed.
 
 ## Policy
 
@@ -31,6 +31,6 @@ Read-only inventory on 2026-10-11 found `emomo-reviewed-public` has exactly one 
 - Immediately after search, retrieve metadata and download one full image with the released CLI. Confirm bytes and SHA-256 against the public metadata. A second immediate download (including a different image or HEAD) must get 429. Wait and retry. Verify Range cannot serve bytes outside the guard.
 - A second independently available egress IP should succeed during the first IP's interval. Cross-location checks are UNVERIFIED unless actually performed; do not manufacture another device identity or copy credentials.
 - Re-read R2 public-domain state: no R2 custom domains and r2.dev disabled. Test the old managed endpoint and known aliases using a known object key; none may return image bytes. Confirm image hostname routes to the Worker. Test fresh requests, not a browser's prior local cache.
-- Check old API routes remain 410 and browser Origin requests 403. Check both website examples render at desktop/mobile widths and the installation prompt still points to stable CLI 1.0.1.
+- Check old API routes remain 410 and browser Origin requests 403. Check both website examples render at desktop/mobile widths and the installation prompt still points to stable CLI 0.1.0.
 
 If any guard or binding fails, keep the affected endpoint closed (503/outage) and repair forward. Reopening R2 public access or rolling back to unprotected versions requires explicit authorization and must be reported as loss of protection.
