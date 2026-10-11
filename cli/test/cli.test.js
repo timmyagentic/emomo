@@ -67,7 +67,7 @@ test('an API URL cannot carry credentials, query parameters, or public HTTP', as
     assert.equal(JSON.stringify(result.output).includes('do-not-leak-123'), false);
     assert.equal(JSON.stringify(result.output).includes('secret=value'), false);
   }
-  assert.equal((await cli(['stats', '--api-url', 'http://127.0.0.1:1/api/v1'], { EMOMO_API_TOKEN: 'test-only-token' })).output.error.code, 'INSECURE_TOKEN');
+  assert.equal((await cli(['stats', '--api-url', 'http://127.0.0.1:1/api/v1'], { EMOMO_API_TOKEN: 'test-only-token', EMOMO_API_URL: 'http://127.0.0.1:1/api/v1' })).output.error.code, 'INSECURE_TOKEN');
 });
 
 test('offline, missing, forbidden, and rate-limited responses have stable error codes without leaking upstream bodies', async t => {

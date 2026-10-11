@@ -1,3 +1,5 @@
+// @ts-expect-error Shared dependency-free development environment helper.
+import { developmentEnv } from '../../../../scripts/dev.mjs';
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -167,11 +169,12 @@ test('actual installed CLI searches local D1, gets real metadata and downloads a
     const schema = await readFile(fileURLToPath(new URL('../migrations/0001_text_index.sql', import.meta.url).href), 'utf8');
     await db.batch(schema.split('-- statement').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)));
     await db.prepare(importSQL(indexRow({ meme: { id: 'cat-1', storage_key: 'cat-1.png', image_info: { width: 1, height: 1, format: 2 } }, annotation: { meme_id: 'cat-1', description: '一只猫咪露出无语的表情' } }))).run();
-    const packed = JSON.parse((await execute('npm', ['pack', '--pack-destination', temporary, '--json'], { cwd: cli })).stdout)[0];
+    const cleanEnv = developmentEnv(temporary);
+    const packed = JSON.parse((await execute('npm', ['pack', '--ignore-scripts', '--pack-destination', temporary, '--json'], { cwd: cli, env: cleanEnv })).stdout)[0];
     const prefix = join(temporary, 'installed');
-    await execute('npm', ['install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', join(temporary, packed.filename)]);
+    await execute('npm', ['install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', join(temporary, packed.filename)], { env: cleanEnv });
     const binary = join(prefix, 'bin', 'emomo');
-    const env = { ...process.env, EMOMO_API_URL: `${origin}/agent/v1`, EMOMO_API_TOKEN: '', CODEX_HOME: join(temporary, 'codex') };
+    const env = { ...cleanEnv, EMOMO_CONFIG_DIR: join(temporary, 'config'), EMOMO_API_URL: `${origin}/agent/v1`, EMOMO_API_TOKEN: '', CODEX_HOME: join(temporary, 'codex') };
     const invoke = async (args: string[]) => JSON.parse((await execute(binary, args, { env })).stdout);
     const installed = await invoke(['skill', 'install']);
     assert.match(await readFile(join(installed.data.path, 'SKILL.md'), 'utf8'), /keyword|关键词/i);

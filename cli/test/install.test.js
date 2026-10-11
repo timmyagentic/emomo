@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { developmentEnv } from '../../scripts/dev.mjs';
 import { PNG, serve, json, wireMeme } from './helpers.js';
 
 const exec = promisify(execFile);
@@ -14,14 +15,17 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 test('packed npm install includes the CLI and skill, and performs search -> detail -> image download', { timeout: 30000 }, async t => {
   const temporary = await mkdtemp(join(tmpdir(), 'emomo-install-e2e-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
-  const packed = JSON.parse((await exec('npm', ['pack', '--pack-destination', temporary, '--json'], { cwd: root })).stdout)[0];
+  const cleanEnv = developmentEnv(temporary);
+  await mkdir(cleanEnv.HOME, { recursive: true });
+  const npm = (args, options = {}) => exec(process.execPath, [process.env.npm_execpath, ...args], { ...options, env: cleanEnv });
+  const packed = JSON.parse((await npm(['pack', '--ignore-scripts', '--pack-destination', temporary, '--json'], { cwd: root })).stdout)[0];
   const paths = packed.files.map(file => file.path);
   assert.ok(paths.includes('bin/emomo.js'));
   assert.ok(paths.includes('skills/emomo/SKILL.md'));
   assert.ok(paths.includes('LICENSE'));
   assert.ok(paths.every(path => !path.includes('.env') && !path.startsWith('test/')));
   const prefix = join(temporary, 'installed');
-  await exec('npm', ['install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', join(temporary, packed.filename)]);
+  await npm(['install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', join(temporary, packed.filename)]);
   const binary = process.platform === 'win32' ? join(prefix, 'emomo.cmd') : join(prefix, 'bin', 'emomo');
   let origin;
   const api = await serve((request, response, body) => {
@@ -33,8 +37,10 @@ test('packed npm install includes the CLI and skill, and performs search -> deta
     else json(response, { error: 'not found' }, 404);
   }, t);
   origin = api.origin;
-  const env = { ...process.env, EMOMO_API_URL: `${origin}/agent/v1`, EMOMO_API_TOKEN: '', CODEX_HOME: join(temporary, 'codex') };
-  const invoke = async args => JSON.parse((await exec(binary, args, { env })).stdout);
+  await access(binary);
+  const script = join(prefix, ...(process.platform === 'win32' ? [] : ['lib']), 'node_modules', '@timmyagentic', 'emomo-cli', 'bin', 'emomo.js');
+  const env = { ...cleanEnv, EMOMO_CONFIG_DIR: join(temporary, 'config'), EMOMO_API_URL: `${origin}/agent/v1`, EMOMO_API_TOKEN: '', CODEX_HOME: join(temporary, 'codex') };
+  const invoke = async args => JSON.parse((await exec(process.execPath, [script, ...args], { env })).stdout);
   const installed = await invoke(['skill', 'install']);
   assert.match(await readFile(join(installed.data.path, 'SKILL.md'), 'utf8'), /emomo download/);
   const search = await invoke(['search', '开会想下班', '--limit', '3']);

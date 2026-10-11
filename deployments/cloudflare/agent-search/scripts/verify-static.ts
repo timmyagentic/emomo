@@ -1,3 +1,5 @@
+// @ts-expect-error Shared dependency-free development environment helper.
+import { developmentEnv } from '../../../../scripts/dev.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, mkdtemp, rm, realpath } from 'node:fs/promises';
@@ -85,11 +87,12 @@ try {
   const cases:Case[]=JSON.parse(await readFile(casesPath,'utf8'));
   assert.ok(cases.length>0&&cases.every(c=>typeof c.query==='string'&&c.expectedIds.length>0));
   const cliRoot=fileURLToPath(new URL('../../../../cli/',import.meta.url).href);
-  const pack=JSON.parse((await execute('npm',['pack','--pack-destination',target,'--json'],{cwd:cliRoot})).stdout)[0];
+  const cleanEnv=developmentEnv(scratch);
+  const pack=JSON.parse((await execute('npm',['pack','--ignore-scripts','--pack-destination',target,'--json'],{cwd:cliRoot,env:cleanEnv})).stdout)[0];
   const prefix=join(target,'installed');
-  await execute('npm',['install','--global','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--offline',join(target,pack.filename)]);
+  await execute('npm',['install','--global','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund','--offline',join(target,pack.filename)],{env:cleanEnv});
   const binary=join(prefix,'bin/emomo'),cwd=join(target,'clean');await mkdir(cwd);
-  const env={AGENT_API_ENABLED:'false',IMAGE_BASE_URL:'',PATH:process.env.PATH,HOME:process.env.HOME,TMPDIR:process.env.TMPDIR,EMOMO_CONFIG_DIR:join(scratch,'config'),CODEX_HOME:join(target,'codex')};
+  const env={AGENT_API_ENABLED:'false',IMAGE_BASE_URL:'',...cleanEnv,EMOMO_CONFIG_DIR:join(scratch,'config'),CODEX_HOME:join(target,'codex')};
   const invoke=async(args:string[],expectedOK=true)=>{
     let stdout:string;
     try{stdout=(await execute(binary,['--api-url',`${origin}/agent/v1`,...args],{env,cwd})).stdout;assert.ok(expectedOK);}

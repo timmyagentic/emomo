@@ -100,7 +100,7 @@ export async function run(argv, { env = process.env } = {}) {
   const catalogPath = await selectCatalog(flags, env);
   if (!catalogPath && ['media', 'subject', 'intent', 'include-objects'].some(f => flags[f] !== undefined)) throw new EmomoError('INVALID_ARGUMENT', 'Media, subject, intent and object filters require a local catalog.');
   const imageHosts = env.EMOMO_IMAGE_HOSTS?.split(',').map(host => host.trim().toLowerCase()).filter(Boolean);
-  const client = catalogPath ? await LocalCatalog.open(catalogPath) : new EmomoClient({ baseUrl: flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, token: env.EMOMO_API_TOKEN, imageHosts, timeoutMs: integer(flags.timeout, 30000, 100, 120000, 'timeout') });
+  const client = catalogPath ? await LocalCatalog.open(catalogPath) : new EmomoClient({ baseUrl: flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, token: boundToken(flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, env), imageHosts, timeoutMs: integer(flags.timeout, 30000, 100, 120000, 'timeout') });
   let data;
   try {
   if (command === 'search') {
@@ -133,4 +133,19 @@ export async function main(argv, { env = process.env, write = text => process.st
   }
   write(`${JSON.stringify(envelope)}\n`);
   return exitCode;
+}
+
+// Ambient credentials belong to the configured endpoint, never an arbitrary override.
+export function boundToken(selected, env) {
+  if (!env.EMOMO_API_TOKEN) return undefined;
+  const binding = env.EMOMO_API_TOKEN_URL || env.EMOMO_API_URL;
+  if (!binding) return undefined;
+  try {
+    const canonical = value => {
+      const url = new URL(value);
+      if (url.username || url.password || url.search || url.hash || !['https:', 'http:'].includes(url.protocol)) throw new Error('Invalid token binding');
+      return url.origin + url.pathname.replace(/\/+$/, '');
+    };
+    return canonical(selected) === canonical(binding) ? env.EMOMO_API_TOKEN : undefined;
+  } catch { return undefined; }
 }

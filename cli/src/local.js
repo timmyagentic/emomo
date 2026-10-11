@@ -1,7 +1,8 @@
+import { publishDirectory } from './publish-directory.js';
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir, mkdtemp, rename, rm, realpath } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, rm, realpath } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { EmomoError } from './error.js';
 import { identifyImage, saveImage } from './client.js';
 import { refinedSearch } from './refined-search.js';
@@ -74,7 +75,7 @@ export async function importRows(rows, directory, lexiconInput = {}) {
   const target = resolve(directory), parent = dirname(target);
   await mkdir(parent, { recursive: true });
   const stage = await mkdtemp(join(parent, '.emomo-catalog-'));
-  let reserved = false, db;
+  let db;
   try {
     await mkdir(join(stage, 'assets'));
     for (let i = 0; i < items.length; i++) {
@@ -98,12 +99,10 @@ export async function importRows(rows, directory, lexiconInput = {}) {
     db.exec('COMMIT'); db.close(); db = undefined;
     await writeFile(join(stage, 'manifest.json'), JSON.stringify({ schemaVersion: 1, format: 'emomo-local-catalog', items: items.length, name: 'Reviewed local gallery', lexicon, indexSha256: hash(await readFile(join(stage, 'search.sqlite3'))) }) + '\n', { mode: 0o600 });
     // Exclusive reservation protects existing catalogs, including empty user directories.
-    try { await mkdir(target); reserved = true; } catch (e) { if (e.code === 'EEXIST') throw new EmomoError('CATALOG_EXISTS', 'The destination catalog already exists. Choose a new directory.'); throw e; }
-    await rename(stage, target); reserved = false;
+    try { await publishDirectory(stage, target, 'manifest.json'); } catch (e) { if (e.code === 'EEXIST') throw new EmomoError('CATALOG_EXISTS', 'The destination catalog already exists. Choose a new directory.'); throw e; }
     return { path: target, totalMemes: String(items.length), usable: items.filter(r => r.category === 'usable').length, objects: items.filter(r => r.category === 'object_sticker').length, portable: true, modelsUsed: [] };
   } finally {
     db?.close();
-    if (reserved) await rm(target, { recursive: true, force: true });
     await rm(stage, { recursive: true, force: true });
   }
 }
@@ -136,9 +135,10 @@ export class LocalCatalog {
     if (!rel || rel === '..' || rel.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) || isAbsolute(rel)) throw bad();
     return path;
   }
-  candidate(r, score = 0) {
+  async candidate(r, score = 0) {
     if (!plain(r) || typeof r.id !== 'string' || !/^[\w-]+$/.test(r.id) || typeof r.asset !== 'string' || isAbsolute(r.asset) || r.asset.split(/[\\/]/).includes('..')) throw bad();
-    return { ...(r.canonicalId ? { canonicalId: r.canonicalId, searchable: r.searchable, ocrReview: r.ocrReview } : {}), id: r.id, url: pathToFileURL(join(this.root, r.asset)).href, description: r.description, category: r.category, tags: r.tags, score,
+    const localPath = await this.checkedImage(r);
+    return { ...(r.canonicalId ? { canonicalId: r.canonicalId, searchable: r.searchable, ocrReview: r.ocrReview } : {}), id: r.id, url: pathToFileURL(localPath).href, description: r.description, category: r.category, tags: r.tags, score,
       textPresence: r.imageText ? 'with_text' : 'unknown', image: r.image, imageText: r.imageText, subjects: r.subjects, scenarios: r.scenarios,
       mediaKind: r.mediaKind, previewOnly: r.previewOnly, quality: r.quality, contentFlags: r.contentFlags, publicReleaseClearance: r.publicReleaseClearance };
   }
@@ -191,24 +191,28 @@ export class LocalCatalog {
       let score = matchedIntents.length * 30 + matchedSubjects.length * 12 + literal.length * 35 + Math.min(overlap.length, 8) * 4;
       if (intents.length && matchedIntents.length === intents.length) score += 25;
       score += Math.min(Math.log2(Math.max(r.image.width, r.image.height)), 10) * 0.1;
-      ranked.push({ ...this.candidate(r, Math.round(score * 100) / 100), match: { intents: matchedIntents, subjects: matchedSubjects, literalFields: literal, tokens: overlap } });
+      ranked.push({ record: r, id: r.id, score: Math.round(score * 100) / 100, match: { intents: matchedIntents, subjects: matchedSubjects, literalFields: literal, tokens: overlap } });
     }
     ranked.sort((a, b) => b.score - a.score || Number(a.id.slice(6)) - Number(b.id.slice(6)) || a.id.localeCompare(b.id));
-    return { query, expandedQuery: [...intents, ...subjects].join(' '), total: ranked.length, results: ranked.slice(0, limit), reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
+    return { query, expandedQuery: [...intents, ...subjects].join(' '), total: ranked.length, results: await Promise.all(ranked.slice(0, limit).map(async ({ record, score, match }) => ({ ...await this.candidate(record, score), match }))), reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
   }
   item(id) {
     const row = this.db.prepare('SELECT data FROM items WHERE json_extract(data,\'$.id\') = ?').get(id);
     if (!row) throw new EmomoError('NOT_FOUND', 'This image ID is not in the selected local catalog.');
     return JSON.parse(row.data);
   }
-  async get(id) {
-    const item = this.item(id);
+  async checkedImage(item) {
     const localPath = await this.contained(item.asset).catch(error => { if (error instanceof EmomoError) throw error; throw new EmomoError('LOCAL_IMAGE_UNAVAILABLE', 'The original image is missing from the local catalog.'); });
     const bytes = await readFile(localPath);
     if (bytes.length > MAX_IMAGE || hash(bytes) !== item.sha256) throw new EmomoError('IMAGE_INTEGRITY_ERROR', 'The local image no longer matches its catalog hash.');
     identifyImage(bytes, { allowGif: true });
+    return localPath;
+  }
+  async get(id) {
+    const item = this.item(id);
     const versions = item.canonicalId ? this.db.prepare("SELECT data FROM items WHERE json_extract(data,'$.canonicalId') = ? ORDER BY id").all(item.canonicalId).map(row => { const r = JSON.parse(row.data); return { id: r.id, canonicalId: r.canonicalId, sha256: r.sha256, image: r.image }; }) : undefined;
-    return { meme: { ...this.candidate(item), localPath, sha256: item.sha256, ...(versions ? { versions } : {}) } };
+    const meme = await this.candidate(item);
+    return { meme: { ...meme, localPath: fileURLToPath(meme.url), sha256: item.sha256, ...(versions ? { versions } : {}) } };
   }
   async download(id, directory) {
     const item = this.item(id), { meme } = await this.get(id);
