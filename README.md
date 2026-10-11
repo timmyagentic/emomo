@@ -54,4 +54,4 @@ cd ../deployments/cloudflare/agent-search && npm ci && npm run check
 
 ## 版本约定
 
-当前正式版本为 **0.1.0**。后续常规更新按 **0.1.1 → 0.1.2 → …** 递增，未经明确决定不跳到 0.2.0 或 1.0.0。请以官网及 GitHub Latest 推荐的版本为准。详见 [发布与版本政策](docs/PUBLIC_RELEASE.md#version-policy)。
+当前正式版本为 **0.1.0**。后续常规更新按 **0.1.1 → 0.1.2 → …** 递增，未经明确决定不提升次版本号或主版本号。请以官网及 GitHub Latest 推荐的版本为准。详见 [发布与版本政策](docs/PUBLIC_RELEASE.md#version-policy)。

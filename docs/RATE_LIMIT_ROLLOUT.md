@@ -1,6 +1,17 @@
 # Search and original-image protection
 
-Implementation and local validation do not prove production activation. This change needs an authorized production cutover, with recorded Worker version IDs and live checks. The existing CLI 0.1.0 protocol and image URLs stay compatible; no package release or image/index reimport is needed.
+Production protection is active as of 2026-10-11. Search and original-image downloads independently enforce a 1,000 ms per-IP interval. The CLI 0.1.0 protocol and canonical image URLs are unchanged.
+
+## Deployed state and acceptance
+
+- Search Worker version: `091e966b-6d17-49ae-9755-f50684523091`.
+- Image Worker version: `3b36bfb5-9c5d-4ec8-8ced-a6fca4349344`.
+- `images.timmyagentic.si` is attached to the image Worker. The R2 bucket has no public custom domains; its managed r2.dev endpoint is disabled.
+- Public tests admitted one of six simultaneous searches and one of six downloads; the remainder returned 429 with Retry-After: 1. Requests succeeded again after the interval. Cached queries, changing image keys and HEAD requests did not bypass the guard. Range returned 416.
+- Released CLI search and full-image download passed canonical SHA-256 verification. Known-object r2.dev requests returned 401; unsigned S3 requests returned an Authorization error, without image bytes.
+- The recorded public checks used the NRT edge. Independent second-egress/cross-region production tests remain unverified.
+
+The steps below are the runbook for future redeployment or recovery, not pending work for the current release.
 
 ## Policy
 
@@ -15,7 +26,7 @@ Implementation and local validation do not prove production activation. This cha
 
 Run `node scripts/dev.mjs check agent` from the repository root. It includes CLI tests, real-workerd concurrency tests, a packaged CLI searching D1 and downloading through the protected R2 Worker, type checking, and dry runs of both Workers. Inspect the website's two local example images. The website and documentation must ship together with protection, not ahead of it.
 
-Read-only inventory on 2026-10-11 found `emomo-reviewed-public` has exactly one enabled R2 custom domain, `images.timmyagentic.si`, and its managed r2.dev endpoint is disabled. Refresh that inventory immediately before writing; check for any additional public aliases. Do not touch legacy/private buckets or emomo.net.
+The pre-cutover inventory had one R2 custom domain, `images.timmyagentic.si`. After the completed cutover, `emomo-reviewed-public` has no public custom domains and its managed r2.dev endpoint remains disabled. Refresh that inventory immediately before writing; check for any additional public aliases. Do not touch legacy/private buckets or emomo.net.
 
 ## Authorized cutover
 

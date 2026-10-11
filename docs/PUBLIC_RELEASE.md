@@ -8,7 +8,7 @@ The current product is the Agent CLI + skill and deterministic search service. T
 
 ## Version policy
 
-`cli/package.json` is the source of truth for the public Emomo product version. The current release is `0.1.0`; the next ordinary release is `0.1.1`, then `0.1.2`, and so on. Increment the final (patch) component for routine fixes and updates. Do not jump to `0.2.0` or `1.0.0` without an explicit product/version decision. API `/v1`, JSON `schemaVersion`, catalog schemas and dependency versions are separate contracts, not product release numbers.
+`cli/package.json` is the source of truth for the public Emomo product version. The current release is `0.1.0`; the next ordinary release is `0.1.1`, then `0.1.2`, and so on. Increment the final (patch) component for routine fixes and updates. Changing the minor or major component requires an explicit product/version decision. API `/v1`, JSON `schemaVersion`, catalog schemas and dependency versions are separate contracts, not product release numbers.
 
 For every release, synchronize package version, website labels, README, installation prompt/instructions, asset filenames, URLs, release title/tag, checksums and source provenance. HTTP User-Agent derives from the package version. Mark the current stable release explicitly as GitHub Latest. Preserve published package bytes and tag targets; document-only corrections must record their source and update the corresponding checksums.
 
