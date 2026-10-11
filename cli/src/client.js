@@ -96,7 +96,7 @@ function statusError(response, resource = 'API') {
   const errors = {
     400: ['BAD_REQUEST', 'The service rejected the request. Check the search arguments.'],
     401: ['UNAUTHORIZED', resource === 'image'
-      ? 'The image host requires authentication. API tokens are never sent to image requests; obtain an accessible image URL from the API.'
+      ? 'The image host requires a valid access key. Configure an issued key for the official API; other image hosts never receive API credentials.'
       : 'Authentication is required. Use an EMOMO_API_TOKEN intended for this API and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset) matching the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent.'],
     403: ['FORBIDDEN', 'Access was denied. Check the API endpoint and its access policy.'],
     404: ['NOT_FOUND', `${resource === 'image' ? 'The image' : 'The requested resource'} was not found.`],
@@ -144,6 +144,7 @@ export class EmomoClient {
   constructor({ baseUrl = DEFAULT_API_URL, token, timeoutMs = 30000, imageHosts = ['images.timmyagentic.si', 'r2.emomo.net', '*.r2.dev', '*.r2.cloudflarestorage.com'] } = {}) {
     this.base = apiUrl(baseUrl);
     this.token = token;
+    this.officialImageToken = token && this.base.href.replace(/\/+$/, '') === DEFAULT_API_URL ? token : undefined;
     this.timeoutMs = timeoutMs;
     this.imageHosts = imageHosts;
     if (token && this.base.protocol !== 'https:') throw new EmomoError('INSECURE_TOKEN', 'API tokens cannot be sent over HTTP.');
@@ -225,13 +226,16 @@ export class EmomoClient {
     const { meme } = await this.get(id);
     let url = imageUrl(meme.url, this.base, this.imageHosts);
     let response;
+    const authenticatedImage = this.officialImageToken && url.origin === 'https://images.timmyagentic.si' && !url.search && /^\/collections\/reviewed\/[a-f0-9]{64}\.(png|jpg|webp)$/.test(url.pathname);
     for (let hop = 0; hop <= 3; hop++) {
-      // API Authorization is deliberately never attached to image requests.
-      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': USER_AGENT } });
+      // Only the official API's explicitly bound key can reach its canonical image origin.
+      const headers = { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': USER_AGENT };
+      if (authenticatedImage) headers.Authorization = `Bearer ${this.officialImageToken}`;
+      response = await this.fetch(url, { redirect: 'manual', headers });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
         await response.body?.cancel();
-        if (!location || hop === 3) throw new EmomoError('IMAGE_REDIRECT', 'The image redirect could not be resolved.');
+        if (authenticatedImage || !location || hop === 3) throw new EmomoError('IMAGE_REDIRECT', 'The image redirect could not be resolved.');
         url = imageUrl(new URL(location, url).href, this.base, this.imageHosts);
         continue;
       }

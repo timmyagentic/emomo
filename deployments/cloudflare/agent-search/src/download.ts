@@ -1,3 +1,4 @@
+import { authenticate, admit, AccessError, accessError } from './access.js';
 import { enforceInterval, rateLimited, uncached } from './rate-limit.js';
 export { PerIpLimiter } from './rate-limit.js';
 
@@ -7,18 +8,22 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const error = (message: string, status: number) => uncached(Response.json({ error: message }, { status }));
 
 export default {
-  async fetch(request: Request, env: DownloadEnv): Promise<Response> {
+  async fetch(request: Request, env: DownloadEnv, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const match = IMAGE.exec(url.pathname);
     if (!match || url.search) return error('Image not found.', 404);
     if (!['GET', 'HEAD'].includes(request.method)) return error('Method not allowed.', 405);
+    let reservation: Awaited<ReturnType<typeof admit>> | undefined;
+    let backendFailed = false;
     try {
       const ip = request.headers.get('cf-connecting-ip');
       if (!ip) return error('Download protection unavailable.', 503);
       const coarse = await env.DOWNLOAD_RATE_LIMITER.limit({ key: ip });
       if (!coarse.success) return rateLimited(60);
+      const identity = await authenticate(request, env.ACCESS_KEYS_JSON, 'download');
       const denied = await enforceInterval(request, env.DOWNLOAD_IP_LIMITER);
       if (denied) return denied;
+      reservation = await admit(env, 'download', identity);
       // No ranges or conditional shortcuts: every full-image request consumes a slot.
       if (request.headers.has('range')) return error('Partial downloads are not supported.', 416);
       const key = url.pathname.slice(1);
@@ -41,9 +46,13 @@ export default {
         'x-content-type-options': 'nosniff',
         'accept-ranges': 'none',
       } }));
-    } catch {
+    } catch (caught) {
+      if (caught instanceof AccessError) return accessError(caught);
+      backendFailed = !!reservation;
       console.error(JSON.stringify({ event: 'download_unavailable' }));
       return error('Download service unavailable.', 503);
+    } finally {
+      if (reservation) ctx.waitUntil(reservation.finish(backendFailed).catch(() => console.warn(JSON.stringify({ event: 'admission_finish_failed' }))));
     }
   },
 } satisfies ExportedHandler<DownloadEnv>;

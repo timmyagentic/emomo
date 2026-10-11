@@ -4,7 +4,7 @@
 
 这消除了新版搜索服务的模型调用费用；Workers、D1、R2、日志、域名及保留的其他服务仍可能收费。限流和缓存不是账户账单硬上限。任意自定义 CLI API、旧 Go 服务及另行运行旧摄入流水线不在零模型保证内。
 
-## 0.1.0 正式服务
+## 0.1.1 正式服务
 
 官网 https://timmyagentic.si，API https://api.timmyagentic.si/agent/v1，图片 https://images.timmyagentic.si。正式配置已启用，使用独立 D1。公开索引为 7,302 张审核主图，重复版本不导入，不确定 OCR 不索引。发布流程见 [PUBLIC_RELEASE](../../../docs/PUBLIC_RELEASE.md)。以下旧库导出记录仅作历史参考。
 
@@ -17,7 +17,7 @@
 - 查询 1–160 字/最多 64 词、默认 8 / 最多 100 候选、请求体 8 KiB；SQL 参数绑定，FTS 运算符不能注入。同一 IP 搜索至少间隔 1 秒，由 SQLite Durable Object 序列化并持久化计数，跨边缘节点共享；独立下载 Worker 对 GET/HEAD 原图请求同样限制 1 秒 1 次。另有每个边缘节点约 30 次/60 秒的最终一致辅助保护；Worker 内部成功响应缓存 60 秒，搜索缓存键只用请求哈希；错误不缓存。缓存读前限流，对外响应 no-store。详情读取不消耗搜索的秒级额度。限流不可用时返回 503，超限 429 + Retry-After。
 - 下载 Worker 流式读取 R2，保留 URL、完整字节与 SHA-256；仅允许审核目录的静态图片，不支持 Range。官网仅两张固定展示图作为站内资源。
 - 搜索与下载限流已于 2026-10-11 上线并完成公网验收：R2 公开自定义域名已移除，r2.dev 已关闭，图片域名由下载 Worker 接管。部署版本及验收见 [限流运行说明](../../../docs/RATE_LIMIT_ROLLOUT.md)。
-- 原图由 CLI 经独立下载 Worker 流式读取；搜索 Worker 不读取或代理图片。图片基地址由运维配置，key 逐段编码；离线输入拒绝公开/签名 URL。匿名接口缓存不区分用户，未引入调用者鉴权功能。
+- 原图由 CLI 经独立下载 Worker 流式读取；搜索 Worker 不读取或代理图片。图片基地址由运维配置，key 逐段编码；离线输入拒绝公开/签名 URL。共享缓存只在密钥鉴权和配额准入之后读取。密钥发放、撤销、累计配额及熔断见 [访问控制](../../../docs/ACCESS_CONTROL.md)。
 
 ## 离线导入
 
@@ -43,9 +43,9 @@ npm ci
 npm run index:build -- /tmp/emomo-metadata.jsonl /tmp/emomo-index-data.sql
 npx wrangler d1 migrations apply emomo-agent-index --local
 npx wrangler d1 execute emomo-agent-index --local --file /tmp/emomo-index-data.sql
-npm run dev -- --var AGENT_API_ENABLED:true
-# 另一个终端
-EMOMO_API_URL=http://127.0.0.1:8787/agent/v1 emomo search "无语 猫" --limit 8
+npm run check
+# 测试使用仅限本地的密钥夹具；正式 CLI 不向 HTTP 地址发送密钥。
+# 手动开发需配置本地 ACCESS_KEYS_JSON 并使用 HTTPS。
 ```
 
 输出 SQL 权限 0600，拒绝覆盖；失败删除本次部分输出。每行输入最多 128 KiB、SQL 每条最多 96 KiB，超限需离线检查后重新导出，不静默截断。Upsert 与触发器同步 FTS，不重复插入 ID。更新后缓存最多滞后 60 秒。

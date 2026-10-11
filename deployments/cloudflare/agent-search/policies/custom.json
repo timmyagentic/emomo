@@ -1,0 +1,16 @@
+[
+  {
+    "ref": "emomo_require_bearer",
+    "description": "Emomo protected services require Bearer syntax before Worker execution",
+    "expression": "(http.host in {\"api.timmyagentic.si\" \"images.timmyagentic.si\"} and not any(starts_with(http.request.headers[\"authorization\"][*], \"Bearer emomo_\")))",
+    "action": "block",
+    "enabled": true
+  },
+  {
+    "ref": "emomo_request_shape",
+    "description": "Reject unsupported methods and query strings for Emomo protected services",
+    "expression": "((http.host eq \"api.timmyagentic.si\" and not http.request.method in {\"GET\" \"POST\"}) or (http.host eq \"images.timmyagentic.si\" and not http.request.method in {\"GET\" \"HEAD\"}) or (http.host in {\"api.timmyagentic.si\" \"images.timmyagentic.si\"} and http.request.uri.query ne \"\"))",
+    "action": "block",
+    "enabled": true
+  }
+]

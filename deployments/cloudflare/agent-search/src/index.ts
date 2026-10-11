@@ -1,3 +1,5 @@
+import { authenticate, admit, AccessError, accessError } from './access.js';
+export { Admission } from './access.js';
 import { enforceInterval, uncached } from './rate-limit.js';
 export { PerIpLimiter } from './rate-limit.js';
 import { create, fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
@@ -29,15 +31,18 @@ async function body(request: Request): Promise<string> {
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let length = 0;
+  let timedOut = false;
+  const deadline = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => {}); }, 5000);
   try {
     for (;;) {
       const { value, done } = await reader.read();
+      if (timedOut) throw new HttpError(408, 'Search body timed out.');
       if (done) break;
       length += value.byteLength;
       if (length > MAX_BODY) { await reader.cancel(); throw new HttpError(413, 'Search body is too large.'); }
       chunks.push(value);
     }
-  } finally { reader.releaseLock(); }
+  } finally { clearTimeout(deadline); reader.releaseLock(); }
   const bytes = new Uint8Array(length);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
@@ -122,6 +127,8 @@ export default {
     if (request.method !== expected) return json({ error: 'Method not allowed.' }, 405);
     // CLI-only API. Reject browser origins, including cached responses.
     if (request.headers.has('origin')) return json({ error: 'Browser access disabled.' }, 403);
+    let reservation: Awaited<ReturnType<typeof admit>> | undefined;
+    let backendFailed = false;
     try {
       const limited = await env.EMOMO_RATE_LIMITER.limit({ key: request.headers.get('cf-connecting-ip') || 'unknown' });
       if (!limited.success) {
@@ -129,10 +136,13 @@ export default {
         response.headers.set('retry-after', '60');
         return response;
       }
+      const op = path === '/agent/v1/search' ? 'search' : 'read';
+      const identity = await authenticate(request, env.ACCESS_KEYS_JSON, op);
       if (path === '/agent/v1/search') {
         const denied = await enforceInterval(request, env.PER_IP_LIMITER);
         if (denied) return denied;
       }
+      reservation = await admit(env, op, identity);
       // Query text is not put in cache URLs or logs. Bound before hashing.
       const content = expected === 'POST' ? await body(request) : '';
       const normalized = expected === 'POST' ? new Request(request.url, { method: 'POST', headers: request.headers, body: content }) : request;
@@ -145,9 +155,13 @@ export default {
       if (response.ok) ctx.waitUntil(caches.default.put(key, response.clone()).catch(() => { console.warn(JSON.stringify({ event: 'cache_write_failed' })); }));
       return uncached(response);
     } catch (error) {
+      if (error instanceof AccessError) return accessError(error);
       if (error instanceof HttpError) return json({ error: error.message }, error.status);
+      backendFailed = !!reservation;
       console.error(JSON.stringify({ event: 'index_unavailable' }));
       return json({ error: 'Text index unavailable; no fallback service is called.' }, 503);
+    } finally {
+      if (reservation) ctx.waitUntil(reservation.finish(backendFailed).catch(() => console.warn(JSON.stringify({ event: 'admission_finish_failed' }))));
     }
   },
 } satisfies ExportedHandler<Env>;

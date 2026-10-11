@@ -45,6 +45,12 @@ Zero results are valid. Inspect `data.reason` and `data.detail`. Coverage belong
 
 An image's `publicReleaseClearance=UNVERIFIED` is a provenance limitation, not a finding that the image is safe for public redistribution. Ordinary local selection does not publish the library. Sending selected files to another person or channel follows the user's authorization for that destination.
 
+## Hosted access
+
+The hosted API, details and image downloads require an administrator-issued Emomo access key. Check `emomo auth status`; configure a user-provided private file with `emomo auth configure --key-file <private-file>`. Never display the key, put it in a URL, or retrieve infrastructure/model credentials. Missing access is a blocker for hosted verification, not for offline catalogs. Configuration keeps existing catalog selection. `auth clear` removes saved access.
+
+Default per-key search and download quotas are each 120/hour and 500/day; read requests (detail, stats, categories combined) are 600/hour and 2,000/day. UTC calendar windows apply. Cached and failed admitted requests count. Respect 429/503 Retry-After and stop on revoked/expired access. Downloads also use one read request to resolve their metadata.
+
 ## Library selection and installation
 
 - `emomo catalog path` shows the selected local catalog. `emomo catalog use <catalog-directory>` explicitly selects an existing reviewed catalog; `--catalog <directory>` or `EMOMO_CATALOG` selects one per invocation. Do not import arbitrary local files or switch libraries merely to make an unrelated search succeed.

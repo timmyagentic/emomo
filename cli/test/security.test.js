@@ -98,7 +98,7 @@ test('image 401 does not suggest forwarding API credentials to the image host', 
   });
   await assert.rejects(new EmomoClient({ token: 'synthetic-api-secret' }).download('one', root), error => {
     assert.equal(error.code, 'UNAUTHORIZED');
-    assert.match(error.message, /API tokens are never sent to image requests/);
+    assert.match(error.message, /other image hosts never receive API credentials/);
     assert.equal(error.message.includes('EMOMO_API_TOKEN_URL'), false);
     assert.equal(error.message.includes('synthetic-'), false);
     return true;

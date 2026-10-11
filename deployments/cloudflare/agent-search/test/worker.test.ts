@@ -1,3 +1,4 @@
+import { authorizedFetch, bindings, admission, downloadEntry } from './access-fixture.js';
 // @ts-expect-error Shared dependency-free development environment helper.
 import { developmentEnv } from '../../../../scripts/dev.mjs';
 import assert from 'node:assert/strict';
@@ -30,9 +31,9 @@ const options = (enabled: string, imageBase = 'https://r2.emomo.net') => ({
   // Latest stable v4 local workerd date; deployment config keeps today's date.
   compatibilityDate: '2026-07-30',
   compatibilityFlags: ['nodejs_compat'],
-  bindings: { AGENT_API_ENABLED: enabled, IMAGE_BASE_URL: imageBase },
+  bindings: { ...bindings, AGENT_API_ENABLED: enabled, IMAGE_BASE_URL: imageBase },
   d1Databases: { DB: 'local-index' },
-  durableObjects: { PER_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } },
+  durableObjects: { ...admission, PER_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } },
   ratelimits: { EMOMO_RATE_LIMITER: { namespace_id: '1002', simple: { limit: 30, period: 60 as const } } },
   // Block every external HTTP request and prove success without one.
   outboundService: () => { outboundCalls++; return new MFResponse('External HTTP forbidden in this test', { status: 502 }); },
@@ -59,7 +60,7 @@ before(async () => {
 after(async () => { await mf?.dispose(); await rm(temporary, { recursive: true, force: true }); });
 
 let clientIP = 1;
-const request = (path: string, body?: object) => mf.dispatchFetch(`https://emomo.test${path}`, {
+const request = (path: string, body?: object) => authorizedFetch(mf, `https://emomo.test${path}`, {
   method: body ? 'POST' : 'GET',
   headers: { 'content-type': 'application/json', 'cf-connecting-ip': `192.0.2.${clientIP++}` },
   body: body ? JSON.stringify(body) : undefined,
@@ -104,7 +105,7 @@ test('detail/categories/stats use canonical metadata only, and legacy/bulk/brows
   for (const path of ['/agent/v1/memes', '/agent/v1/search/stream', '/health', '/agent/v1/memes/cat%2D1', '/agent/v1/stats?admin=1']) assert.equal((await request(path)).status, 404);
   assert.equal((await request('/agent/v1/search')).status, 405);
   assert.equal((await request('/agent/v1/memes/missing')).status, 404);
-  assert.equal((await mf.dispatchFetch('https://emomo.test/agent/v1/stats', { headers: { origin: 'https://emomo.net' } })).status, 403);
+  assert.equal((await authorizedFetch(mf, 'https://emomo.test/agent/v1/stats', { headers: { origin: 'https://emomo.net' } })).status, 403);
   assert.equal(outboundCalls, 0);
 });
 
@@ -115,7 +116,7 @@ test('bounds, unknown profiles, malformed bodies and query operators cannot bypa
     assert.equal(response.status, input.query === '* NEAR()' ? 200 : 400);
   }
   for (const [body, type, status] of [['{', 'application/json', 400], ['x', 'text/plain', 415], ['x'.repeat(8193), 'application/json', 413]] as const) {
-    assert.equal((await mf.dispatchFetch('https://emomo.test/agent/v1/search', { method: 'POST', headers: { 'content-type': type, 'cf-connecting-ip': `192.0.2.${clientIP++}` }, body })).status, status);
+    assert.equal((await authorizedFetch(mf, 'https://emomo.test/agent/v1/search', { method: 'POST', headers: { 'content-type': type, 'cf-connecting-ip': `192.0.2.${clientIP++}` }, body })).status, status);
   }
   assert.equal(outboundCalls, 0);
 });
@@ -133,11 +134,11 @@ test('offline upserts update the FTS index and quote apostrophes as data', async
 test('disabled and unavailable D1 states do not call any fallback; rate limiter bounds requests', async () => {
   const guarded = new Miniflare({ ...options('false'), ratelimits: { EMOMO_RATE_LIMITER: { namespace_id: '1003', simple: { limit: 2, period: 60 } } } });
   try {
-    assert.equal((await guarded.dispatchFetch('https://emomo.test/agent/v1/stats')).status, 410);
+    assert.equal((await authorizedFetch(guarded, 'https://emomo.test/agent/v1/stats')).status, 410);
     await guarded.setOptions({ ...options('true'), ratelimits: { EMOMO_RATE_LIMITER: { namespace_id: '1003', simple: { limit: 2, period: 60 } } } });
-    assert.equal((await guarded.dispatchFetch('https://emomo.test/agent/v1/stats')).status, 503);
-    assert.equal((await guarded.dispatchFetch('https://emomo.test/agent/v1/stats')).status, 503);
-    const throttled = await guarded.dispatchFetch('https://emomo.test/agent/v1/stats');
+    assert.equal((await authorizedFetch(guarded, 'https://emomo.test/agent/v1/stats')).status, 503);
+    assert.equal((await authorizedFetch(guarded, 'https://emomo.test/agent/v1/stats')).status, 503);
+    const throttled = await authorizedFetch(guarded, 'https://emomo.test/agent/v1/stats');
     assert.equal(throttled.status, 429);
     assert.equal(throttled.headers.get('retry-after'), '60');
   } finally { await guarded.dispose(); }
@@ -148,14 +149,14 @@ test('actual installed CLI searches local D1, gets real metadata and downloads a
   let local: Miniflare;
   const id = createHash('sha256').update(PNG).digest('hex');
   const imageKey = `collections/reviewed/${id}.png`;
-  const downloadBundle = await build({ entryPoints: ['src/download.ts'], write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
-  const images = new Miniflare({ modules: true, script: downloadBundle.outputFiles[0].text, compatibilityDate: '2026-07-30', r2Buckets: { IMAGES: 'cli-images' }, durableObjects: { DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } }, ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1004', simple: { limit: 30, period: 60 } } } });
+  const downloadBundle = await build({ stdin: { contents: downloadEntry, resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
+  const images = new Miniflare({ modules: true, script: downloadBundle.outputFiles[0].text, compatibilityDate: '2026-07-30', r2Buckets: { IMAGES: 'cli-images' }, bindings, durableObjects: { ...admission, DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } }, ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1004', simple: { limit: 30, period: 60 } } } });
   await (await images.getR2Bucket('IMAGES') as unknown as R2Bucket).put(imageKey, new Uint8Array(PNG));
   const server = createServer(async (incoming, outgoing) => {
     try {
       const chunks: Buffer[] = [];
       for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
-      const response = await (incoming.url === `/${imageKey}` ? images : local).dispatchFetch(`${origin}${incoming.url}`, {
+      const response = await authorizedFetch(incoming.url === `/${imageKey}` ? images : local, `${origin}${incoming.url}`, {
         method: incoming.method,
         headers: { 'content-type': incoming.headers['content-type'] || 'application/json', 'cf-connecting-ip': '198.51.100.1' },
         body: incoming.method === 'POST' ? Buffer.concat(chunks) : undefined,
@@ -222,7 +223,7 @@ test('reviewed unknown text remains filterable and object stickers require expli
 });
 
 test('strict per-IP search interval serializes bursts before shared cache and ignores spoofed forwarding headers', async () => {
-  const search = (ip: string, forwarded = '203.0.113.1') => mf.dispatchFetch('https://emomo.test/agent/v1/search', {
+  const search = (ip: string, forwarded = '203.0.113.1') => authorizedFetch(mf, 'https://emomo.test/agent/v1/search', {
     method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip, 'x-forwarded-for': forwarded }, body: JSON.stringify({ query: '猫' }),
   });
   // Warm the shared query cache from a different client first.
@@ -235,7 +236,7 @@ test('strict per-IP search interval serializes bursts before shared cache and ig
     if (response.status === 429) assert.equal(response.headers.get('retry-after'), '1');
   }
   assert.equal((await search('198.51.100.52')).status, 200);
-  assert.equal((await mf.dispatchFetch('https://emomo.test/agent/v1/memes/cat-1', { headers: { 'cf-connecting-ip': '198.51.100.51' } })).status, 200);
+  assert.equal((await authorizedFetch(mf, 'https://emomo.test/agent/v1/memes/cat-1', { headers: { 'cf-connecting-ip': '198.51.100.51' } })).status, 200);
   await new Promise(resolve => setTimeout(resolve, 1050));
   assert.equal((await search('198.51.100.51')).status, 200);
 });
@@ -243,12 +244,23 @@ test('strict per-IP search interval serializes bursts before shared cache and ig
 test('missing trusted identity and missing durable binding fail closed even with cached search results', async () => {
   const init = { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '', 'x-forwarded-for': '198.51.100.60' }, body: JSON.stringify({ query: '猫' }) };
   // Miniflare supplies loopback CF-Connecting-IP automatically; strip it inside a test-only entrypoint.
-  const missingIdentityBundle = await build({ stdin: { contents: "import handler from './src/index.ts'; export { PerIpLimiter } from './src/rate-limit.ts'; export default { fetch(r,e,c) { r = new Request(r); r.headers.delete('cf-connecting-ip'); return handler.fetch(r,e,c); } };", resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
+  const missingIdentityBundle = await build({ stdin: { contents: "import handler from './src/index.ts'; export { PerIpLimiter } from './src/rate-limit.ts'; export { Admission } from './src/access.ts'; export default { fetch(r,e,c) { r = new Request(r); r.headers.delete('cf-connecting-ip'); return handler.fetch(r,e,c); } };", resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
   const missingIdentity = new Miniflare({ ...options('true'), script: missingIdentityBundle.outputFiles[0].text });
-  try { assert.equal((await missingIdentity.dispatchFetch('https://emomo.test/agent/v1/search', init)).status, 503); }
+  try { assert.equal((await authorizedFetch(missingIdentity, 'https://emomo.test/agent/v1/search', init)).status, 503); }
   finally { await missingIdentity.dispose(); }
   const broken = new Miniflare({ ...options('true'), durableObjects: {} });
   try {
-    assert.equal((await broken.dispatchFetch('https://emomo.test/agent/v1/search', { ...init, headers: { ...init.headers, 'cf-connecting-ip': '198.51.100.61' } })).status, 503);
+    assert.equal((await authorizedFetch(broken, 'https://emomo.test/agent/v1/search', { ...init, headers: { ...init.headers, 'cf-connecting-ip': '198.51.100.61' } })).status, 503);
   } finally { await broken.dispose(); }
+});
+
+test('warm search cache still requires a valid key', async () => {
+  assert.equal((await request('/agent/v1/search', { query: '猫' })).status, 200);
+  for (const authorization of ['', 'Bearer invalid']) {
+    const denied = await mf.dispatchFetch('https://emomo.test/agent/v1/search', {
+      method: 'POST', headers: { authorization, 'content-type': 'application/json', 'cf-connecting-ip': `203.0.113.${clientIP++}` }, body: JSON.stringify({ query: '猫' }),
+    });
+    assert.equal(denied.status, 401);
+    assert.equal(denied.headers.get('cache-control'), 'no-store');
+  }
 });

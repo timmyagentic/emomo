@@ -1,3 +1,5 @@
+> Historical 0.1.0 rollout evidence. Current 0.1.1 adds mandatory keys, cumulative quotas and circuit protection; see [ACCESS_CONTROL](ACCESS_CONTROL.md).
+
 # Search and original-image protection
 
 Production protection is active as of 2026-10-11. Search and original-image downloads independently enforce a 1,000 ms per-IP interval. The CLI 0.1.0 protocol and canonical image URLs are unchanged.
