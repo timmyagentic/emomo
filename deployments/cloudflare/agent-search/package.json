@@ -12,9 +12,9 @@
     "gen:check": "node scripts/sync-proto.mjs --check",
     "index:build": "tsx scripts/build-index.ts",
     "test": "tsx --test test/*.test.ts",
-    "types:generate": "wrangler types --strict-vars=false",
+    "types:generate": "wrangler types --strict-vars=false && wrangler types download-configuration.d.ts --config wrangler.downloads.jsonc --env-interface DownloadEnv --include-runtime=false --strict-vars=false",
     "typecheck": "npm run types:generate && tsc --noEmit",
-    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist && wrangler deploy --config wrangler.downloads.jsonc --dry-run --outdir dist-downloads",
     "check": "npm run gen:check && npm run typecheck && npm test && npm run deploy:dry-run",
     "static:prepare": "tsx scripts/prepare-static.ts",
     "static:verify": "tsx scripts/verify-static.ts"
