@@ -51,6 +51,14 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
+      - name: Setup Node for Go isolation regression
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Verify persistent Go configuration is isolated
+        run: node --test scripts/test/goenv.test.mjs
+
       - name: Test backend
         working-directory: backend
         run: go test ./...

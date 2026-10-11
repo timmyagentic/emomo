@@ -27,6 +27,7 @@ export function plan(action, profile) {
     if (profile === 'full') {
       add(gateway, 'npm', 'test');
       add(gateway, 'npm', 'run', 'typecheck');
+      add('.', 'node', '--test', 'scripts/test/goenv.test.mjs');
       add('backend', 'go', 'test', './...');
       add('backend', 'go', 'build', './...');
       add('frontend', 'npm', 'run', 'lint');
@@ -71,7 +72,7 @@ export function developmentEnv(root, source = process.env) {
     WRANGLER_LOG_PATH: join(state, 'logs'), WRANGLER_SEND_METRICS: 'false',
     CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: 'false',
     EXPO_NO_DOTENV: '1', EXPO_NO_TELEMETRY: '1',
-    GOTOOLCHAIN: 'go1.26.2', GOPATH: join(state, 'go'),
+    GOENV: 'off', GOTOOLCHAIN: 'go1.26.2', GOPATH: join(state, 'go'),
     GOMODCACHE: join(state, 'go', 'pkg', 'mod'), GOCACHE: join(state, 'go-build'),
   });
 }
