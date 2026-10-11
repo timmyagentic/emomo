@@ -26,6 +26,11 @@
       {
         "name": "DOWNLOAD_IP_LIMITER",
         "class_name": "PerIpLimiter"
+      },
+      {
+        "name": "ADMISSION",
+        "class_name": "Admission",
+        "script_name": "emomo-agent-search"
       }
     ]
   },
@@ -50,5 +55,17 @@
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1
+  },
+  "secrets": {
+    "required": [
+      "ACCESS_KEYS_JSON"
+    ]
+  },
+  "limits": {
+    "cpu_ms": 50
+  },
+  "vars": {
+    "SERVICE_PAUSED": "false",
+    "GLOBAL_LIMITS_JSON": "{\"search\": {\"perSecond\": 10, \"perDay\": 5000, \"inFlight\": 10, \"failures\": 5, \"cooldownSeconds\": 30}, \"read\": {\"perSecond\": 30, \"perDay\": 20000, \"inFlight\": 30, \"failures\": 5, \"cooldownSeconds\": 30}, \"download\": {\"perSecond\": 10, \"perDay\": 5000, \"inFlight\": 10, \"failures\": 5, \"cooldownSeconds\": 30}}"
   }
 }

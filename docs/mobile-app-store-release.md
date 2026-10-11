@@ -11,7 +11,7 @@ This checklist tracks the remaining work needed to move `mobile/` from simulator
 - Expo owner: `timmy3956`
 - Bundle ID: `com.timmy.emomo`
 - App Store Connect Apple ID (`ascAppId`): `6776160506`
-- Version: `0.1.0`
+- Version: `0.1.1`
 - Initial iOS build number: `1`
 - EAS project ID: `9550b08d-da2c-4075-8bbc-e4579773fc30`
 - Backend API base for EAS builds: `https://api.emomo.net/api/v1`

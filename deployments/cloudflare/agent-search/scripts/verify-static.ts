@@ -1,3 +1,4 @@
+import { authorizedFetch, bindings, admission } from '../test/access-fixture.js';
 // @ts-expect-error Shared dependency-free development environment helper.
 import { developmentEnv } from '../../../../scripts/dev.mjs';
 import assert from 'node:assert/strict';
@@ -48,7 +49,7 @@ const server=createServer(async(incoming,outgoing)=>{
     }
     const chunks:Buffer[]=[];let length=0;
     for await(const chunk of incoming){length+=chunk.length;if(length>8192){outgoing.writeHead(413);outgoing.end();return;}chunks.push(Buffer.from(chunk));}
-    const response=await mf!.dispatchFetch(`${origin}${incoming.url}`,{method:incoming.method,
+    const response=await authorizedFetch(mf!, `${origin}${incoming.url}`,{method:incoming.method,
       headers:{'content-type':incoming.headers['content-type']??'application/json','cf-connecting-ip':`192.0.${Math.floor(requests/250)}.${++requests%250+1}`},
       body:incoming.method==='POST'?Buffer.concat(chunks):undefined});
     outgoing.writeHead(response.status,Object.fromEntries(response.headers));outgoing.end(Buffer.from(await response.arrayBuffer()));
@@ -75,8 +76,8 @@ try {
   const inputs=Object.keys(bundle.metafile!.inputs);
   assert.ok(inputs.every(p=>{const rel=relative(workerRoot,resolve(p));return rel.startsWith('src/')||rel.startsWith('gen/')||rel.startsWith('node_modules/@bufbuild/protobuf/');}));
   mf=new Miniflare({modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],
-    durableObjects:{PER_IP_LIMITER:{className:'PerIpLimiter',useSQLite:true}},
-    bindings:{AGENT_API_ENABLED:'true',IMAGE_BASE_URL:origin},d1Databases:{DB:'actual-static-index'},
+    durableObjects:{...admission,PER_IP_LIMITER:{className:'PerIpLimiter',useSQLite:true}},
+    bindings:{...bindings,AGENT_API_ENABLED:'true',IMAGE_BASE_URL:origin},d1Databases:{DB:'actual-static-index'},
     ratelimits:{EMOMO_RATE_LIMITER:{namespace_id:'1100',simple:{limit:30,period:60}}},
     outboundService:()=>{calls++;return new MFResponse('External HTTP prohibited',{status:502});}});
   const db=await mf.getD1Database('DB');

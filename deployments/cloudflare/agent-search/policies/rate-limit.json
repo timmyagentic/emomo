@@ -1,0 +1,18 @@
+[
+  {
+    "ref": "emomo_edge_burst",
+    "description": "Emomo API and original image burst guard",
+    "expression": "(starts_with(http.request.uri.path, \"/agent/v1/\") or starts_with(http.request.uri.path, \"/collections/reviewed/\"))",
+    "action": "block",
+    "ratelimit": {
+      "characteristics": [
+        "cf.colo.id",
+        "ip.src"
+      ],
+      "period": 10,
+      "requests_per_period": 60,
+      "mitigation_timeout": 10
+    },
+    "enabled": true
+  }
+]

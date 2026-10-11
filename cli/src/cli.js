@@ -1,3 +1,4 @@
+import { readAccess, configureAccess, accessStatus, clearAccess, canonicalApi } from './auth.js';
 import { readFile } from 'node:fs/promises';
 import { EmomoClient, DEFAULT_API_URL } from './client.js';
 import { EmomoError, publicError } from './error.js';
@@ -9,6 +10,9 @@ import { selectCatalog, useCatalog } from './config.js';
 const PACKAGE = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const GLOBAL = ['api-url', 'timeout', 'catalog'];
 const COMMANDS = {
+  'auth configure': { flags: ['key-file'], usage: 'emomo auth configure --key-file /private/path/access-key.txt [--api-url https://api.timmyagentic.si/agent/v1]' },
+  'auth status': { flags: [], usage: 'emomo auth status' },
+  'auth clear': { flags: [], usage: 'emomo auth clear' },
   search: { positional: 'query', flags: ['limit', 'category', 'text', 'profile', 'collection', 'media', 'subject', 'intent', 'include-objects'], usage: 'emomo search "下班 开会" --limit 8' },
   get: { positional: 'id', flags: [], usage: 'emomo get <meme-id>' },
   download: { positional: 'id', flags: ['dir'], usage: 'emomo download <meme-id> --dir /tmp/emomo' },
@@ -56,7 +60,7 @@ function parse(argv) {
     } else words.push(arg);
   }
   let command = words.shift() || 'help';
-  if (command === 'skill' || command === 'catalog') command += ` ${words.shift() || ''}`;
+  if (command === 'skill' || command === 'catalog' || command === 'auth') command += ` ${words.shift() || ''}`;
   if (flags.version) return { command: 'version', flags, words: [] };
   if (flags.help || command === 'help') return { command: 'help', flags, words: [] };
   const spec = COMMANDS[command];
@@ -77,7 +81,7 @@ function help() {
     commands: Object.entries(COMMANDS).map(([command, spec]) => ({ command, usage: spec.usage, flags: spec.flags })),
     globalOptions: { '--catalog': 'Explicit portable local catalog; no network or model calls. --api-url overrides the saved catalog to select a remote API.', '--api-url': 'HTTPS REST API base; defaults to EMOMO_API_URL or /agent/v1 on the public Emomo API. Local text search uses http://127.0.0.1:8787/agent/v1.', '--timeout': 'Request timeout in milliseconds, 100–120000; default 30000.', '--help': 'Print this JSON command catalog.' },
     environment: ['EMOMO_API_URL', 'EMOMO_API_TOKEN', 'EMOMO_API_TOKEN_URL', 'EMOMO_IMAGE_HOSTS', 'CODEX_HOME', 'EMOMO_CATALOG', 'EMOMO_CONFIG_DIR', 'XDG_CONFIG_HOME'],
-    authentication: 'For a private API, set EMOMO_API_TOKEN to a credential intended for that endpoint and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset). The binding must match the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent. API tokens are never sent to image requests. The public API needs no token.',
+    authentication: 'For a private API, set EMOMO_API_TOKEN to a credential intended for that endpoint and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset). The binding must match the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent. The hosted API requires an issued access key. Configure it with auth configure --key-file. For the official API only, the key is also sent to canonical HTTPS images.timmyagentic.si downloads; authenticated image redirects are rejected. Other image hosts never receive the key.',
     defaultApiUrl: DEFAULT_API_URL,
   };
 }
@@ -86,6 +90,9 @@ export async function run(argv, { env = process.env } = {}) {
   const { command, flags, words } = parse(argv);
   if (command === 'help' || command === 'capabilities') return { command, data: help() };
   if (command === 'version') return { command, data: { version: PACKAGE.version } };
+  if (command === 'auth configure') return { command, data: await configureAccess(flags['key-file'], flags['api-url'] || DEFAULT_API_URL, env) };
+  if (command === 'auth status') return { command, data: await accessStatus(env) };
+  if (command === 'auth clear') return { command, data: await clearAccess(env) };
   if (command === 'skill path') return { command, data: { path: SKILL_SOURCE } };
   if (command === 'skill install') return { command, data: await installSkill({ agent: flags.agent, directory: flags.dir, env }) };
   if (command === 'catalog import') {
@@ -101,7 +108,13 @@ export async function run(argv, { env = process.env } = {}) {
   const catalogPath = await selectCatalog(flags, env);
   if (!catalogPath && ['media', 'subject', 'intent', 'include-objects'].some(f => flags[f] !== undefined)) throw new EmomoError('INVALID_ARGUMENT', 'Media, subject, intent and object filters require a local catalog.');
   const imageHosts = env.EMOMO_IMAGE_HOSTS?.split(',').map(host => host.trim().toLowerCase()).filter(Boolean);
-  const client = catalogPath ? await LocalCatalog.open(catalogPath) : new EmomoClient({ baseUrl: flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, token: boundToken(flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, env), imageHosts, timeoutMs: integer(flags.timeout, 30000, 100, 120000, 'timeout') });
+  const selectedApi = flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL;
+  let token = boundToken(selectedApi, env);
+  if (!catalogPath && !env.EMOMO_API_TOKEN) {
+    const saved = await readAccess(env);
+    if (saved) { try { if (saved.apiUrl === canonicalApi(selectedApi)) token = saved.token; } catch { /* mismatched endpoint receives no key */ } }
+  }
+  const client = catalogPath ? await LocalCatalog.open(catalogPath) : new EmomoClient({ baseUrl: flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, token, imageHosts, timeoutMs: integer(flags.timeout, 30000, 100, 120000, 'timeout') });
   let data;
   try {
   if (command === 'search') {

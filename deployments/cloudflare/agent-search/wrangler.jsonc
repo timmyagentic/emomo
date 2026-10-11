@@ -9,7 +9,9 @@
   "routes": [{ "pattern": "api.timmyagentic.si", "custom_domain": true }],
   "vars": {
     "AGENT_API_ENABLED": "true",
-    "IMAGE_BASE_URL": "https://images.timmyagentic.si"
+    "IMAGE_BASE_URL": "https://images.timmyagentic.si",
+    "SERVICE_PAUSED": "false",
+    "GLOBAL_LIMITS_JSON": "{\"search\": {\"perSecond\": 10, \"perDay\": 5000, \"inFlight\": 10, \"failures\": 5, \"cooldownSeconds\": 30}, \"read\": {\"perSecond\": 30, \"perDay\": 20000, \"inFlight\": 30, \"failures\": 5, \"cooldownSeconds\": 30}, \"download\": {\"perSecond\": 10, \"perDay\": 5000, \"inFlight\": 10, \"failures\": 5, \"cooldownSeconds\": 30}}"
   },
   "d1_databases": [{
     "binding": "DB",
@@ -19,8 +21,10 @@
     "remote": false,
     "migrations_dir": "migrations"
   }],
-  "durable_objects": { "bindings": [{ "name": "PER_IP_LIMITER", "class_name": "PerIpLimiter" }] },
-  "migrations": [{ "tag": "v1-per-ip-limit", "new_sqlite_classes": ["PerIpLimiter"] }],
+  "secrets": { "required": ["ACCESS_KEYS_JSON"] },
+  "limits": { "cpu_ms": 100 },
+  "durable_objects": { "bindings": [{ "name": "ADMISSION", "class_name": "Admission" },{ "name": "PER_IP_LIMITER", "class_name": "PerIpLimiter" }] },
+  "migrations": [{ "tag": "v1-per-ip-limit", "new_sqlite_classes": ["PerIpLimiter"] }, { "tag": "v2-admission", "new_sqlite_classes": ["Admission"] }],
   "ratelimits": [{
     "name": "EMOMO_RATE_LIMITER",
     "namespace_id": "1002",

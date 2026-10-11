@@ -50,7 +50,7 @@ The finished APK is uploaded as a GitHub Actions artifact named `emomo-android-p
 
 ## iOS App Store readiness
 
-The iOS release identity is configured in `app.json` with bundle ID `com.timmy.emomo`, version `0.1.0`, build number `1`, and `usesNonExemptEncryption=false`. The `production` EAS profile builds the App Store archive, and `store.config.json` contains initial App Store metadata.
+The iOS release identity is configured in `app.json` with bundle ID `com.timmy.emomo`, version `0.1.1`, build number `1`, and `usesNonExemptEncryption=false`. The `production` EAS profile builds the App Store archive, and `store.config.json` contains initial App Store metadata.
 
 Before submitting, initialize remote build numbers if needed and make sure iOS distribution credentials plus App Store Connect API access are configured. The App Store Connect app record is `emomo - Meme Search`, and its Apple ID (`ascAppId`) is already set in `submit.production.ios`.
 

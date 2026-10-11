@@ -1,3 +1,4 @@
+import { authorizedFetch, bindings, admission, downloadEntry } from './access-fixture.js';
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { build } from 'esbuild';
@@ -11,19 +12,19 @@ let script: string;
 let outbound = 0;
 const options = () => ({
   modules: true, script, compatibilityDate: '2026-07-30',
-  durableObjects: { DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } },
+  bindings, durableObjects: { ...admission, DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } },
   r2Buckets: { IMAGES: 'images' },
   ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1004', simple: { limit: 30, period: 60 as const } } },
   outboundService: () => { outbound++; return new MFResponse('Forbidden', { status: 502 }); },
 });
 before(async () => {
-  const bundle = await build({ entryPoints: ['src/download.ts'], write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
+  const bundle = await build({ stdin: { contents: downloadEntry, resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
   script = bundle.outputFiles[0].text;
   mf = new Miniflare(options());
   await (await mf.getR2Bucket('IMAGES') as unknown as R2Bucket).put(key, new Uint8Array(PNG));
 });
 after(async () => { await mf?.dispose(); });
-const request = (ip: string, method = 'GET', headers: Record<string, string> = {}, path = key) => mf.dispatchFetch(`https://images.test/${path}`, { method, headers: { 'cf-connecting-ip': ip, ...headers } });
+const request = (ip: string, method = 'GET', headers: Record<string, string> = {}, path = key) => authorizedFetch(mf, `https://images.test/${path}`, { method, headers: { 'cf-connecting-ip': ip, ...headers } });
 
 test('full original bytes stream from R2 and repeated concurrent downloads cannot bypass the interval', async () => {
   const responses = await Promise.all(Array.from({ length: 20 }, (_, i) => request('198.51.100.1', 'GET', { 'x-forwarded-for': `203.0.113.${i}`, 'if-none-match': '*' })));
@@ -57,19 +58,28 @@ test('HEAD, ranges, missing objects, query strings and unsupported methods have 
 
 test('missing identity, limiter and R2 bindings fail closed; edge bulk guard returns its longer retry interval', async () => {
   // Miniflare supplies loopback CF-Connecting-IP automatically; strip it inside a test-only entrypoint.
-  const missingIdentityBundle = await build({ stdin: { contents: "import handler from './src/download.ts'; export { PerIpLimiter } from './src/rate-limit.ts'; export default { fetch(r,e,c) { r = new Request(r); r.headers.delete('cf-connecting-ip'); return handler.fetch(r,e,c); } };", resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
+  const missingIdentityBundle = await build({ stdin: { contents: "import handler from './src/download.ts'; export { PerIpLimiter } from './src/rate-limit.ts'; export { Admission } from './src/access.ts'; export default { fetch(r,e,c) { r = new Request(r); r.headers.delete('cf-connecting-ip'); return handler.fetch(r,e,c); } };", resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
   const missingIdentity = new Miniflare({ ...options(), script: missingIdentityBundle.outputFiles[0].text });
-  try { assert.equal((await missingIdentity.dispatchFetch(`https://images.test/${key}`)).status, 503); }
+  try { assert.equal((await authorizedFetch(missingIdentity, `https://images.test/${key}`)).status, 503); }
   finally { await missingIdentity.dispose(); }
   const broken = new Miniflare({ ...options(), durableObjects: {} });
   try {
-    assert.equal((await broken.dispatchFetch(`https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.9' } })).status, 503);
+    assert.equal((await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.9' } })).status, 503);
     await broken.setOptions({ ...options(), r2Buckets: {} });
-    assert.equal((await broken.dispatchFetch(`https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.10' } })).status, 503);
+    assert.equal((await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.10' } })).status, 503);
     await broken.setOptions({ ...options(), ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1005', simple: { limit: 1, period: 60 } } } });
-    await broken.dispatchFetch(`https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.11' } });
-    const denied = await broken.dispatchFetch(`https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.11' } });
+    await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.11' } });
+    const denied = await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.11' } });
     assert.equal(denied.status, 429); assert.equal(denied.headers.get('retry-after'), '60');
   } finally { await broken.dispose(); }
   assert.equal(outbound, 0);
+});
+
+test('direct image requests without a valid key never return stored bytes', async () => {
+  for (const authorization of ['', 'Bearer invalid']) {
+    const response = await mf.dispatchFetch(`https://images.test/${key}`, { headers: { authorization, 'cf-connecting-ip': '203.0.113.88' } });
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.notDeepEqual(Buffer.from(await response.arrayBuffer()), PNG);
+  }
 });
