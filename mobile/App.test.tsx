@@ -42,7 +42,7 @@ test('opens app store readiness information from the header', async () => {
   fireEvent.press(await screen.findByLabelText('打开关于与隐私信息'));
 
   expect(screen.getByText('关于 emomo')).toBeTruthy();
-  expect(screen.getByText('版本 1.0.0')).toBeTruthy();
+  expect(screen.getByText('版本 0.1.0')).toBeTruthy();
   expect(screen.getByText('隐私政策')).toBeTruthy();
   expect(screen.getByText('搜索历史只保存在本机，可以随时清空。')).toBeTruthy();
   expect(screen.getByText('支持与反馈')).toBeTruthy();

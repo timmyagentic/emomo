@@ -4,7 +4,7 @@
 
 这消除了新版搜索服务的模型调用费用；Workers、D1、R2、日志、域名及保留的其他服务仍可能收费。限流和缓存不是账户账单硬上限。任意自定义 CLI API、旧 Go 服务及另行运行旧摄入流水线不在零模型保证内。
 
-## 1.0.0-beta1 预发布服务
+## 0.1.0 正式服务
 
 官网 https://timmyagentic.si，API https://api.timmyagentic.si/agent/v1，图片 https://images.timmyagentic.si。正式配置已启用，使用独立 D1。公开索引为 7,302 张审核主图，重复版本不导入，不确定 OCR 不索引。发布流程见 [PUBLIC_RELEASE](../../../docs/PUBLIC_RELEASE.md)。以下旧库导出记录仅作历史参考。
 
@@ -16,8 +16,8 @@
 - 仅 search、单图详情、categories、stats，profile 为 keyword，collection 留空或 keyword。旧 /api/v1 返回 410，整库列表、SSE、管理及浏览器 Origin 关闭。类别最多列出 100 项。
 - 查询 1–160 字/最多 64 词、默认 8 / 最多 100 候选、请求体 8 KiB；SQL 参数绑定，FTS 运算符不能注入。同一 IP 搜索至少间隔 1 秒，由 SQLite Durable Object 序列化并持久化计数，跨边缘节点共享；独立下载 Worker 对 GET/HEAD 原图请求同样限制 1 秒 1 次。另有每个边缘节点约 30 次/60 秒的最终一致辅助保护；Worker 内部成功响应缓存 60 秒，搜索缓存键只用请求哈希；错误不缓存。缓存读前限流，对外响应 no-store。详情读取不消耗搜索的秒级额度。限流不可用时返回 503，超限 429 + Retry-After。
 - 下载 Worker 流式读取 R2，保留 URL、完整字节与 SHA-256；仅允许审核目录的静态图片，不支持 Range。官网仅两张固定展示图作为站内资源。
-- 本变更需按 [限流上线步骤](../../../docs/RATE_LIMIT_ROLLOUT.md) 关闭 R2 公开入口并切换域名后才生效；代码与本地验证不等于生产已启用。
-- 原图由 CLI 直接下载，Worker 不读写/代理图片。图片基地址由运维配置，key 逐段编码；离线输入拒绝公开/签名 URL。匿名接口缓存不区分用户，未引入调用者鉴权功能。
+- 搜索与下载限流已于 2026-10-11 上线并完成公网验收：R2 公开自定义域名已移除，r2.dev 已关闭，图片域名由下载 Worker 接管。部署版本及验收见 [限流运行说明](../../../docs/RATE_LIMIT_ROLLOUT.md)。
+- 原图由 CLI 经独立下载 Worker 流式读取；搜索 Worker 不读取或代理图片。图片基地址由运维配置，key 逐段编码；离线输入拒绝公开/签名 URL。匿名接口缓存不区分用户，未引入调用者鉴权功能。
 
 ## 离线导入
 

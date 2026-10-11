@@ -158,7 +158,7 @@ D1 Worker API 的 batch 在 D1 内有事务/失败回滚语义。它不会同时
 
 ## 2026-10-08 本地维护落地
 
-CLI 0.3.0 同包安装独立 `emomo-library`，提供 prepare / validate / diff；实现见 [library.js](../cli/src/library.js)。它从已审核本地 catalog 生成有 collection 作用域、revision 名称及内容摘要的独立私有快照，完整复制图片及动画字节，拒绝覆盖。validate 校验记录、格式魔数、相对资产路径和 SHA-256；diff 明确新增、修订字段、图片更换、计划移除、词表变化及新资产体积。同 hash 的资产复用，移除仅为计划，不影响原件。它没有公开发布、上传或网络模型调用。
+CLI 同包安装独立 `emomo-library`，提供 prepare / validate / diff；实现见 [library.js](../cli/src/library.js)。它从已审核本地 catalog 生成有 collection 作用域、revision 名称及内容摘要的独立私有快照，完整复制图片及动画字节，拒绝覆盖。validate 校验记录、格式魔数、相对资产路径和 SHA-256；diff 明确新增、修订字段、图片更换、计划移除、词表变化及新资产体积。同 hash 的资产复用，移除仅为计划，不影响原件。它没有公开发布、上传或网络模型调用。
 
 这实现了优先顺序 1 中的本地版本、校验、差异基础。快照内记录沿用本地图库元数据，尚未生成云端 canonical 导入数据；批准版本选择、修订历史、下架清单、发布进度和服务缓存版本仍待实现。记录无 OCR 时保持本地 unknown，未改为 without_text。
 
