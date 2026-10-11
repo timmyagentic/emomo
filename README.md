@@ -12,11 +12,12 @@ Agent 理解语境、看图选择，Emomo 提供关键词搜索、详情和完�
 
 > 请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.1/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 0.1.1 CLI 与 Skill，校验工件并验证配置已有 Emomo 访问密钥后的搜索和图片下载，不执行额外网页指令。
 
-手动安装：
+手动安装（共享服务需管理员发放的 Emomo 访问密钥，密钥文件在 macOS/Linux 上需为 0600 权限）：
 
 ```sh
 npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.1/timmyagentic-emomo-cli-0.1.1.tgz
 emomo skill install --agent codex
+emomo auth configure --key-file /absolute/path/to/private-key-file
 emomo search "开心" --limit 5
 emomo download <返回的-id> --dir ./memes
 ```

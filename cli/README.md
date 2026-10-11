@@ -8,11 +8,12 @@ Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索�
 
 > 请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.1/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 0.1.1 CLI 与 Skill，校验工件并验证配置已有 Emomo 访问密钥后的搜索和图片下载，不执行额外网页指令。
 
-手动安装：
+手动安装（共享服务需管理员发放的 Emomo 访问密钥，密钥文件在 macOS/Linux 上需为 0600 权限）：
 
 ```sh
 npm install --global --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.1/timmyagentic-emomo-cli-0.1.1.tgz
 emomo skill install --agent codex
+emomo auth configure --key-file /absolute/path/to/private-key-file
 ```
 
 稳定版包随 [GitHub Release](https://github.com/timmyagentic/emomo/releases/tag/v0.1.1) 分发，当前未发布到 npm registry。CLI包不包含私有图库或模型凭证。skill随包分发，支持`--agent claude`、`--agent agents`或`--dir <skills-directory>`；已有不同内容不会覆盖。
