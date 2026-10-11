@@ -60,5 +60,8 @@ export async function refinedSearch(catalog, query, { limit, category, textPrese
     ranked.push({ record: r, id: r.id, image: r.image, score, match: { terms: matched, subjects: groups.filter(g=>g.subject).flatMap(g=>g.terms.filter(t=>rt.includes(t))), literalFields: txt.includes(q) ? ['imageText'] : [] } });
   }
   ranked.sort((a,b)=>b.score-a.score || b.image.width*b.image.height-a.image.width*a.image.height || a.id.localeCompare(b.id));
-  return { query, expandedQuery: groups.map(g=>g.terms.join('|')).join(' '), total: ranked.length, results: await Promise.all(ranked.slice(0,limit).map(async ({ record, score, match }) => ({ ...await catalog.candidate(record, score), match }))), reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
+  // Match ordinary search: validate every returned image without overlapping full reads.
+  const results = [];
+  for (const { record, score, match } of ranked.slice(0,limit)) results.push({ ...await catalog.candidate(record, score), match });
+  return { query, expandedQuery: groups.map(g=>g.terms.join('|')).join(' '), total: ranked.length, results, reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
 }

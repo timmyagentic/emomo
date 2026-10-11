@@ -194,7 +194,10 @@ export class LocalCatalog {
       ranked.push({ record: r, id: r.id, score: Math.round(score * 100) / 100, match: { intents: matchedIntents, subjects: matchedSubjects, literalFields: literal, tokens: overlap } });
     }
     ranked.sort((a, b) => b.score - a.score || Number(a.id.slice(6)) - Number(b.id.slice(6)) || a.id.localeCompare(b.id));
-    return { query, expandedQuery: [...intents, ...subjects].join(' '), total: ranked.length, results: await Promise.all(ranked.slice(0, limit).map(async ({ record, score, match }) => ({ ...await this.candidate(record, score), match }))), reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
+    // Each validation reads a full image. Keep only one read active even at limit 100.
+    const results = [];
+    for (const { record, score, match } of ranked.slice(0, limit)) results.push({ ...await this.candidate(record, score), match });
+    return { query, expandedQuery: [...intents, ...subjects].join(' '), total: ranked.length, results, reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
   }
   item(id) {
     const row = this.db.prepare('SELECT data FROM items WHERE json_extract(data,\'$.id\') = ?').get(id);
