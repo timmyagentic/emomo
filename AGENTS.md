@@ -26,6 +26,10 @@ scripts/     Cross-service helpers (currently: scripts/start.sh)
 
 Single-language helpers (e.g. `import-data.sh`, Vite config, Expo config) live inside their respective subproject directory, not in the root `scripts/`. Each subproject has a dedicated top-level `gen/` directory containing **only** generated protobuf code (Go in `backend/gen/`, TypeScript in `frontend/gen/` and `mobile/gen/`); these directories are committed to git, but flagged `linguist-generated=true` via [.gitattributes](.gitattributes) so PR diffs collapse them.
 
+## Cloud development
+
+Use `node scripts/dev.mjs bootstrap agent` then `node scripts/dev.mjs check agent` for the current CLI and deterministic search product. Use the `full` profile for the retained gateway, Go, frontend and mobile checks. See [docs/CLOUD_DEVELOPMENT.md](docs/CLOUD_DEVELOPMENT.md) for requirements, isolation and verification boundaries. Never copy private image libraries or environment files into cloud development.
+
 ## Common Commands
 
 - `./scripts/start.sh` — start backend (8080) + frontend (5173) for local development.

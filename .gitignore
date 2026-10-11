@@ -92,3 +92,6 @@ skills-lock.json
 
 # Mobile local tooling
 /mobile/.expo/
+
+# Secret-free development entry point (dependencies, tool config and logs)
+/.dev-cache/
