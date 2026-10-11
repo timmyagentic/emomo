@@ -1,6 +1,6 @@
 # Install Emomo for this Agent
 
-The user asked you to install Emomo. Execute this workflow with your terminal/file tools, rather than merely repeating commands to the user. The current version is **0.1.0**, the current stable release. Product versioning was reset to 0.1.0; older 1.x releases are superseded. Explicitly install this version even when a numerically higher historical version is already installed.
+The user asked you to install Emomo. Execute this workflow with your terminal/file tools, rather than merely repeating commands to the user. The current stable version is **0.1.0**.
 
 Scope: install the public CLI and the Emomo Skill for the Agent environment you are currently running in, then verify them. Do not create accounts, request model/API credentials, deploy services, change the user's selected library or send images to anyone. Follow your host's permission rules. If you lack terminal access, explain that installation needs a terminal-capable Agent; do not claim completion.
 

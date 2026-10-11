@@ -51,7 +51,7 @@ Use `node scripts/dev.mjs bootstrap agent` then `node scripts/dev.mjs check agen
 
 ## Public product versioning
 
-The current public Emomo version is owned by `cli/package.json`. The owner reset the baseline to `0.1.0`; routine subsequent releases increment the patch component (`0.1.1`, `0.1.2`, ...). Do not independently jump to `0.2.0` or `1.0.0`. Follow [docs/PUBLIC_RELEASE.md](docs/PUBLIC_RELEASE.md#version-policy) and synchronize every current install/release/website entry point. Schema/API/dependency versions and historical release evidence must not be mechanically renumbered.
+The current public Emomo version is owned by `cli/package.json`. The baseline is `0.1.0`; routine subsequent releases increment the patch component (`0.1.1`, `0.1.2`, ...). Do not independently jump to `0.2.0` or `1.0.0`. Follow [docs/PUBLIC_RELEASE.md](docs/PUBLIC_RELEASE.md#version-policy) and synchronize every current install/release/website entry point. Schema/API/dependency versions and historical release evidence must not be mechanically renumbered.
 
 ## Commit & Pull Request Guidelines
 

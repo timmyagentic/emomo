@@ -1,4 +1,4 @@
-> Current product version: **0.1.0**. Version numbering was reset at the owner's request. Historical 1.x releases are superseded; they are not the recommended release. See [version policy](#version-policy).
+> Current product version: **0.1.0**. See [version policy](#version-policy).
 
 # Emomo 0.1.0 stable release
 
@@ -10,7 +10,7 @@ The current product is the Agent CLI + skill and deterministic search service. T
 
 `cli/package.json` is the source of truth for the public Emomo product version. The current release is `0.1.0`; the next ordinary release is `0.1.1`, then `0.1.2`, and so on. Increment the final (patch) component for routine fixes and updates. Do not jump to `0.2.0` or `1.0.0` without an explicit product/version decision. API `/v1`, JSON `schemaVersion`, catalog schemas and dependency versions are separate contracts, not product release numbers.
 
-For every release, synchronize package version, website labels, README, installation prompt/instructions, asset filenames, URLs, release title/tag, checksums and source provenance. HTTP User-Agent derives from the package version. Mark the current stable release explicitly as GitHub Latest; do not rely on automatic semver ordering during the 1.x → 0.1.x reset. Keep superseded releases clearly labeled and never silently replace bytes under an existing tag or asset URL. A user with a historical higher version must explicitly install the recommended archive; there is no automatic downgrade.
+For every release, synchronize package version, website labels, README, installation prompt/instructions, asset filenames, URLs, release title/tag, checksums and source provenance. HTTP User-Agent derives from the package version. Mark the current stable release explicitly as GitHub Latest. Preserve published package bytes and tag targets; document-only corrections must record their source and update the corresponding checksums.
 
 ## Distribution
 
