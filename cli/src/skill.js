@@ -1,7 +1,8 @@
+import { publishDirectory } from './publish-directory.js';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lstat, mkdir, readFile, rename, rm, mkdtemp, cp } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rm, mkdtemp, cp } from 'node:fs/promises';
 import { EmomoError } from './error.js';
 
 export const SKILL_SOURCE = fileURLToPath(new URL('../skills/emomo/', import.meta.url));
@@ -29,15 +30,11 @@ export async function installSkill({ agent = 'codex', directory, env = process.e
   }
   await mkdir(parent, { recursive: true });
   const temporary = await mkdtemp(join(parent, '.emomo-skill-'));
-  let ownsDestination = false;
   try {
     await cp(SKILL_SOURCE, temporary, { recursive: true });
     // Reserve the name exclusively so an existing empty user directory is safe too.
-    await mkdir(destination);
-    ownsDestination = true;
-    await rename(temporary, destination);
+    await publishDirectory(temporary, destination, 'SKILL.md');
   } catch {
-    if (ownsDestination) await rm(destination, { recursive: true, force: true });
     throw new EmomoError('SKILL_INSTALL_FAILED', 'The skill could not be installed. Check directory permissions and existing files.');
   } finally {
     await rm(temporary, { recursive: true, force: true });

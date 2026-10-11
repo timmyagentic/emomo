@@ -76,7 +76,8 @@ function help() {
     output: 'One JSON object on stdout. Exit 0 means success; exit 1 means error. --json is optional.',
     commands: Object.entries(COMMANDS).map(([command, spec]) => ({ command, usage: spec.usage, flags: spec.flags })),
     globalOptions: { '--catalog': 'Explicit portable local catalog; no network or model calls. --api-url overrides the saved catalog to select a remote API.', '--api-url': 'HTTPS REST API base; defaults to EMOMO_API_URL or /agent/v1 on the public Emomo API. Local text search uses http://127.0.0.1:8787/agent/v1.', '--timeout': 'Request timeout in milliseconds, 100–120000; default 30000.', '--help': 'Print this JSON command catalog.' },
-    environment: ['EMOMO_API_URL', 'EMOMO_API_TOKEN', 'EMOMO_IMAGE_HOSTS', 'CODEX_HOME', 'EMOMO_CATALOG', 'EMOMO_CONFIG_DIR', 'XDG_CONFIG_HOME'],
+    environment: ['EMOMO_API_URL', 'EMOMO_API_TOKEN', 'EMOMO_API_TOKEN_URL', 'EMOMO_IMAGE_HOSTS', 'CODEX_HOME', 'EMOMO_CATALOG', 'EMOMO_CONFIG_DIR', 'XDG_CONFIG_HOME'],
+    authentication: 'For a private API, set EMOMO_API_TOKEN to a credential intended for that endpoint and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset). The binding must match the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent. API tokens are never sent to image requests. The public API needs no token.',
     defaultApiUrl: DEFAULT_API_URL,
   };
 }
@@ -100,7 +101,7 @@ export async function run(argv, { env = process.env } = {}) {
   const catalogPath = await selectCatalog(flags, env);
   if (!catalogPath && ['media', 'subject', 'intent', 'include-objects'].some(f => flags[f] !== undefined)) throw new EmomoError('INVALID_ARGUMENT', 'Media, subject, intent and object filters require a local catalog.');
   const imageHosts = env.EMOMO_IMAGE_HOSTS?.split(',').map(host => host.trim().toLowerCase()).filter(Boolean);
-  const client = catalogPath ? await LocalCatalog.open(catalogPath) : new EmomoClient({ baseUrl: flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, token: env.EMOMO_API_TOKEN, imageHosts, timeoutMs: integer(flags.timeout, 30000, 100, 120000, 'timeout') });
+  const client = catalogPath ? await LocalCatalog.open(catalogPath) : new EmomoClient({ baseUrl: flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, token: boundToken(flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, env), imageHosts, timeoutMs: integer(flags.timeout, 30000, 100, 120000, 'timeout') });
   let data;
   try {
   if (command === 'search') {
@@ -133,4 +134,19 @@ export async function main(argv, { env = process.env, write = text => process.st
   }
   write(`${JSON.stringify(envelope)}\n`);
   return exitCode;
+}
+
+// Ambient credentials belong to the configured endpoint, never an arbitrary override.
+export function boundToken(selected, env) {
+  if (!env.EMOMO_API_TOKEN) return undefined;
+  const binding = env.EMOMO_API_TOKEN_URL || env.EMOMO_API_URL;
+  if (!binding) return undefined;
+  try {
+    const canonical = value => {
+      const url = new URL(value);
+      if (url.username || url.password || url.search || url.hash || !['https:', 'http:'].includes(url.protocol)) throw new Error('Invalid token binding');
+      return url.origin + url.pathname.replace(/\/+$/, '');
+    };
+    return canonical(selected) === canonical(binding) ? env.EMOMO_API_TOKEN : undefined;
+  } catch { return undefined; }
 }

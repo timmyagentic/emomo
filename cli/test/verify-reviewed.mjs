@@ -35,7 +35,7 @@ for (const c of cases) {
     const detail=invoke(['get',c.selectedId]).meme,download=invoke(['download',c.selectedId,'--dir',join(out,'images')]);
     assert.equal(hash(readFileSync(download.path)),detail.sha256);
     assert.equal(detail.sha256,byId.get(c.selectedId).sha256);
-    verified.push({...c,total:search.total,download,visualReview:'agent_inspected_complete_candidate',match:search.results.find(r=>r.id===c.selectedId).match});
+    verified.push({...c,total:search.total,download,visualReview:'UNVERIFIED_by_script',match:search.results.find(r=>r.id===c.selectedId).match});
   } else { assert.equal(search.total,0); verified.push({...c,total:0,reason:search.reason}); }
 }
 const alias=actual.find(r=>r.searchable===false),detail=invoke(['get',alias.id]).meme;

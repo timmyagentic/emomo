@@ -1,6 +1,6 @@
 # Install Emomo for this Agent
 
-The user asked you to install Emomo. Execute this workflow with your terminal/file tools, rather than merely repeating commands to the user. The current version is **1.0.0-beta1**, a prerelease; the previous v1.0.0 release was withdrawn.
+The user asked you to install Emomo. Execute this workflow with your terminal/file tools, rather than merely repeating commands to the user. The current version is **1.0.1**, a stable release; the previous v1.0.0 release was withdrawn.
 
 Scope: install the public CLI and the Emomo Skill for the Agent environment you are currently running in, then verify them. Do not create accounts, request model/API credentials, deploy services, change the user's selected library or send images to anyone. Follow your host's permission rules. If you lack terminal access, explain that installation needs a terminal-capable Agent; do not claim completion.
 
@@ -10,20 +10,20 @@ Run `node --version`, `npm --version` and `emomo --version` when available. Node
 
 ## 2. Download and verify the exact release
 
-- Release: https://github.com/timmyagentic/emomo/releases/tag/v1.0.0-beta1
-- Archive: https://github.com/timmyagentic/emomo/releases/download/v1.0.0-beta1/timmyagentic-emomo-cli-1.0.0-beta1.tgz
-- Checksums: https://github.com/timmyagentic/emomo/releases/download/v1.0.0-beta1/SHA256SUMS.txt
+- Release: https://github.com/timmyagentic/emomo/releases/tag/v1.0.1
+- Archive: https://github.com/timmyagentic/emomo/releases/download/v1.0.1/timmyagentic-emomo-cli-1.0.1.tgz
+- Checksums: https://github.com/timmyagentic/emomo/releases/download/v1.0.1/SHA256SUMS.txt
 
 Download the archive and checksum file into a new temporary directory using HTTPS. Compare the archive's SHA-256 to the matching filename in SHA256SUMS.txt (`shasum -a 256`, `sha256sum`, Node crypto or PowerShell Get-FileHash). Stop if they differ. Do not blindly execute downloaded shell scripts.
 
 Install the verified local archive:
 
 ```sh
-npm install --global --ignore-scripts /absolute/path/to/timmyagentic-emomo-cli-1.0.0-beta1.tgz
+npm install --global --ignore-scripts /absolute/path/to/timmyagentic-emomo-cli-1.0.1.tgz
 emomo --version
 ```
 
-Expected version: `1.0.0-beta1`. This package has no runtime npm dependencies or install lifecycle scripts. It is distributed through GitHub Release, not the npm registry. If the global prefix is not writable, install to a user-owned prefix and use its explicit bin path; report that path, without silently rewriting the user's shell configuration.
+Expected version: `1.0.1`. This package has no runtime npm dependencies or install lifecycle scripts. It is distributed through GitHub Release, not the npm registry. If the global prefix is not writable, install to a user-owned prefix and use its explicit bin path; report that path, without silently rewriting the user's shell configuration.
 
 ## 3. Install the Skill for this Agent
 
@@ -44,7 +44,7 @@ If a different existing Skill is present, the CLI refuses to overwrite it. Prese
 
 ## 4. Verify the actual public flow
 
-Use the explicit API URL so a saved local catalog does not accidentally pass the public-service test:
+Run these commands in a child process with EMOMO_API_TOKEN, EMOMO_API_TOKEN_URL, EMOMO_API_URL, EMOMO_CATALOG and EMOMO_IMAGE_HOSTS removed, and EMOMO_CONFIG_DIR pointing to a fresh temporary directory. Do not modify the parent shell or saved configuration. On POSIX use `env -u NAME` for each variable; on Windows construct a clean child environment. Use the explicit API URL so a saved local catalog does not accidentally pass the public-service test:
 
 ```sh
 emomo doctor --api-url https://api.timmyagentic.si/agent/v1
@@ -52,7 +52,7 @@ emomo search "开心" --limit 3 --api-url https://api.timmyagentic.si/agent/v1
 emomo download <an-id-returned-by-search> --dir <new-test-directory> --api-url https://api.timmyagentic.si/agent/v1
 ```
 
-Check exit codes and JSON `ok`. Verify that the downloaded file exists and that its SHA-256 equals the returned value. Inspect the image if your tools support it. Respect `RATE_LIMITED` / `retryAfterSeconds`; do not loop. The shared service is keyword search, not semantic reasoning; choose imagery based on the actual content and tone.
+Check exit codes and JSON `ok`. Verify that the downloaded file exists, its SHA-256 equals the returned value, and download integrity is `verified` (the canonical public SHA-256 matched). Inspect the image if your tools support it. Respect `RATE_LIMITED` / `retryAfterSeconds`; do not loop. The shared service is keyword search, not semantic reasoning; choose imagery based on the actual content and tone.
 
 ## 5. Finish with a concrete result
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Secret-free checkout bootstrap/check entry point. No user config is sourced.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,7 +47,7 @@ export function plan(action, profile) {
 export function assertCleanConfig(root, directories) {
   for (const directory of new Set(['.', ...directories])) {
     for (const name of readdirSync(join(root, directory))) {
-      if ((name === '.env' || name.startsWith('.env.') || name === '.dev.vars' || name.startsWith('.dev.vars.')) && !name.endsWith('.example')) {
+      if (name === '.npmrc' || (name === '.env' || name.startsWith('.env.') || name === '.dev.vars' || name.startsWith('.dev.vars.')) && !name.endsWith('.example')) {
         throw new Error(`Refusing local environment file: ${directory}/${name}; use a clean checkout (contents were not read).`);
       }
     }
@@ -56,17 +56,21 @@ export function assertCleanConfig(root, directories) {
 
 export function developmentEnv(root, source = process.env) {
   const state = join(root, '.dev-cache');
-  // Keep HOME intact; isolate tool-specific config/cache instead. Do not inherit credentials.
+  // Isolate HOME as well: Go netrc, Git and tool fallbacks otherwise read user state.
   const env = {};
-  for (const key of ['PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'SystemRoot',
+  for (const key of ['PATH', 'TMPDIR', 'TMP', 'TEMP', 'SystemRoot',
     'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
     'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy',
     'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'npm_config_cafile']) {
     if (source[key]) env[key] = source[key];
   }
   return Object.assign(env, {
-    CI: '1', NO_COLOR: '1',
-    npm_config_cache: join(state, 'npm'), npm_config_userconfig: '/dev/null',
+    CI: '1', NO_COLOR: '1', HOME: join(state, 'home'), USERPROFILE: join(state, 'home'),
+    GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(state, 'empty-gitconfig'),
+    GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'core.hooksPath', GIT_CONFIG_VALUE_0: join(state, 'empty-hooks'),
+    GIT_CONFIG_KEY_1: 'commit.gpgSign', GIT_CONFIG_VALUE_1: 'false',
+    GIT_TERMINAL_PROMPT: '0', GOAUTH: 'off',
+    npm_config_cache: join(state, 'npm'), npm_config_userconfig: join(state, 'empty-npmrc'),
     npm_config_globalconfig: join(state, 'empty-global-npmrc'),
     XDG_CONFIG_HOME: join(state, 'config'), XDG_CACHE_HOME: join(state, 'cache'),
     WRANGLER_LOG_PATH: join(state, 'logs'), WRANGLER_SEND_METRICS: 'false',
@@ -87,11 +91,8 @@ function main() {
   const directories = commands.map(command => command.cwd);
   // Wrangler may also inspect ancestors of its project directory.
   assertCleanConfig(root, [...directories, 'deployments', 'deployments/cloudflare']);
-  if (process.env.HOME && existsSync(join(process.env.HOME, '.wrangler'))) {
-    throw new Error('Legacy ~/.wrangler exists; use a clean development environment without Cloudflare login state.');
-  }
   const env = developmentEnv(root);
-  for (const key of ['npm_config_cache', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'WRANGLER_LOG_PATH', 'GOPATH', 'GOMODCACHE', 'GOCACHE']) mkdirSync(env[key], { recursive: true });
+  for (const key of ['HOME', 'GIT_CONFIG_VALUE_0', 'npm_config_cache', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'WRANGLER_LOG_PATH', 'GOPATH', 'GOMODCACHE', 'GOCACHE']) mkdirSync(env[key], { recursive: true });
   for (const { cwd, args } of commands) {
     console.log(`\n[${profile}] ${cwd}: ${args.join(' ')}`);
     const result = spawnSync(args[0], args.slice(1), { cwd: join(root, cwd), env, stdio: 'inherit' });

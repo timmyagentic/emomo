@@ -1,5 +1,6 @@
+import { publishDirectory } from './publish-directory.js';
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir, mkdtemp, rename, rm, realpath, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, rm, realpath, stat } from 'node:fs/promises';
 import { resolve, join, dirname, relative, isAbsolute } from 'node:path';
 import { LocalCatalog } from './local.js';
 import { identifyImage } from './client.js';
@@ -24,7 +25,7 @@ async function contained(root, asset) {
   if (typeof asset !== 'string' || isAbsolute(asset) || asset.includes('\\') || asset.split('/').some(p => !p || p === '.' || p === '..')) throw fail();
   const path = await realpath(join(root, asset));
   const rel = relative(root, path);
-  if (!rel || rel === '..' || rel.startsWith('../') || isAbsolute(rel)) throw fail();
+  if (!rel || rel === '..' || rel.split(/[\\/]/)[0] === '..' || isAbsolute(rel)) throw fail();
   return path;
 }
 function validateRows(rows) {
@@ -85,7 +86,7 @@ export async function validateSnapshot(directory) {
 export async function prepareSnapshot(catalogPath, directory, { collection, revision } = {}) {
   if (!key(collection) || !key(revision)) throw new EmomoError('INVALID_ARGUMENT', 'Specify a collection and revision using letters, digits, hyphens or underscores.');
   const catalog = await LocalCatalog.open(catalogPath);
-  let stage, reserved = false;
+  let stage;
   const target = resolve(directory);
   try {
     const rows = catalog.db.prepare('SELECT data FROM items ORDER BY id').all().map(r => JSON.parse(r.data)).sort((a,b) => a.id.localeCompare(b.id));
@@ -108,13 +109,11 @@ export async function prepareSnapshot(catalogPath, directory, { collection, revi
     await writeFile(join(stage, 'snapshot.json'), JSON.stringify(manifest,null,2)+'\n', { mode: 0o600, flag: 'wx' });
     const validated = await validateSnapshot(stage);
     await writeFile(join(stage, 'review.json'), JSON.stringify(validated.report,null,2)+'\n', { mode: 0o600, flag: 'wx' });
-    try { await mkdir(target); reserved = true; }
+    try { await publishDirectory(stage, target, 'snapshot.json'); }
     catch (e) { if (e.code === 'EEXIST') throw new EmomoError('SNAPSHOT_EXISTS', 'The snapshot destination already exists; use a new revision directory.'); throw e; }
-    await rename(stage, target); reserved = false;
     return { path: target, ...validated.report };
   } finally {
     catalog.close();
-    if (reserved) await rm(target, { recursive: true, force: true });
     if (stage) await rm(stage, { recursive: true, force: true });
   }
 }

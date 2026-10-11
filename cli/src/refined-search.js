@@ -24,7 +24,7 @@ function groupsFor(query, tags, lexicon) {
   });
 }
 
-export function refinedSearch(catalog, query, { limit, category, textPresence, media, subject, intent, includeObjects }) {
+export async function refinedSearch(catalog, query, { limit, category, textPresence, media, subject, intent, includeObjects }) {
   const empty = reason => ({ query, expandedQuery: '', total: 0, results: [], reason, source: 'local' });
   if (textPresence === 3) return empty('text_absence_unverified');
   const gap = Object.entries(catalog.lexicon.gaps).find(([term]) => normalize(query).includes(normalize(term)));
@@ -57,8 +57,11 @@ export function refinedSearch(catalog, query, { limit, category, textPresence, m
     if (matched.length !== groups.length) continue;
     if (txt.includes(q)) score += 30;
     if (['不','没','未'].some(prefix => txt.includes(prefix+q))) score -= 60;
-    ranked.push({ ...catalog.candidate(r,score), match: { terms: matched, subjects: groups.filter(g=>g.subject).flatMap(g=>g.terms.filter(t=>rt.includes(t))), literalFields: txt.includes(q) ? ['imageText'] : [] } });
+    ranked.push({ record: r, id: r.id, image: r.image, score, match: { terms: matched, subjects: groups.filter(g=>g.subject).flatMap(g=>g.terms.filter(t=>rt.includes(t))), literalFields: txt.includes(q) ? ['imageText'] : [] } });
   }
   ranked.sort((a,b)=>b.score-a.score || b.image.width*b.image.height-a.image.width*a.image.height || a.id.localeCompare(b.id));
-  return { query, expandedQuery: groups.map(g=>g.terms.join('|')).join(' '), total: ranked.length, results: ranked.slice(0,limit), reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
+  // Match ordinary search: validate every returned image without overlapping full reads.
+  const results = [];
+  for (const { record, score, match } of ranked.slice(0,limit)) results.push({ ...await catalog.candidate(record, score), match });
+  return { query, expandedQuery: groups.map(g=>g.terms.join('|')).join(' '), total: ranked.length, results, reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
 }

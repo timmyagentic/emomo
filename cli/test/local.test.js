@@ -51,11 +51,27 @@ test('import preserves existing catalogs and rejects changed source or corrupted
 });
 test('local image symlink escapes and changed bytes are rejected',async t=>{
   const s=await setup(t),env={...s.env,EMOMO_CATALOG:s.catalog};const a=await run(['get','local-1'],{env}),asset=a.data.meme.localPath;
-  await rm(asset);await symlink(join(s.root,'one.png'),asset);assert.equal((await cli(['get','local-1'],env)).error.code,'INVALID_CATALOG');
-  await rm(asset);await writeFile(asset,'corrupt');assert.equal((await cli(['download','local-1','--dir',join(s.root,'download')],env)).error.code,'IMAGE_INTEGRITY_ERROR');
+  await rm(asset);await symlink(join(s.root,'one.png'),asset);assert.equal((await cli(['search','猫同意'],env)).error.code,'INVALID_CATALOG');assert.equal((await cli(['get','local-1'],env)).error.code,'INVALID_CATALOG');
+  await rm(asset);await writeFile(asset,'corrupt');assert.equal((await cli(['search','猫同意'],env)).error.code,'IMAGE_INTEGRITY_ERROR');assert.equal((await cli(['download','local-1','--dir',join(s.root,'download')],env)).error.code,'IMAGE_INTEGRITY_ERROR');
 });
 test('search SQL stays a read-only parameter and explicit local/API options cannot conflict',async t=>{
   const s=await setup(t),env={...s.env,EMOMO_CATALOG:s.catalog},before=await readFile(join(s.catalog,'search.sqlite3'));
   await run(['search',"' OR 1=1; DROP TABLE items; --"],{env});assert.deepEqual(await readFile(join(s.catalog,'search.sqlite3')),before);
   assert.equal((await cli(['search','猫','--catalog',s.catalog,'--api-url','https://example.com'],env)).error.code,'INVALID_ARGUMENT');
+});
+
+test('refined search applies the same image integrity boundary', async t => {
+  const s = await setup(t), env = { ...s.env, EMOMO_CATALOG: s.catalog };
+  const manifestPath = join(s.catalog, 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath));
+  manifest.lexicon.searchMode = 'facets';
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const good = await run(['search', '赞同'], { env });
+  assert.equal(good.data.results[0].id, 'local-1');
+  const asset = (await run(['get', 'local-1'], { env })).data.meme.localPath;
+  await writeFile(asset, Buffer.concat([PNG, Buffer.from('changed')]));
+  assert.equal((await cli(['search', '赞同'], env)).error.code, 'IMAGE_INTEGRITY_ERROR');
+  await rm(asset);
+  await symlink(join(s.root, 'one.png'), asset);
+  assert.equal((await cli(['search', '赞同'], env)).error.code, 'INVALID_CATALOG');
 });

@@ -75,7 +75,10 @@ function normalizeMeme(meme, result = {}) {
   for (const value of [meme.category, result.description]) {
     if (value !== undefined && typeof value !== 'string') throw invalidResponse();
   }
+  const contentHash = field(meme, 'content_hash', 'contentHash');
+  if (contentHash !== undefined && contentHash !== '' && (typeof contentHash !== 'string' || !/^(?:[a-fA-F0-9]{32}|[a-fA-F0-9]{64})$/.test(contentHash))) throw invalidResponse();
   return {
+    ...(contentHash ? { contentHash: contentHash.toLowerCase(), ...(contentHash.length === 64 ? { sha256: contentHash.toLowerCase() } : {}) } : {}),
     id: meme.id,
     url: meme.url,
     description: result.description ?? '',
@@ -91,7 +94,9 @@ function statusError(response, resource = 'API') {
   const status = response.status;
   const errors = {
     400: ['BAD_REQUEST', 'The service rejected the request. Check the search arguments.'],
-    401: ['UNAUTHORIZED', 'Authentication is required. Set EMOMO_API_TOKEN if this API requires a token.'],
+    401: ['UNAUTHORIZED', resource === 'image'
+      ? 'The image host requires authentication. API tokens are never sent to image requests; obtain an accessible image URL from the API.'
+      : 'Authentication is required. Use an EMOMO_API_TOKEN intended for this API and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset) matching the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent.'],
     403: ['FORBIDDEN', 'Access was denied. Check the API endpoint and its access policy.'],
     404: ['NOT_FOUND', `${resource === 'image' ? 'The image' : 'The requested resource'} was not found.`],
     410: ['SERVICE_PAUSED', 'Emomo is offline. Do not retry searches or restart infrastructure automatically.'],
@@ -145,7 +150,7 @@ export class EmomoClient {
 
   async request(path, { method = 'GET', body } = {}) {
     const url = new URL(`${this.base.href.replace(/\/$/, '')}/${path}`);
-    const headers = { Accept: 'application/json', 'User-Agent': 'emomo-cli/1.0.0-beta1' };
+    const headers = { Accept: 'application/json', 'User-Agent': 'emomo-cli/1.0.1' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     const response = await this.fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
@@ -221,7 +226,7 @@ export class EmomoClient {
     let response;
     for (let hop = 0; hop <= 3; hop++) {
       // API Authorization is deliberately never attached to image requests.
-      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': 'emomo-cli/1.0.0-beta1' } });
+      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': 'emomo-cli/1.0.1' } });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
         await response.body?.cancel();
@@ -243,7 +248,9 @@ export class EmomoClient {
     const bytes = await readBounded(response, MAX_IMAGE_BYTES);
     const image = identifyImage(bytes);
     if (image.mimeType !== contentType) throw new EmomoError('INVALID_IMAGE', 'The image content does not match its declared type.');
-    return saveImage(bytes, image, id, directory, meme.url);
+    if (meme.contentHash && createHash(meme.contentHash.length === 64 ? 'sha256' : 'md5').update(bytes).digest('hex') !== meme.contentHash) throw new EmomoError('IMAGE_INTEGRITY_ERROR', 'The downloaded image does not match its canonical hash.');
+    const saved = await saveImage(bytes, image, id, directory, meme.url);
+    return { ...saved, integrity: meme.contentHash ? (meme.sha256 ? 'verified' : 'verified_legacy_md5') : 'unverified_no_hash' };
   }
 }
 
