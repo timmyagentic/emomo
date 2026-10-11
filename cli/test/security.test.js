@@ -59,3 +59,48 @@ test('non-string canonical hashes fail as incompatible responses', async t => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ meme: { id: 'one', url: 'https://images.timmyagentic.si/one.png', content_hash: ['a'.repeat(64)] } }));
   await assert.rejects(new EmomoClient().get('one'), { code: 'INVALID_RESPONSE' });
 });
+
+test('capabilities and help disclose the private API token binding contract without secrets', async () => {
+  for (const args of [['capabilities'], ['--help']]) {
+    const result = await run(args, { env: { EMOMO_API_TOKEN: 'synthetic-help-secret' } });
+    assert.ok(result.data.environment.includes('EMOMO_API_TOKEN_URL'));
+    assert.match(result.data.authentication, /EMOMO_API_TOKEN_URL/);
+    assert.match(result.data.authentication, /EMOMO_API_URL/);
+    assert.match(result.data.authentication, /origin.*path/i);
+    assert.match(result.data.authentication, /not sent/i);
+    assert.equal(JSON.stringify(result).includes('synthetic-help-secret'), false);
+  }
+});
+
+test('API 401 explains endpoint binding without echoing credentials', async t => {
+  t.mock.method(globalThis, 'fetch', async () => new Response('synthetic-upstream-secret', { status: 401 }));
+  await assert.rejects(run(['stats', '--api-url', 'https://private.invalid/api/v1'], {
+    env: { EMOMO_API_TOKEN: 'synthetic-api-secret' },
+  }), error => {
+    assert.equal(error.code, 'UNAUTHORIZED');
+    assert.match(error.message, /EMOMO_API_TOKEN_URL/);
+    assert.match(error.message, /EMOMO_API_URL/);
+    assert.match(error.message, /origin.*path/i);
+    assert.match(error.message, /not sent/i);
+    assert.equal(error.message.includes('synthetic-'), false);
+    return true;
+  });
+});
+
+
+test('image 401 does not suggest forwarding API credentials to the image host', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'emomo-image-auth-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (String(url).includes('/memes/')) return Response.json({ meme: { id: 'one', url: 'https://images.timmyagentic.si/one.png' } });
+    assert.equal(options.headers.Authorization, undefined);
+    return new Response('synthetic-upstream-secret', { status: 401 });
+  });
+  await assert.rejects(new EmomoClient({ token: 'synthetic-api-secret' }).download('one', root), error => {
+    assert.equal(error.code, 'UNAUTHORIZED');
+    assert.match(error.message, /API tokens are never sent to image requests/);
+    assert.equal(error.message.includes('EMOMO_API_TOKEN_URL'), false);
+    assert.equal(error.message.includes('synthetic-'), false);
+    return true;
+  });
+});

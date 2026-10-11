@@ -94,7 +94,9 @@ function statusError(response, resource = 'API') {
   const status = response.status;
   const errors = {
     400: ['BAD_REQUEST', 'The service rejected the request. Check the search arguments.'],
-    401: ['UNAUTHORIZED', 'Authentication is required. Set EMOMO_API_TOKEN if this API requires a token.'],
+    401: ['UNAUTHORIZED', resource === 'image'
+      ? 'The image host requires authentication. API tokens are never sent to image requests; obtain an accessible image URL from the API.'
+      : 'Authentication is required. Use an EMOMO_API_TOKEN intended for this API and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset) matching the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent.'],
     403: ['FORBIDDEN', 'Access was denied. Check the API endpoint and its access policy.'],
     404: ['NOT_FOUND', `${resource === 'image' ? 'The image' : 'The requested resource'} was not found.`],
     410: ['SERVICE_PAUSED', 'Emomo is offline. Do not retry searches or restart infrastructure automatically.'],
