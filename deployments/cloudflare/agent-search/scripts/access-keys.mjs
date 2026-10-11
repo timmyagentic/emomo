@@ -34,7 +34,7 @@ async function saveStore(data) {
 const data = await readStore();
 const id = flags['--id'];
 if (command === 'create') {
-  if (!/^[a-zA-Z0-9-]{1,48}$/.test(id || '') || Object.hasOwn(data, id)) throw Error('Use a new key id (1–48 letters, digits or hyphens). Never reuse revoked ids.');
+  if (!/^[a-zA-Z0-9-]{1,48}$/.test(id || '') || id.startsWith('web-') || Object.hasOwn(data, id)) throw Error('Use a new key id (1–48 letters, digits or hyphens). Never reuse revoked ids or the reserved web- prefix.');
   const token = `emomo_${id}_${randomBytes(32).toString('hex')}`;
   const record = { hash: createHash('sha256').update(token).digest('hex') };
   if (flags['--expires-days']) {

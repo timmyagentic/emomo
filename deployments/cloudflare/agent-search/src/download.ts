@@ -20,7 +20,7 @@ export default {
       if (!ip) return error('Download protection unavailable.', 503);
       const coarse = await env.DOWNLOAD_RATE_LIMITER.limit({ key: ip });
       if (!coarse.success) return rateLimited(60);
-      const identity = await authenticate(request, env.ACCESS_KEYS_JSON, 'download');
+      const identity = await authenticate(request, env.ACCESS_KEYS_JSON, 'download', env.ACCOUNT_STORE);
       const denied = await enforceInterval(request, env.DOWNLOAD_IP_LIMITER);
       if (denied) return denied;
       reservation = await admit(env, 'download', identity);

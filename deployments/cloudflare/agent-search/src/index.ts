@@ -137,7 +137,7 @@ export default {
         return response;
       }
       const op = path === '/agent/v1/search' ? 'search' : 'read';
-      const identity = await authenticate(request, env.ACCESS_KEYS_JSON, op);
+      const identity = await authenticate(request, env.ACCESS_KEYS_JSON, op, env.ACCOUNT_STORE);
       if (path === '/agent/v1/search') {
         const denied = await enforceInterval(request, env.PER_IP_LIMITER);
         if (denied) return denied;

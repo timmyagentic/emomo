@@ -2,3 +2,4 @@ backend/gen/** linguist-generated=true
 frontend/gen/** linguist-generated=true
 mobile/gen/** linguist-generated=true
 deployments/cloudflare/agent-search/gen/** linguist-generated=true
+website/gen/** linguist-generated=true

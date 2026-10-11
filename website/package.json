@@ -1,0 +1,23 @@
+{
+  "name": "emomo-website",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "types": "wrangler types --env-interface WebsiteEnv --strict-vars=false",
+    "check": "npm run gen:check && npm run types && tsc --noEmit && node --check public/account.js && npm test && wrangler deploy --dry-run --outdir dist",
+    "test": "tsx --test test/*.test.ts",
+    "gen:check": "node scripts/sync-proto.mjs --check"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.2",
+    "esbuild": "0.28.1",
+    "miniflare": "4.20260730.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.2",
+    "wrangler": "4.149.0"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.16.0"
+  }
+}
