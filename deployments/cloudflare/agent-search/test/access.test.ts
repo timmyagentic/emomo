@@ -70,7 +70,8 @@ test('image Worker uses the API-owned admission namespace and enforces download 
   { name: 'images', modules: true, script: images.outputFiles[0].text, compatibilityDate: '2026-07-30', bindings: { ...bindings, ACCESS_KEYS_JSON: JSON.stringify(keys) }, durableObjects: { ADMISSION: { className: 'Admission', scriptName: 'api', useSQLite: true }, DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } }, ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1901', simple: { limit: 1000, period: 60 } } } },
  ] });
  try {
-  const worker = await mf.getWorker('images');
+  // Miniflare's structural type conversion confuses Fetcher with the generated Request type.
+  const worker = await mf.getWorker('images') as unknown as { fetch: Miniflare['dispatchFetch'] };
   const url = `https://images.test/collections/reviewed/${'a'.repeat(64)}.png`;
   const call = (ip: string, authorization = `Bearer ${token(0)}`) => worker.fetch(url,{headers:{authorization,'cf-connecting-ip':ip}});
   assert.equal((await call('192.0.2.1','')).status,401);
