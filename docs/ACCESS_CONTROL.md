@@ -1,6 +1,6 @@
 # Emomo 0.1.1 access and resource protection
 
-The hosted search, detail, categories, stats and image services require an administrator-issued Emomo access key. Offline catalogs require no key. The CLI stores a key in a private file, binds it to an HTTPS API base, and sends the official API key only to that API and canonical HTTPS image paths on images.timmyagentic.si. Authenticated image redirects are rejected. No key appears in an image URL or response DTO.
+The hosted search, detail, categories, stats and image services require an Emomo access key. Users can sign in with an email code at https://timmyagentic.si/account and create their own keys; operator-issued keys remain supported. See [account service](../website/README.md). Offline catalogs require no key. The CLI stores a key in a private file, binds it to an HTTPS API base, and sends the official API key only to that API and canonical HTTPS image paths on images.timmyagentic.si. Authenticated image redirects are rejected. No key appears in an image URL or response DTO.
 
 ## Admission order and quotas
 
@@ -14,7 +14,7 @@ The Worker verifies SHA-256 against its secret key registry, checks revocation/e
 | Read: detail, categories, stats combined | 600 | 2,000 |
 | Image GET or HEAD | 120 | 500 |
 
-Counters are serialized and persisted per key/operation, independent of source IP or Worker isolate. Cached responses count. Failed requests after admission count; there is no refund. A CLI download resolves detail first, consuming one read and one image admission. Key policy overrides support smaller canary/test quotas. Reissuing a key uses a new ID; do not reuse IDs, which also identify counters.
+Counters are serialized and persisted independent of source IP or Worker isolate. Operator keys are counted per key/operation; all self-service keys belonging to one account share the same account/operation counter. Cached responses count. Failed requests after admission count; there is no refund. A CLI download resolves detail first, consuming one read and one image admission. Key policy overrides support smaller canary/test quotas. Reissuing a key uses a new ID; do not reuse IDs, which also identify counters.
 
 Global limits use separate Durable Objects per operation:
 
@@ -27,6 +27,10 @@ Global limits use separate Durable Objects per operation:
 These counters include cache hits and failures after key admission. Five backend failures within 30 seconds open that operation's circuit for 30 seconds. One subsequent probe may run; success closes it, failure reopens it. Backend leases expire after 30 seconds to recover crashed requests. Download leases cover R2 acquisition, not the client's entire response transfer; they are not a hard active-connection cap. Search request bodies are limited to 8 KiB and five seconds. Worker CPU limits are 100 ms for the API and 50 ms for images. Existing image size limit is 25 MiB. These controls bound admitted operations, not the Cloudflare account bill.
 
 401 means missing, invalid, expired or revoked key. 429 means IP or key limit. 503 means missing policy/binding, paused service, global limit or open circuit. Admission responses are no-store; 429/503 include Retry-After where a retry time is known. WAF may return 403/429 before Worker JSON handling. Do not retry in a tight loop.
+
+## Self-service accounts
+
+Use `/account` to verify an email, create a named key, see remaining quotas or revoke a key. The full key appears only at creation and can be downloaded. Up to three keys may be active. Downloaded key files require mode 0600 on macOS/Linux before `emomo auth configure --key-file`. Creating another key does not reset account usage. Account code/session/issuance controls are described in the website README.
 
 ## Offline issuance and revocation
 

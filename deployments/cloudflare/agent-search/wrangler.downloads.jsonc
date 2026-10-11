@@ -22,7 +22,7 @@
     }
   ],
   "durable_objects": {
-    "bindings": [
+    "bindings": [{ "name": "ACCOUNT_STORE", "class_name": "Account", "script_name": "emomo-official" },
       {
         "name": "DOWNLOAD_IP_LIMITER",
         "class_name": "PerIpLimiter"

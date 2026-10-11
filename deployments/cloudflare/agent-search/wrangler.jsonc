@@ -23,7 +23,7 @@
   }],
   "secrets": { "required": ["ACCESS_KEYS_JSON"] },
   "limits": { "cpu_ms": 100 },
-  "durable_objects": { "bindings": [{ "name": "ADMISSION", "class_name": "Admission" },{ "name": "PER_IP_LIMITER", "class_name": "PerIpLimiter" }] },
+  "durable_objects": { "bindings": [{ "name": "ACCOUNT_STORE", "class_name": "Account", "script_name": "emomo-official" },{ "name": "ADMISSION", "class_name": "Admission" },{ "name": "PER_IP_LIMITER", "class_name": "PerIpLimiter" }] },
   "migrations": [{ "tag": "v1-per-ip-limit", "new_sqlite_classes": ["PerIpLimiter"] }, { "tag": "v2-admission", "new_sqlite_classes": ["Admission"] }],
   "ratelimits": [{
     "name": "EMOMO_RATE_LIMITER",

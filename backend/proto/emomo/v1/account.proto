@@ -1,0 +1,33 @@
+syntax = "proto3";
+package emomo.v1;
+option go_package = "github.com/timmy/emomo/gen/emomo/v1;emomov1";
+
+// Website-only account DTOs. The hosted meme API remains bearer-only.
+message RequestLoginCode { string email = 1; }
+message LoginCodeResponse { string challenge = 1; uint32 expires_in = 2; uint32 retry_after = 3; }
+message VerifyLoginCode { string email = 1; string challenge = 2; string code = 3; }
+message AccountActionResponse { bool ok = 1; }
+message CreateAccountKey { string name = 1; }
+message AccountKey {
+  string id = 1;
+  string name = 2;
+  int64 created_at = 3; // Unix milliseconds.
+  int64 revoked_at = 4; // Zero when active.
+}
+message AccountKeyCreated { string token = 1; AccountKey key = 2; }
+message AccountUsage {
+  uint32 hourly = 1;
+  uint32 daily = 2;
+  uint32 hour_limit = 3;
+  uint32 day_limit = 4;
+  uint32 hour_remaining = 5;
+  uint32 day_remaining = 6;
+  int64 hour_reset_at = 7;
+  int64 day_reset_at = 8;
+}
+message AccountProfile {
+  string email = 1;
+  int64 created_at = 2;
+  repeated AccountKey keys = 3;
+  map<string, AccountUsage> usage = 4;
+}

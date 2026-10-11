@@ -1,15 +1,14 @@
 import { DurableObject } from 'cloudflare:workers';
 import { uncached } from './rate-limit.js';
 
-export type Operation = 'search' | 'read' | 'download';
-export type Quota = { hour: number; day: number };
+import { DEFAULT_QUOTAS, type Operation, type Quota } from './policy.js';
+import type { AccountNamespace } from '../../../../website/src/account-types.js';
+export { DEFAULT_QUOTAS } from './policy.js';
+export type { Operation, Quota } from './policy.js';
 export type GlobalLimits = { perSecond: number; perDay: number; inFlight: number; failures: number; cooldownSeconds: number };
 type KeyRecord = { hash: string; disabled?: boolean; expiresAt?: number; quotas?: Partial<Record<Operation, Quota>> };
 type Counter = { hour: number; hourly: number; day: number; daily: number; next: number };
 type GlobalState = { second: number; count: number; day: number; daily: number; leases: Record<string, number>; errors: number[]; openUntil: number; probe?: string };
-export const DEFAULT_QUOTAS: Record<Operation, Quota> = {
-  search: { hour: 120, day: 500 }, read: { hour: 600, day: 2000 }, download: { hour: 120, day: 500 },
-};
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const LEASE_MS = 30_000;
@@ -26,9 +25,16 @@ export function accessError(error: AccessError): Response {
   return response;
 }
 
-export async function authenticate(request: Request, registry: string, op: Operation): Promise<{ id: string; quota: Quota }> {
+export async function authenticate(request: Request, registry: string, op: Operation, accounts?: DurableObjectNamespace): Promise<{ id: string; quota: Quota }> {
   const match = /^Bearer (emomo_([a-zA-Z0-9-]{1,48})_[a-f0-9]{64})$/.exec(request.headers.get('authorization') ?? '');
   if (!match) throw new AccessError(401, 'A valid Emomo access key is required.');
+  const web = /^web-([a-f0-9]{24})-([a-f0-9]{16})$/.exec(match[2]);
+  if (web) {
+    if (!accounts) throw new AccessError(503, 'Account access unavailable.', 30);
+    const authority = accounts as unknown as AccountNamespace;
+    if (!await authority.getByName(`user/${web[1]}`).authenticate(match[1])) throw new AccessError(401, 'A valid Emomo access key is required.');
+    return { id: `web/${web[1]}`, quota: DEFAULT_QUOTAS[op] };
+  }
   if (!registry || registry.length > 131072) throw new AccessError(503, 'Access service unavailable.', 30);
   let keys: Record<string, KeyRecord>;
   try { keys = JSON.parse(registry); } catch { throw new AccessError(503, 'Access service unavailable.', 30); }
@@ -98,6 +104,15 @@ export class Admission extends DurableObject {
       } else if (s.errors.length >= limits.failures) s.openUntil = Math.max(s.openUntil, now + limits.cooldownSeconds * 1000);
       await tx.put('global', s);
     });
+  }
+
+  async usage(policy: Quota) {
+    const now = Date.now(), hour = Math.floor(now / HOUR), day = Math.floor(now / DAY);
+    const s = await this.ctx.storage.get<Counter>('quota');
+    const hourly = s?.hour === hour ? s.hourly : 0, daily = s?.day === day ? s.daily : 0;
+    return { hourly, daily, hourLimit: policy.hour, dayLimit: policy.day,
+      hourRemaining: Math.max(0, policy.hour - hourly), dayRemaining: Math.max(0, policy.day - daily),
+      hourResetAt: (hour + 1) * HOUR, dayResetAt: (day + 1) * DAY };
   }
 
   async alarm(): Promise<void> {
