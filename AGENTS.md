@@ -49,6 +49,10 @@ Use `node scripts/dev.mjs bootstrap agent` then `node scripts/dev.mjs check agen
 - Protobuf's boundary is the API contract plus a small allowlist of structured values. Source `.proto` files live in `backend/proto/emomo/v1/` (`types.proto` / `meme.proto` / `api.proto`) and generate backend/ frontend/mobile DTOs. Use protobuf for HTTP request/response/SSE bodies, closed cross-boundary enums, and the explicit DB JSON columns `memes.image_info` and `meme_annotations.labels`. Do **not** use protobuf as the owner of relational table shape, migrations, runtime config, open string sets (`category`, `tags`, `collection`, model names), repository internals, or React / React Native UI state. emomo's HTTP API stays RESTful via Gin; there is no protobuf `service`, gRPC, Connect, or `google.api.http` layer.
 - Backend database migrations are owned by `backend/internal/repository/db.go` (GORM AutoMigrate + explicit migration helpers). No separate SQL migration runner; do not add files under `backend/migrations/`.
 
+## Public product versioning
+
+The current public Emomo version is owned by `cli/package.json`. The owner reset the baseline to `0.1.0`; routine subsequent releases increment the patch component (`0.1.1`, `0.1.2`, ...). Do not independently jump to `0.2.0` or `1.0.0`. Follow [docs/PUBLIC_RELEASE.md](docs/PUBLIC_RELEASE.md#version-policy) and synchronize every current install/release/website entry point. Schema/API/dependency versions and historical release evidence must not be mechanically renumbered.
+
 ## Commit & Pull Request Guidelines
 
 - Use Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`...). Keep the subject short and imperative.

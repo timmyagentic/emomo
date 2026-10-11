@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { link, mkdir, open, unlink } from 'node:fs/promises';
+import { link, mkdir, open, readFile, unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { EmomoError } from './error.js';
 
 export const DEFAULT_API_URL = 'https://api.timmyagentic.si/agent/v1';
+const USER_AGENT = `emomo-cli/${JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version}`;
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 const FORMATS = new Map([[1, 'jpeg'], [2, 'png'], [3, 'webp'], ['IMAGE_FORMAT_JPEG', 'jpeg'], ['IMAGE_FORMAT_PNG', 'png'], ['IMAGE_FORMAT_WEBP', 'webp']]);
@@ -150,7 +151,7 @@ export class EmomoClient {
 
   async request(path, { method = 'GET', body } = {}) {
     const url = new URL(`${this.base.href.replace(/\/$/, '')}/${path}`);
-    const headers = { Accept: 'application/json', 'User-Agent': 'emomo-cli/1.0.1' };
+    const headers = { Accept: 'application/json', 'User-Agent': USER_AGENT };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     const response = await this.fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
@@ -226,7 +227,7 @@ export class EmomoClient {
     let response;
     for (let hop = 0; hop <= 3; hop++) {
       // API Authorization is deliberately never attached to image requests.
-      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': 'emomo-cli/1.0.1' } });
+      response = await this.fetch(url, { redirect: 'manual', headers: { Accept: 'image/png,image/jpeg,image/webp', 'User-Agent': USER_AGENT } });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
         await response.body?.cancel();
