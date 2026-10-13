@@ -1,35 +1,139 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>我的密钥 — Emomo</title><meta name="description" content="登录 Emomo，领取和管理你的访问密钥。">
-  <meta name="robots" content="noindex"><link rel="icon" href="/favicon.svg">
-  <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/account.css">
-  <script src="/account.js" defer></script>
+  <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>我的密钥 — Emomo</title>
+<meta name="description" content="登录 Emomo，领取和管理你的访问密钥。">
+  <meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/account.css">
+  <script src="/account.js" defer>
+</script>
+<script src="/site.js" defer>
+</script>
 </head>
 <body>
-<header><nav class="wrap"><a class="brand" href="/"><span class="mark" aria-hidden="true">:)</span>emomo</a><div class="navlinks"><a href="/docs">文档</a><a href="/">返回首页 ↗</a></div></nav></header>
-<main class="account-wrap">
-  <div class="account-heading"><div class="eyebrow">YOUR ACCESS / 你的 Emomo</div><h1>把表情带回对话。</h1><p>一个邮箱，一把密钥。让你的 Agent 开始找图。</p></div>
+<a class="skip" href="#account-main">跳到正文</a>
+<header>
+<nav class="wrap" aria-label="主导航">
+<a class="brand" href="/" aria-label="Emomo 首页">
+<img src="/favicon.svg" width="34" height="34" alt="">emomo</a>
+<div class="navlinks" id="site-navigation">
+<a href="/#examples">看看表情</a>
+<a href="/docs">使用文档</a>
+<a href="https://github.com/timmyagentic/emomo">GitHub</a>
+</div>
+<a class="navcta" href="/account" aria-label="登录 / 领取密钥"><span class="navcta-long">登录 / 领取密钥</span><span class="navcta-short">领取密钥</span></a>
+<button class="menu-toggle" aria-label="打开导航" aria-expanded="false" aria-controls="site-navigation">
+<img class="icon" src="/icons/menu-2.svg" alt="" aria-hidden="true" width="24" height="24">
+</button>
+</nav>
+</header>
+<main id="account-main" class="account-wrap">
+  <div class="account-heading">
+<div class="eyebrow">YOUR ACCESS / 你的 Emomo</div>
+<h1>把表情带回对话。</h1>
+<p>一个邮箱，一把密钥。让你的 Agent 开始找图。</p>
+</div>
   <p id="status" role="status" aria-live="polite">正在检查登录状态…</p>
   <section id="signin" class="signin" hidden aria-label="登录或注册">
-    <div class="intro"><h2>登录，即可领取密钥。</h2><p>首次验证邮箱会自动创建账户。<br>没有密码需要记，也不用提供模型密钥。</p><ol><li>验证你的邮箱</li><li>创建专属访问密钥</li><li>配置 CLI，开始找图</li></ol><p class="muted">已有本地图库？离线使用不需要登录。</p></div>
+    <div class="intro">
+<h2>登录，即可领取密钥。</h2>
+<p>首次验证邮箱会自动创建账户。<br>没有密码需要记，也不用提供模型密钥。</p>
+<ol>
+<li>验证你的邮箱</li>
+<li>创建专属访问密钥</li>
+<li>配置 CLI，开始找图</li>
+</ol>
+<p class="muted">已有本地图库？离线使用不需要登录。</p>
+</div>
     <div class="account-card">
-      <form id="email-form"><h2>登录 / 注册</h2><p class="muted">我们会发给你一封包含验证码的邮件。</p><label for="email">邮箱地址</label><input id="email" type="email" autocomplete="email" maxlength="254" placeholder="you@example.com" required><button class="button primary" type="submit">发送验证码 <span aria-hidden="true">→</span></button><p class="small muted">邮箱仅用于登录和账户管理。</p></form>
-      <form id="code-form" hidden><h2>查看你的邮箱</h2><p class="muted">验证码已发送至 <strong id="sent-email"></strong>，10 分钟内有效。</p><label for="code">6 位验证码</label><input id="code" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="000000" required><button class="button primary" type="submit">验证并登录 <span aria-hidden="true">→</span></button><div class="form-actions"><button id="resend" class="text-button" type="button" disabled>60 秒后重新发送</button><button id="change-email" class="text-button" type="button">更换邮箱</button></div><p class="small muted">没有收到？也看看垃圾邮件文件夹。</p></form>
+      <form id="email-form">
+<h2>登录 / 注册</h2>
+<p class="muted">我们会发给你一封包含验证码的邮件。</p>
+<label for="email">邮箱地址</label>
+<input id="email" type="email" autocomplete="email" maxlength="254" placeholder="you@example.com" required>
+<button class="button primary" type="submit">发送验证码 <span aria-hidden="true">→</span>
+</button>
+<p class="small muted">邮箱仅用于登录和账户管理。</p>
+</form>
+      <form id="code-form" hidden>
+<h2>查看你的邮箱</h2>
+<p class="muted">验证码已发送至 <strong id="sent-email">
+</strong>，10 分钟内有效。</p>
+<label for="code">6 位验证码</label>
+<input id="code" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="000000" required>
+<button class="button primary" type="submit">验证并登录 <span aria-hidden="true">→</span>
+</button>
+<div class="form-actions">
+<button id="resend" class="text-button" type="button" disabled>60 秒后重新发送</button>
+<button id="change-email" class="text-button" type="button">更换邮箱</button>
+</div>
+<p class="small muted">没有收到？也看看垃圾邮件文件夹。</p>
+</form>
     </div>
   </section>
   <section id="dashboard" hidden aria-label="账户与密钥">
-    <div class="account-bar"><div><span class="muted small">已登录</span><p id="account-email"></p></div><button id="logout" class="button" type="button">退出登录</button></div>
-    <div class="section-title"><h2>当前可用额度</h2><button id="refresh" class="text-button" type="button">刷新额度 ↻</button></div>
-    <div id="quota-cards" class="quota-grid"></div><p class="small muted">同一账户的所有密钥共享额度；换密钥不会重置。按 UTC 整点与日历日更新，缓存命中也计入使用量。</p>
-    <div class="section-title key-title"><div><h2>访问密钥</h2><p class="muted">用于 CLI 搜索、查看详情和下载原图，最多同时保留 3 把。</p></div></div>
-    <form id="key-form" class="key-form"><label for="key-name">给新密钥起个名字</label><div class="key-input-row"><input id="key-name" maxlength="40" placeholder="例如：我的 Mac" required><button class="button primary" type="submit">创建密钥 ＋</button></div></form>
-    <section id="new-key" class="new-key" hidden aria-label="新密钥"><h3>密钥已创建，请现在保存。</h3><p>完整密钥只显示这一次。请勿发到群聊、截图或提交到代码仓库。</p><label class="small" for="key-value">新访问密钥</label><textarea id="key-value" readonly spellcheck="false" rows="3"></textarea><div class="form-actions"><button id="copy-key" class="button primary" type="button">复制密钥</button><button id="download-key" class="button" type="button">下载密钥文件</button><button id="dismiss-key" class="text-button" type="button">已保存，关闭</button></div></section>
-    <div id="keys" class="keys" aria-live="polite"></div>
-    <section class="setup account-card"><div class="eyebrow">NEXT / 接入 CLI</div><h2>最后一步，交给你的 Agent。</h2><p>安装 <a href="/docs#install">Emomo CLI</a>，下载上方密钥文件，然后在 macOS / Linux 执行：</p><pre class="code">chmod 600 ~/Downloads/emomo-access.key
+    <div class="account-bar">
+<div>
+<span class="muted small">已登录</span>
+<p id="account-email">
+</p>
+</div>
+<button id="logout" class="button" type="button">退出登录</button>
+</div>
+    <div class="section-title">
+<h2>当前可用额度</h2>
+<button id="refresh" class="text-button" type="button">刷新额度 ↻</button>
+</div>
+    <div id="quota-cards" class="quota-grid">
+</div>
+<p class="small muted">同一账户的所有密钥共享额度；换密钥不会重置。按 UTC 整点与日历日更新，缓存命中也计入使用量。</p>
+    <div class="section-title key-title">
+<div>
+<h2>访问密钥</h2>
+<p class="muted">用于 CLI 搜索、查看详情和下载原图，最多同时保留 3 把。</p>
+</div>
+</div>
+    <form id="key-form" class="key-form">
+<label for="key-name">给新密钥起个名字</label>
+<div class="key-input-row">
+<input id="key-name" maxlength="40" placeholder="例如：我的 Mac" required>
+<button class="button primary" type="submit">创建密钥 ＋</button>
+</div>
+</form>
+    <section id="new-key" class="new-key" hidden aria-label="新密钥">
+<h3>密钥已创建，请现在保存。</h3>
+<p>完整密钥只显示这一次。请勿发到群聊、截图或提交到代码仓库。</p>
+<label class="small" for="key-value">新访问密钥</label>
+<textarea id="key-value" readonly spellcheck="false" rows="3">
+</textarea>
+<div class="form-actions">
+<button id="copy-key" class="button primary" type="button">复制密钥</button>
+<button id="download-key" class="button" type="button">下载密钥文件</button>
+<button id="dismiss-key" class="text-button" type="button">已保存，关闭</button>
+</div>
+</section>
+    <div id="keys" class="keys" aria-live="polite">
+</div>
+    <section class="setup account-card">
+<div class="eyebrow">NEXT / 接入 CLI</div>
+<h2>最后一步，交给你的 Agent。</h2>
+<p>安装 <a href="/docs#install">Emomo CLI</a>，下载上方密钥文件，然后在 macOS / Linux 执行：</p>
+<pre class="code">chmod 600 ~/Downloads/emomo-access.key
 emomo auth configure --key-file ~/Downloads/emomo-access.key
-emomo doctor --api-url https://api.timmyagentic.si/agent/v1</pre><p class="small muted">Windows 请将文件路径替换为实际下载路径，无需 chmod。密钥配置不会改变已有本地图库。</p></section>
+emomo doctor --api-url https://api.timmyagentic.si/agent/v1</pre>
+<p class="small muted">Windows 请将文件路径替换为实际下载路径，无需 chmod。密钥配置不会改变已有本地图库。</p>
+</section>
   </section>
-</main><footer><div class="wrap foot"><span>emomo / 表情到位，对话才有意思。</span><a href="/docs">使用文档 →</a></div></footer>
-</body></html>
+</main>
+<footer>
+<div class="wrap foot">
+<span>emomo / 表情到位，对话才有意思。</span>
+<a href="/docs">使用文档 →</a>
+</div>
+</footer>
+</body>
+</html>
