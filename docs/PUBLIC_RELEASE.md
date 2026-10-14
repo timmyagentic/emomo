@@ -1,20 +1,20 @@
-> Current product version: **0.1.1**. See [version policy](#version-policy).
+> Current product version: **0.1.2**. See [version policy](#version-policy).
 
-# Emomo 0.1.1 stable release
+# Emomo 0.1.2 stable release
 
-The installation entry point is a copyable prompt linking to https://github.com/timmyagentic/emomo/releases/download/v0.1.1/INSTALL.md. Agents first review the versioned instructions and execute only the scoped install, Skill setup and live verification rather than asking users to paste shell commands.
+The installation entry point is a copyable prompt linking to https://github.com/timmyagentic/emomo/releases/download/v0.1.2/INSTALL.md. Agents first review the versioned instructions and execute only the scoped install, Skill setup and live verification rather than asking users to paste shell commands.
 
 The current product is the Agent CLI + skill and deterministic search service. The official site is https://timmyagentic.si; API is https://api.timmyagentic.si/agent/v1; original images use https://images.timmyagentic.si. The emomo.net domain-sale site remains independent.
 
 ## Version policy
 
-`cli/package.json` is the source of truth for the public Emomo product version. The current release is `0.1.1`; the next ordinary release is `0.1.2`, then `0.1.3`, and so on. Increment the final (patch) component for routine fixes and updates. Changing the minor or major component requires an explicit product/version decision. API `/v1`, JSON `schemaVersion`, catalog schemas and dependency versions are separate contracts, not product release numbers.
+`cli/package.json` is the source of truth for the public Emomo product version. The current release is `0.1.2`; the next ordinary release is `0.1.3`, then `0.1.4`, and so on. Increment the final (patch) component for routine fixes and updates. Changing the minor or major component requires an explicit product/version decision. API `/v1`, JSON `schemaVersion`, catalog schemas and dependency versions are separate contracts, not product release numbers.
 
 For every release, synchronize package version, website labels, README, installation prompt/instructions, asset filenames, URLs, release title/tag, checksums and source provenance. HTTP User-Agent derives from the package version. Mark the current stable release explicitly as GitHub Latest. Preserve published package bytes and tag targets; document-only corrections must record their source and update the corresponding checksums.
 
 ## Distribution
 
-The dependency-free Node.js >=22.13 CLI is distributed as `timmyagentic-emomo-cli-0.1.1.tgz` on GitHub Release `v0.1.1`, with SHA-256 checksums. It is not published to the npm registry. Install the release URL with `npm install -g --ignore-scripts`. Skill instructions ship in that archive and at the website's `/SKILL.md`.
+The dependency-free Node.js >=22.13 CLI is distributed as `timmyagentic-emomo-cli-0.1.2.tgz` on GitHub Release `v0.1.2`, with SHA-256 checksums. It is not published to the npm registry. Install the release URL with `npm install -g --ignore-scripts`. Skill instructions ship in that archive and at the website's `/SKILL.md`.
 
 Access control, issuance and operational limits are specified in [ACCESS_CONTROL](ACCESS_CONTROL.md). Hosted verification requires an issued key; missing-key requests must be rejected.
 

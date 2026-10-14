@@ -30,7 +30,7 @@ test('remote canonical hashes survive projection and reject different valid imag
   t.mock.method(globalThis, 'fetch', async url => String(url).includes('/memes/')
     ? Response.json({ meme: { id: 'one', url: 'https://images.timmyagentic.si/one.png', content_hash: contentHash } })
     : new Response(bytes, { headers: { 'Content-Type': 'image/png' } }));
-  const client = new EmomoClient();
+  const client = new EmomoClient({ token: 'synthetic-key' });
   assert.equal((await client.get('one')).meme.sha256, contentHash);
   bytes = Buffer.concat([PNG, Buffer.from('different')]);
   await assert.rejects(client.download('one', root), { code: 'IMAGE_INTEGRITY_ERROR' });
@@ -57,7 +57,7 @@ test('token bindings cannot hide credentials, query parameters or fragments', ()
 
 test('non-string canonical hashes fail as incompatible responses', async t => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ meme: { id: 'one', url: 'https://images.timmyagentic.si/one.png', content_hash: ['a'.repeat(64)] } }));
-  await assert.rejects(new EmomoClient().get('one'), { code: 'INVALID_RESPONSE' });
+  await assert.rejects(new EmomoClient({ token: 'synthetic-key' }).get('one'), { code: 'INVALID_RESPONSE' });
 });
 
 test('capabilities and help disclose the private API token binding contract without secrets', async () => {
