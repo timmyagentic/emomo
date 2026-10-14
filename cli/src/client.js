@@ -91,11 +91,13 @@ function normalizeMeme(meme, result = {}) {
   };
 }
 
-function statusError(response, resource = 'API') {
+export const OFFICIAL_ACCESS_GUIDANCE = 'Sign in with your email at https://timmyagentic.si/account to obtain an Emomo access key. Save it in a private file (chmod 600 on macOS/Linux), then run emomo auth configure --key-file <private-file> and emomo auth status. Never paste the key into chat or a URL. If using EMOMO_API_TOKEN, bind EMOMO_API_TOKEN_URL to the official API base URL.';
+
+function statusError(response, resource = 'API', official = false) {
   const status = response.status;
   const errors = {
     400: ['BAD_REQUEST', 'The service rejected the request. Check the search arguments.'],
-    401: ['UNAUTHORIZED', resource === 'image'
+    401: ['UNAUTHORIZED', official ? `The official API requires a valid access key. ${OFFICIAL_ACCESS_GUIDANCE}` : resource === 'image'
       ? 'The image host requires a valid access key. Configure an issued key for the official API; other image hosts never receive API credentials.'
       : 'Authentication is required. Use an EMOMO_API_TOKEN intended for this API and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset) matching the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent.'],
     403: ['FORBIDDEN', 'Access was denied. Check the API endpoint and its access policy.'],
@@ -151,6 +153,8 @@ export class EmomoClient {
   }
 
   async request(path, { method = 'GET', body } = {}) {
+    const official = this.base.href.replace(/\/+$/, '') === DEFAULT_API_URL;
+    if (official && !this.token) throw new EmomoError('UNAUTHORIZED', `No access key is configured for the official API. ${OFFICIAL_ACCESS_GUIDANCE}`);
     const url = new URL(`${this.base.href.replace(/\/$/, '')}/${path}`);
     const headers = { Accept: 'application/json', 'User-Agent': USER_AGENT };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -162,7 +166,7 @@ export class EmomoClient {
     }
     if (!response.ok) {
       await response.body?.cancel();
-      throw statusError(response);
+      throw statusError(response, 'API', official);
     }
     if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
       await response.body?.cancel();

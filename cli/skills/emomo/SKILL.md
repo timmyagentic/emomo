@@ -47,7 +47,17 @@ An image's `publicReleaseClearance=UNVERIFIED` is a provenance limitation, not a
 
 ## Hosted access
 
-The hosted API, details and image downloads require an administrator-issued Emomo access key. Check `emomo auth status`; configure a user-provided private file with `emomo auth configure --key-file <private-file>`. Never display the key, put it in a URL, or retrieve infrastructure/model credentials. Missing access is a blocker for hosted verification, not for offline catalogs. Configuration keeps existing catalog selection. `auth clear` removes saved access.
+The official API, details and image downloads require an Emomo access key. If no key is configured, direct the user to https://timmyagentic.si/account to sign in with their email and obtain a key. Have them save it in a private file; do not ask them to paste it into chat. On macOS/Linux, restrict that file before configuring:
+
+```sh
+chmod 600 <private-file>
+emomo auth configure --key-file <private-file>
+emomo auth status
+```
+
+`auth status` reports saved configuration, not live key validity. Retry the intended request after configuration. For a rejected, revoked or expired key, explain the error and direct the user to their official account to check or replace the key; avoid retry loops. For a custom API, obtain credentials from that API's administrator and configure with its explicit `--api-url`; official account keys do not grant custom API access.
+
+Never display a key, put it in a URL, or retrieve infrastructure/model credentials. Missing access blocks hosted verification; offline catalogs need no key. Configuration keeps existing catalog selection. `auth clear` removes saved access.
 
 Default per-key search and download quotas are each 120/hour and 500/day; read requests (detail, stats, categories combined) are 600/hour and 2,000/day. UTC calendar windows apply. Cached and failed admitted requests count. Respect 429/503 Retry-After and stop on revoked/expired access. Downloads also use one read request to resolve their metadata.
 

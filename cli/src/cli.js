@@ -1,6 +1,6 @@
 import { readAccess, configureAccess, accessStatus, clearAccess, canonicalApi } from './auth.js';
 import { readFile } from 'node:fs/promises';
-import { EmomoClient, DEFAULT_API_URL } from './client.js';
+import { EmomoClient, DEFAULT_API_URL, OFFICIAL_ACCESS_GUIDANCE } from './client.js';
 import { EmomoError, publicError } from './error.js';
 import { installSkill, SKILL_SOURCE } from './skill.js';
 import { LocalCatalog, importCatalog } from './local.js';
@@ -82,6 +82,7 @@ function help() {
     globalOptions: { '--catalog': 'Explicit portable local catalog; no network or model calls. --api-url overrides the saved catalog to select a remote API.', '--api-url': 'HTTPS REST API base; defaults to EMOMO_API_URL or /agent/v1 on the public Emomo API. Local text search uses http://127.0.0.1:8787/agent/v1.', '--timeout': 'Request timeout in milliseconds, 100–120000; default 30000.', '--help': 'Print this JSON command catalog.' },
     environment: ['EMOMO_API_URL', 'EMOMO_API_TOKEN', 'EMOMO_API_TOKEN_URL', 'EMOMO_IMAGE_HOSTS', 'CODEX_HOME', 'EMOMO_CATALOG', 'EMOMO_CONFIG_DIR', 'XDG_CONFIG_HOME'],
     authentication: 'For a private API, set EMOMO_API_TOKEN to a credential intended for that endpoint and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset). The binding must match the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent. The hosted API requires an issued access key. Configure it with auth configure --key-file. For the official API only, the key is also sent to canonical HTTPS images.timmyagentic.si downloads; authenticated image redirects are rejected. Other image hosts never receive the key.',
+    officialAccess: OFFICIAL_ACCESS_GUIDANCE,
     defaultApiUrl: DEFAULT_API_URL,
   };
 }
