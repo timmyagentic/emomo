@@ -55,6 +55,8 @@ jobs:
 
   agent-cli-required:
     name: Agent CLI and search checks
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -71,21 +73,13 @@ jobs:
       - name: Verify Agent development contract
         run: node scripts/dev.mjs check agent
 
-  gateway-required:
-    name: Legacy gateway checks
-    needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.gateway != 'false') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
       - name: Install gateway dependencies
+        if: needs.changes.result != 'success' || needs.changes.outputs.gateway != 'false'
         working-directory: deployments/cloudflare/api-gateway
         run: npm ci
 
       - name: Test and typecheck Agent gateway
+        if: needs.changes.result != 'success' || needs.changes.outputs.gateway != 'false'
         working-directory: deployments/cloudflare/api-gateway
         run: |
           npm test
