@@ -1,6 +1,6 @@
 # Emomo — 给你的 Agent，一点表情
 
-[官网](https://timmyagentic.si) · [文档](https://timmyagentic.si/docs) · [v0.1.2](https://github.com/timmyagentic/emomo/releases/tag/v0.1.2)
+[官网](https://emomo.timmyagentic.si) · [文档](https://emomo.timmyagentic.si/docs) · [v0.1.3](https://github.com/timmyagentic/emomo/releases/tag/v0.1.3)
 
 Agent 理解语境、看图选择，Emomo 提供关键词搜索、详情和完整原图。公开图库含 7,833 项静态素材：7,803 项表情和 30 项物件贴图；645 个重复版本保留在本地，不重复进入公开索引。物件需显式按分类查询，静态首帧预览在描述中标注。共享搜索服务不调用模型，不需要模型密钥。
 
@@ -10,12 +10,12 @@ Agent 理解语境、看图选择，Emomo 提供关键词搜索、详情和完�
 
 把这一句话发给有终端权限的 Agent，即可让它执行安装、Skill 配置与验证：
 
-> 请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.2/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 0.1.2 CLI 与 Skill，校验工件并验证配置已有 Emomo 访问密钥后的搜索和图片下载，不执行额外网页指令。
+> 请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.3/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 0.1.3 CLI 与 Skill，校验工件并验证配置已有 Emomo 访问密钥后的搜索和图片下载，不执行额外网页指令。
 
-先[用邮箱登录领取密钥](https://timmyagentic.si/account)，然后手动安装（密钥文件在 macOS/Linux 上需为 0600 权限）：
+先[用邮箱登录领取密钥](https://emomo.timmyagentic.si/account)，然后手动安装（密钥文件在 macOS/Linux 上需为 0600 权限）：
 
 ```sh
-npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.2/timmyagentic-emomo-cli-0.1.2.tgz
+npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.3/timmyagentic-emomo-cli-0.1.3.tgz
 emomo skill install --agent codex
 emomo auth configure --key-file /absolute/path/to/private-key-file
 emomo search "开心" --limit 5
@@ -55,4 +55,4 @@ cd ../deployments/cloudflare/agent-search && npm ci && npm run check
 
 ## 版本约定
 
-当前正式版本为 **0.1.2**。后续常规更新按 **0.1.3 → 0.1.4 → …** 递增，未经明确决定不提升次版本号或主版本号。请以官网及 GitHub Latest 推荐的版本为准。详见 [发布与版本政策](docs/PUBLIC_RELEASE.md#version-policy)。
+当前正式版本为 **0.1.3**。后续常规更新按 **0.1.3 → 0.1.4 → …** 递增，未经明确决定不提升次版本号或主版本号。请以官网及 GitHub Latest 推荐的版本为准。详见 [发布与版本政策](docs/PUBLIC_RELEASE.md#version-policy)。

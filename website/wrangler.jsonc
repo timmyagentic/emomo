@@ -13,11 +13,7 @@
   },
   "routes": [
     {
-      "pattern": "timmyagentic.si",
-      "custom_domain": true
-    },
-    {
-      "pattern": "www.timmyagentic.si",
+      "pattern": "emomo.timmyagentic.si",
       "custom_domain": true
     }
   ],
@@ -45,7 +41,7 @@
   ],
   "vars": {
     "ACCOUNTS_ENABLED": "true",
-    "SITE_ORIGINS": "https://timmyagentic.si,https://www.timmyagentic.si",
+    "SITE_ORIGINS": "https://emomo.timmyagentic.si",
     "EMAIL_FROM": "login@mail.timmyagentic.si"
   },
   "secrets": {

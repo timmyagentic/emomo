@@ -91,7 +91,7 @@ function normalizeMeme(meme, result = {}) {
   };
 }
 
-export const OFFICIAL_ACCESS_GUIDANCE = 'Sign in with your email at https://timmyagentic.si/account to obtain an Emomo access key. Save it in a private file (chmod 600 on macOS/Linux), then run emomo auth configure --key-file <private-file> and emomo auth status. Never paste the key into chat or a URL. If using EMOMO_API_TOKEN, bind EMOMO_API_TOKEN_URL to the official API base URL.';
+export const OFFICIAL_ACCESS_GUIDANCE = 'Sign in with your email at https://emomo.timmyagentic.si/account to obtain an Emomo access key. Save it in a private file (chmod 600 on macOS/Linux), then run emomo auth configure --key-file <private-file> and emomo auth status. Never paste the key into chat or a URL. If using EMOMO_API_TOKEN, bind EMOMO_API_TOKEN_URL to the official API base URL.';
 
 function statusError(response, resource = 'API', official = false) {
   const status = response.status;

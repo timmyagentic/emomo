@@ -6,7 +6,7 @@
 
 ## 0.1.1 正式服务
 
-官网 https://timmyagentic.si，API https://api.timmyagentic.si/agent/v1，图片 https://images.timmyagentic.si。正式配置已启用，使用独立 D1。公开索引为 7,302 张审核主图，重复版本不导入，不确定 OCR 不索引。发布流程见 [PUBLIC_RELEASE](../../../docs/PUBLIC_RELEASE.md)。以下旧库导出记录仅作历史参考。
+官网 https://emomo.timmyagentic.si，API https://api.timmyagentic.si/agent/v1，图片 https://images.timmyagentic.si。正式配置已启用，使用独立 D1。公开索引为 7,302 张审核主图，重复版本不导入，不确定 OCR 不索引。发布流程见 [PUBLIC_RELEASE](../../../docs/PUBLIC_RELEASE.md)。以下旧库导出记录仅作历史参考。
 
 ## 检索契约
 
