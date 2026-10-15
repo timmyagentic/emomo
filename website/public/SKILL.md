@@ -47,7 +47,7 @@ An image's `publicReleaseClearance=UNVERIFIED` is a provenance limitation, not a
 
 ## Hosted access
 
-The official API, details and image downloads require an Emomo access key. If no key is configured, direct the user to https://timmyagentic.si/account to sign in with their email and obtain a key. Have them save it in a private file; do not ask them to paste it into chat. On macOS/Linux, restrict that file before configuring:
+The official API, details and image downloads require an Emomo access key. If no key is configured, direct the user to https://emomo.timmyagentic.si/account to sign in with their email and obtain a key. Have them save it in a private file; do not ask them to paste it into chat. On macOS/Linux, restrict that file before configuring:
 
 ```sh
 chmod 600 <private-file>

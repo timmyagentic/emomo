@@ -1,6 +1,6 @@
 # Emomo 0.1.1 access and resource protection
 
-The hosted search, detail, categories, stats and image services require an Emomo access key. Users can sign in with an email code at https://timmyagentic.si/account and create their own keys; operator-issued keys remain supported. See [account service](../website/README.md). Offline catalogs require no key. The CLI stores a key in a private file, binds it to an HTTPS API base, and sends the official API key only to that API and canonical HTTPS image paths on images.timmyagentic.si. Authenticated image redirects are rejected. No key appears in an image URL or response DTO.
+The hosted search, detail, categories, stats and image services require an Emomo access key. Users can sign in with an email code at https://emomo.timmyagentic.si/account and create their own keys; operator-issued keys remain supported. See [account service](../website/README.md). Offline catalogs require no key. The CLI stores a key in a private file, binds it to an HTTPS API base, and sends the official API key only to that API and canonical HTTPS image paths on images.timmyagentic.si. Authenticated image redirects are rejected. No key appears in an image URL or response DTO.
 
 ## Admission order and quotas
 

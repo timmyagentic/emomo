@@ -59,7 +59,7 @@ test('missing official access guides login and private-file configuration withou
    assert.equal(exit, 1);
    assert.equal(result.schemaVersion, 1);
    assert.equal(result.error.code, 'UNAUTHORIZED');
-   assert.ok(result.error.message.includes('https://timmyagentic.si/account'));
+   assert.ok(result.error.message.includes('https://emomo.timmyagentic.si/account'));
    assert.ok(result.error.message.includes('emomo auth configure --key-file'));
    assert.ok(!('httpStatus' in result.error));
   }
@@ -72,7 +72,7 @@ test('rejected official keys receive recovery guidance while custom API errors s
   client.fetch = async () => new Response('secret-upstream', {status:401});
   await assert.rejects(client.stats(), error => {
    assert.equal(error.code, 'UNAUTHORIZED');
-   assert.equal(error.message.includes('https://timmyagentic.si/account'), baseUrl === DEFAULT_API_URL);
+   assert.equal(error.message.includes('https://emomo.timmyagentic.si/account'), baseUrl === DEFAULT_API_URL);
    assert.ok(!error.message.includes(token));
    assert.ok(!error.message.includes('secret-upstream'));
    return true;
