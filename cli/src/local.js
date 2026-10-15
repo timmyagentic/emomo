@@ -168,7 +168,10 @@ export class LocalCatalog {
     for (const [field, value] of [['subjects', subject], ['tags', intent]]) if (value) {
       clauses.push(`EXISTS (SELECT 1 FROM json_each(r.data, '$.${field}') WHERE value = ?)`); values.push(value);
     }
-    const rows = this.searchDb.prepare(`SELECT r.data, bm25(keywords,4,1,2) AS rank FROM keywords JOIN records r ON r.id=keywords.rowid WHERE ${clauses.join(' AND ')}${filters.sql} ORDER BY rank ASC,json_extract(r.data,'$.id') ASC`).all(...values, ...filters.values);
+    const statement = this.searchDb.prepare(`SELECT r.data, bm25(keywords,4,1,2) AS rank FROM keywords JOIN records r ON r.id=keywords.rowid WHERE ${clauses.join(' AND ')}${filters.sql} ORDER BY rank ASC,json_extract(r.data,'$.id') ASC`);
+    const lookup = expression => statement.all(expression, ...values.slice(1), ...filters.values);
+    let rows = lookup(plan.literalExpression);
+    if (!rows.length && plan.expression !== plan.literalExpression) rows = lookup(plan.expression);
     const results = [];
     for (const row of rows.slice(0, limit)) {
       const score = Math.max(0, -row.rank) / (1 + Math.max(0, -row.rank));

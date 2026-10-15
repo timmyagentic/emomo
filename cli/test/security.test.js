@@ -60,8 +60,8 @@ test('non-string canonical hashes fail as incompatible responses', async t => {
   await assert.rejects(new EmomoClient({ token: 'synthetic-key' }).get('one'), { code: 'INVALID_RESPONSE' });
 });
 
-test('capabilities and help disclose the private API token binding contract without secrets', async () => {
-  for (const args of [['capabilities'], ['--help']]) {
+test('capabilities and advanced help disclose the private API token binding contract without secrets', async () => {
+  for (const args of [['capabilities'], ['--help', '--all']]) {
     const result = await run(args, { env: { EMOMO_API_TOKEN: 'synthetic-help-secret' } });
     assert.ok(result.data.environment.includes('EMOMO_API_TOKEN_URL'));
     assert.match(result.data.authentication, /EMOMO_API_TOKEN_URL/);
@@ -70,6 +70,9 @@ test('capabilities and help disclose the private API token binding contract with
     assert.match(result.data.authentication, /not sent/i);
     assert.equal(JSON.stringify(result).includes('synthetic-help-secret'), false);
   }
+  const daily = await run(['--help'], { env: { EMOMO_API_TOKEN: 'synthetic-help-secret' } });
+  assert.match(daily.data.advanced, /--help --all/);
+  assert.equal(JSON.stringify(daily).includes('synthetic-help-secret'), false);
 });
 
 test('API 401 explains endpoint binding without echoing credentials', async t => {

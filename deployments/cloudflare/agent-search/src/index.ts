@@ -79,7 +79,7 @@ async function search(request: Request, env: Env): Promise<Response> {
   try { plan = keywordPlan(query); }
   catch { throw new HttpError(400, 'Use 1–64 short keyword terms.'); }
   const subjects = subjectFilter(plan, "coalesce(json_extract(m.meme_json, '$.tags'), '[]')");
-  const rows = await env.DB.prepare(`
+  const lookup = (expression: string) => env.DB.prepare(`
     SELECT m.meme_json, m.description, m.text_presence,
       bm25(meme_fts, 4.0, 1.0, 2.0) AS rank
     FROM meme_fts JOIN memes m ON m.rowid=meme_fts.rowid
@@ -87,7 +87,9 @@ async function search(request: Request, env: Env): Promise<Response> {
       AND ((?='' AND m.category<>'object_sticker') OR m.category=?) AND (?=0 OR m.text_presence=?)
       ${subjects.sql}
     ORDER BY rank ASC, m.id ASC LIMIT ?
-  `).bind(plan.expression, parsed.category, parsed.category, parsed.textPresence, parsed.textPresence, ...subjects.values, topK).all<SearchRow>();
+  `).bind(expression, parsed.category, parsed.category, parsed.textPresence, parsed.textPresence, ...subjects.values, topK).all<SearchRow>();
+  let rows = await lookup(plan.literalExpression);
+  if (!rows.results.length && plan.expression !== plan.literalExpression) rows = await lookup(plan.expression);
   const results = rows.results.map(row => create(SearchResultSchema, {
     meme: publicMeme(row.meme_json, env.IMAGE_BASE_URL),
     description: row.description,

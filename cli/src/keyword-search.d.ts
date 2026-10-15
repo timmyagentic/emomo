@@ -1,5 +1,5 @@
 export type Vocabulary = { subjects?: Record<string, string[]>; intents?: Record<string, string[]> };
-export type KeywordPlan = { expression: string; groups: { key: string; terms: string[]; subject: boolean; intent: boolean; expression: string }[] };
+export type KeywordPlan = { expression: string; literalExpression: string; groups: { key: string; terms: string[]; subject: boolean; intent: boolean; literal: string; expression: string }[] };
 export function normalize(text: string): string;
 export function tokens(text: string): string[];
 export function indexTerms(text: string): string;

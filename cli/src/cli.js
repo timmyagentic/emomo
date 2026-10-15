@@ -74,7 +74,7 @@ function parse(argv) {
 }
 
 function help(all = false) {
-  return {
+  const data = {
     name: 'emomo',
     version: PACKAGE.version,
     description: 'Search real memes with keywords, inspect candidates, and get complete original images or animations for an Agent.',
@@ -87,6 +87,12 @@ function help(all = false) {
     officialAccess: OFFICIAL_ACCESS_GUIDANCE,
     defaultApiUrl: DEFAULT_API_URL,
   };
+  if (!all) {
+    data.globalOptions = { '--help --all': 'Offline, installation and compatibility commands.', '--version': 'Installed version.', '--timeout': 'Remote request timeout in milliseconds.' };
+    delete data.environment;
+    data.authentication = 'Configure a private key file with auth configure. doctor reports the selected library and access state.';
+  }
+  return data;
 }
 
 export async function run(argv, { env = process.env } = {}) {
@@ -133,7 +139,11 @@ export async function run(argv, { env = process.env } = {}) {
     data = command === 'get' ? await client.get(id) : await client.download(id, flags.dir);
   } else if (command === 'doctor') {
     data = catalogPath ? await client.verify() : { apiUrl: client.base.href, reachable: true, stats: await client.stats() };
-    const access = env.EMOMO_API_TOKEN ? { configured: true, source: 'environment' } : { ...(catalogPath ? await accessStatus(env) : { configured: !!saved, ...(saved ? { apiUrl: saved.apiUrl } : {}) }), source: 'saved' };
+    let access = env.EMOMO_API_TOKEN ? { configured: true, source: 'environment' } : { configured: !!saved, ...(saved ? { apiUrl: saved.apiUrl } : {}), source: 'saved' };
+    if (catalogPath && !env.EMOMO_API_TOKEN) {
+      try { access = { ...await accessStatus(env), source: 'saved' }; }
+      catch (error) { access = { configured: null, error: publicError(error).code, source: 'saved' }; }
+    }
     data.auth = { ...access, used: !catalogPath && !!token };
   } else data = await client[command]();
   if (['search', 'get', 'download', 'doctor'].includes(command)) data.library = library;

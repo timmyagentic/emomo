@@ -13,7 +13,7 @@ import { authorizedFetch, bindings, admission } from './access-fixture.js';
 import { indexRow, importSQL } from '../src/metadata.js';
 
 const execute = promisify(execFile);
-const cli = fileURLToPath(new URL('../../../../cli/bin/emomo.js', import.meta.url));
+const cli = fileURLToPath(new URL('../../../../cli/bin/emomo.js', import.meta.url).href);
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64');
 
 test('local and hosted search agree on every keyword, aliases, subjects, filters and negative queries', async t => {
@@ -27,6 +27,8 @@ test('local and hosted search agree on every keyword, aliases, subjects, filters
     { id: 'birthday', tags: ['狗', '生日快乐'], text: '生日快乐' },
     { id: 'refusal', tags: ['礼貌', '拒绝'], text: '谢谢，不用了' },
     { id: 'dumpling', tags: ['饺子'], text: '', category: 'object_sticker' },
+    { id: 'word-dog', tags: ['自嘲', '文字表情'], text: '我是菜狗' },
+    { id: 'too-hard', tags: ['太难了', '谐音'], text: '南 南 南' },
   ];
   const metadata = samples.map(s => ({ id: s.id, category: s.category || 'usable', description: s.tags.join('；'), image_text: s.text, intent_tags: s.tags, subjects: [], scenarios: [], query_aliases: [], file_path: image, sha256: createHash('sha256').update(png).digest('hex'), width: 1, height: 1, frames: 1, media_kind: 'image' }));
   const input = join(root, 'metadata.json'); await writeFile(input, JSON.stringify(metadata));
@@ -45,13 +47,15 @@ test('local and hosted search agree on every keyword, aliases, subjects, filters
   });
   t.after(() => mf.dispose());
   const db = await mf.getD1Database('DB');
-  const schema = await readFile(new URL('../migrations/0001_text_index.sql', import.meta.url), 'utf8');
+  const schema = await readFile(fileURLToPath(new URL('../migrations/0001_text_index.sql', import.meta.url).href), 'utf8');
   await db.batch(schema.split('-- statement').map(s => s.trim()).filter(Boolean).map(s => db.prepare(s)));
   await db.batch(samples.map(s => db.prepare(importSQL(indexRow({ meme: { id: 'local-' + s.id, storage_key: s.id + '.png', tags: s.tags, category: s.category || 'usable' }, annotation: { meme_id: 'local-' + s.id, description: s.tags.join('；'), ocr_text: s.text }, text_presence: s.text ? 2 : 1 })))));
   const cases: [string, string?, string[]?][] = [
     ['猫 生气', undefined, ['local-cat']], ['猫愤怒', undefined, ['local-cat']],
     ['熊猫 生气', undefined, ['local-panda']], ['猫 生日快乐', undefined, []],
     ['礼貌拒绝', undefined, ['local-refusal']], ['饺子', undefined, []],
+    ['我是菜狗', undefined, ['local-word-dog']],
+    ['我太难了', undefined, ['local-too-hard']],
     ['饺子', 'object_sticker', ['local-dumpling']], ['火星文未知', undefined, []],
   ];
   let ip = 0;

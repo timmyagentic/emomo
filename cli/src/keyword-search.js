@@ -35,13 +35,13 @@ export function keywordPlan(query, vocabulary = {}) {
     const key = reverse.get(word);
     const alternatives = [...new Set([word, ...(key ? [key, ...aliases[key]] : [])].map(normalize))];
     const expressions = alternatives.map(value => tokens(value).map(token => `"${token}"`).join(' AND ')).filter(Boolean);
-    if (expressions.length) groups.push({ key: key ?? word, terms: alternatives, subject: !!key && Object.hasOwn(subjects, key), intent: !!key && Object.hasOwn(intents, key), expression: '(' + expressions.map(expr => '(' + expr + ')').join(' OR ') + ')' });
+    if (expressions.length) groups.push({ key: key ?? word, terms: alternatives, subject: !!key && Object.hasOwn(subjects, key), intent: !!key && Object.hasOwn(intents, key), literal: '(' + tokens(word).map(token => `"${token}"`).join(' AND ') + ')', expression: '(' + expressions.map(expr => '(' + expr + ')').join(' OR ') + ')' });
   };
   const text = normalize(query).replace(/^(?:(?:请|帮我|给我|我想|想要|找一张|找个|找|来一张|来个))+/, '').replace(/(?:的表情包|的表情|表情包|图片|表情)$/, '').trim() || normalize(query);
   for (const chunk of text.match(/[\p{L}\p{N}]+/gu) ?? []) {
     let pos = 0, unknown = '';
     while (pos < chunk.length) {
-      const word = words.find(value => chunk.startsWith(value, pos) && (!/^[a-z0-9]+$/.test(value) || value === chunk));
+      const word = words.find(value => chunk.startsWith(value, pos) && (!/^[a-z0-9]+$/.test(value) || value === chunk) && (!unknown || !Object.hasOwn(subjects, reverse.get(value))));
       if (word) { add(unknown); unknown = ''; add(word); pos += word.length; }
       else { unknown += chunk[pos]; pos++; }
     }
@@ -49,7 +49,7 @@ export function keywordPlan(query, vocabulary = {}) {
   }
   const expression = groups.map(group => group.expression).join(' AND ');
   if (!expression || expression.length > 16384) throw new Error('Use fewer short keyword terms.');
-  return { expression, groups };
+  return { expression, literalExpression: groups.map(group => group.literal).join(' AND '), groups };
 }
 export const matchExpression = query => keywordPlan(query).expression;
 

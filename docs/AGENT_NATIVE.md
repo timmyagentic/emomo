@@ -1,4 +1,4 @@
-> 当前产品版本为 **0.1.3**，官网 https://emomo.timmyagentic.si，公开 API https://api.timmyagentic.si/agent/v1。当前发布与运维以 [PUBLIC_RELEASE.md](PUBLIC_RELEASE.md) 为准；下文保留迁移设计和当时的验收记录。
+> 当前产品版本为 **0.1.4**，官网 https://emomo.timmyagentic.si，公开 API https://api.timmyagentic.si/agent/v1。当前发布与运维以 [PUBLIC_RELEASE.md](PUBLIC_RELEASE.md) 为准；下文保留迁移设计和当时的验收记录。
 
 # Emomo Agent-native：云端零模型调用
 

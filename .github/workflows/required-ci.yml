@@ -74,7 +74,7 @@ jobs:
   gateway-required:
     name: Legacy gateway checks
     needs: changes
-    if: needs.changes.outputs.gateway == 'true'
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.gateway != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -94,7 +94,7 @@ jobs:
   backend-required:
     name: Backend required checks
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.backend != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -125,7 +125,7 @@ jobs:
   frontend-required:
     name: Frontend required checks
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.frontend != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -153,7 +153,7 @@ jobs:
   mobile-required:
     name: Mobile required checks
     needs: changes
-    if: needs.changes.outputs.mobile == 'true'
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.mobile != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

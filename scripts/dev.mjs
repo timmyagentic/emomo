@@ -22,7 +22,7 @@ export function plan(action, profile) {
       add('backend', 'go', 'mod', 'download');
     }
   } else {
-    add('.', 'node', '--test', 'scripts/test/dev.test.mjs');
+    add('.', 'node', '--test', 'scripts/test/dev.test.mjs', 'scripts/test/ci-scope.test.mjs');
     add('cli', 'npm', 'run', 'check');
     add('cli', 'npm', 'test');
     add(search, 'npm', 'run', 'check');
