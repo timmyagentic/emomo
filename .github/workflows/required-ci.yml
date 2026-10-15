@@ -10,6 +10,28 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Changed components
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.scope.outputs.backend }}
+      frontend: ${{ steps.scope.outputs.frontend }}
+      mobile: ${{ steps.scope.outputs.mobile }}
+      gateway: ${{ steps.scope.outputs.gateway }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/ci-scope.mjs
+
   cli-platforms:
     name: CLI / ${{ matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
@@ -49,6 +71,16 @@ jobs:
       - name: Verify Agent development contract
         run: node scripts/dev.mjs check agent
 
+  gateway-required:
+    name: Legacy gateway checks
+    needs: changes
+    if: needs.changes.outputs.gateway == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
       - name: Install gateway dependencies
         working-directory: deployments/cloudflare/api-gateway
         run: npm ci
@@ -61,6 +93,8 @@ jobs:
 
   backend-required:
     name: Backend required checks
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -90,6 +124,8 @@ jobs:
 
   frontend-required:
     name: Frontend required checks
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -116,6 +152,8 @@ jobs:
 
   mobile-required:
     name: Mobile required checks
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

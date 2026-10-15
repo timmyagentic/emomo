@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { indexRow, importSQL } from '../src/metadata.js';
-import { indexTerms, matchExpression } from '../src/terms.js';
+import { indexTerms, matchExpression, keywordPlan } from '../src/terms.js';
 
 const execute = promisify(execFile);
 const input = { meme: { id: 'cat-1', storage_key: 'cat-1.png', image_info: { width: 1, height: 1, format: 2 } }, annotation: { meme_id: 'cat-1', description: '猫咪无语', ocr_text: '谢谢老板' } };
@@ -14,9 +14,14 @@ const input = { meme: { id: 'cat-1', storage_key: 'cat-1.png', image_info: { wid
 test('Chinese two-character terms and single-character subjects are deterministic; FTS syntax is literal', () => {
   assert.ok(indexTerms('猫咪露出无语的表情').split(' ').includes('无语'));
   assert.ok(indexTerms('猫咪露出无语的表情').split(' ').includes('猫'));
-  assert.equal(matchExpression('无语 猫'), '"无语" OR "猫"');
-  assert.equal(matchExpression('ＨＥＬＬＯ'), '"hello"');
-  assert.equal(matchExpression('猫" OR *'), '"猫" OR "or"');
+  const plan = keywordPlan('无语 猫');
+  assert.deepEqual(plan.groups.map(group => group.key), ['无语', '猫']);
+  assert.ok(plan.groups[0].terms.includes('无奈'));
+  assert.equal(plan.expression, plan.groups.map(group => group.expression).join(' AND '));
+  assert.equal(matchExpression('ＨＥＬＬＯ'), '(("hello"))');
+  assert.ok(matchExpression('猫" OR *').endsWith(' AND (("or"))'));
+  assert.equal(matchExpression('this'), '(("this"))');
+  assert.equal(matchExpression('我'), '(("我"))');
   assert.throws(() => matchExpression('***'));
   assert.throws(() => matchExpression(Array.from({ length: 65 }, (_, i) => `word${i}`).join(' ')));
 });

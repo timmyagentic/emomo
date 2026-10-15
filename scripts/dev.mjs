@@ -14,6 +14,7 @@ export function plan(action, profile) {
   const commands = [];
   const add = (cwd, ...args) => commands.push({ cwd, args });
   if (action === 'bootstrap') {
+    add('protocol', 'npm', 'ci', '--no-audit', '--no-fund');
     add(search, 'npm', 'ci', '--no-audit', '--no-fund');
     add('website', 'npm', 'ci', '--no-audit', '--no-fund');
     if (profile === 'full') {

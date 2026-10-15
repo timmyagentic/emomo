@@ -3,9 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { EmomoClient, DEFAULT_API_URL, OFFICIAL_ACCESS_GUIDANCE } from './client.js';
 import { EmomoError, publicError } from './error.js';
 import { installSkill, SKILL_SOURCE } from './skill.js';
-import { LocalCatalog, importCatalog } from './local.js';
-import { importReviewed } from './refined-import.js';
-import { selectCatalog, useCatalog } from './config.js';
+import { LocalCatalog } from './local.js';
+import { selectLibrary, useCatalog } from './config.js';
 
 const PACKAGE = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const GLOBAL = ['api-url', 'timeout', 'catalog'];
@@ -22,11 +21,12 @@ const COMMANDS = {
   capabilities: { flags: [], usage: 'emomo capabilities' },
   'catalog import': { positional: 'metadata.json', flags: ['dir', 'vocabulary'], usage: 'emomo catalog import <metadata.json> --dir <new-catalog-directory> [--vocabulary <vocabulary.json>]' },
   'catalog import-reviewed': { positional: 'metadata.jsonl', flags: ['dir'], usage: 'emomo catalog import-reviewed <metadata.jsonl> --dir <new-catalog-directory>' },
-  'catalog use': { positional: 'directory', flags: [], usage: 'emomo catalog use <catalog-directory>' },
+  'catalog use': { positional: 'directory-or-api-url', flags: [], usage: 'emomo catalog use <catalog-directory-or-api-url>' },
   'catalog path': { flags: [], usage: 'emomo catalog path' },
   'skill install': { flags: ['agent', 'dir'], usage: 'emomo skill install --agent codex' },
   'skill path': { flags: [], usage: 'emomo skill path' },
 };
+const DAILY = ['search', 'get', 'download', 'auth configure', 'doctor'];
 
 function integer(raw, fallback, min, max, label) {
   if (raw === undefined) return fallback;
@@ -45,6 +45,7 @@ function parse(argv) {
     if (literal) { words.push(arg); continue; }
     if (arg === '--') { literal = true; continue; }
     if (arg === '--help' || arg === '-h') { flags.help = true; continue; }
+    if (arg === '--all') { flags.all = true; continue; }
     if (arg === '--version') { flags.version = true; continue; }
     if (arg === '--include-objects') { if (flags['include-objects']) throw new EmomoError('INVALID_ARGUMENT', 'Duplicate options are not allowed.'); flags['include-objects'] = true; continue; }
     if (arg === '--json') { flags.json = true; continue; }
@@ -72,13 +73,14 @@ function parse(argv) {
   return { command, flags, words };
 }
 
-function help() {
+function help(all = false) {
   return {
     name: 'emomo',
     version: PACKAGE.version,
     description: 'Search real memes with keywords, inspect candidates, and get complete original images or animations for an Agent.',
     output: 'One JSON object on stdout. Exit 0 means success; exit 1 means error. --json is optional.',
-    commands: Object.entries(COMMANDS).map(([command, spec]) => ({ command, usage: spec.usage, flags: spec.flags })),
+    commands: (all ? Object.keys(COMMANDS) : DAILY).map(command => ({ command, usage: COMMANDS[command].usage, flags: !all && command === 'search' ? ['limit', 'category', 'text'] : COMMANDS[command].flags })),
+    advanced: 'emomo --help --all lists offline, installation and compatibility commands. emomo-library help lists local maintenance commands.',
     globalOptions: { '--catalog': 'Explicit portable local catalog; no network or model calls. --api-url overrides the saved catalog to select a remote API.', '--api-url': 'HTTPS REST API base; defaults to EMOMO_API_URL or /agent/v1 on the public Emomo API. Local text search uses http://127.0.0.1:8787/agent/v1.', '--timeout': 'Request timeout in milliseconds, 100–120000; default 30000.', '--help': 'Print this JSON command catalog.' },
     environment: ['EMOMO_API_URL', 'EMOMO_API_TOKEN', 'EMOMO_API_TOKEN_URL', 'EMOMO_IMAGE_HOSTS', 'CODEX_HOME', 'EMOMO_CATALOG', 'EMOMO_CONFIG_DIR', 'XDG_CONFIG_HOME'],
     authentication: 'For a private API, set EMOMO_API_TOKEN to a credential intended for that endpoint and bind it with EMOMO_API_TOKEN_URL (or EMOMO_API_URL when EMOMO_API_TOKEN_URL is unset). The binding must match the selected API base URL origin and path; trailing slashes are ignored. Unbound or mismatched tokens are not sent. The hosted API requires an issued access key. Configure it with auth configure --key-file. For the official API only, the key is also sent to canonical HTTPS images.timmyagentic.si downloads; authenticated image redirects are rejected. Other image hosts never receive the key.',
@@ -89,33 +91,32 @@ function help() {
 
 export async function run(argv, { env = process.env } = {}) {
   const { command, flags, words } = parse(argv);
-  if (command === 'help' || command === 'capabilities') return { command, data: help() };
+  if (command === 'help' || command === 'capabilities') return { command, data: help(command === 'capabilities' || flags.all) };
   if (command === 'version') return { command, data: { version: PACKAGE.version } };
   if (command === 'auth configure') return { command, data: await configureAccess(flags['key-file'], flags['api-url'] || DEFAULT_API_URL, env) };
   if (command === 'auth status') return { command, data: await accessStatus(env) };
   if (command === 'auth clear') return { command, data: await clearAccess(env) };
   if (command === 'skill path') return { command, data: { path: SKILL_SOURCE } };
   if (command === 'skill install') return { command, data: await installSkill({ agent: flags.agent, directory: flags.dir, env }) };
-  if (command === 'catalog import') {
+  if (command === 'catalog import' || command === 'catalog import-reviewed') {
     if (!flags.dir?.trim()) throw new EmomoError('INVALID_ARGUMENT', 'Choose a new catalog directory with --dir.');
-    return { command, data: await importCatalog(words[0], flags.dir, flags.vocabulary) };
-  }
-  if (command === 'catalog import-reviewed') {
-    if (!flags.dir?.trim()) throw new EmomoError('INVALID_ARGUMENT', 'Choose a new catalog directory with --dir.');
-    return { command, data: await importReviewed(words[0], flags.dir) };
+    const { importMetadata } = await import('./refined-import.js');
+    return { command, data: await importMetadata(words[0], flags.dir, flags.vocabulary) };
   }
   if (command === 'catalog use') return { command, data: await useCatalog(words[0], env) };
-  if (command === 'catalog path') return { command, data: { path: await selectCatalog(flags, env) ?? null } };
-  const catalogPath = await selectCatalog(flags, env);
+  const library = await selectLibrary(flags, env);
+  const catalogPath = library.type === 'local' ? library.path : undefined;
+  if (command === 'catalog path') return { command, data: { path: catalogPath ?? null } };
   if (!catalogPath && ['media', 'subject', 'intent', 'include-objects'].some(f => flags[f] !== undefined)) throw new EmomoError('INVALID_ARGUMENT', 'Media, subject, intent and object filters require a local catalog.');
   const imageHosts = env.EMOMO_IMAGE_HOSTS?.split(',').map(host => host.trim().toLowerCase()).filter(Boolean);
-  const selectedApi = flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL;
+  const selectedApi = library.apiUrl || DEFAULT_API_URL;
   let token = boundToken(selectedApi, env);
+  let saved;
   if (!catalogPath && !env.EMOMO_API_TOKEN) {
-    const saved = await readAccess(env);
+    saved = await readAccess(env);
     if (saved) { try { if (saved.apiUrl === canonicalApi(selectedApi)) token = saved.token; } catch { /* mismatched endpoint receives no key */ } }
   }
-  const client = catalogPath ? await LocalCatalog.open(catalogPath) : new EmomoClient({ baseUrl: flags['api-url'] || env.EMOMO_API_URL || DEFAULT_API_URL, token, imageHosts, timeoutMs: integer(flags.timeout, 30000, 100, 120000, 'timeout') });
+  const client = catalogPath ? await LocalCatalog.open(catalogPath) : new EmomoClient({ baseUrl: selectedApi, token, imageHosts, timeoutMs: integer(flags.timeout, 30000, 100, 120000, 'timeout') });
   let data;
   try {
   if (command === 'search') {
@@ -132,7 +133,10 @@ export async function run(argv, { env = process.env } = {}) {
     data = command === 'get' ? await client.get(id) : await client.download(id, flags.dir);
   } else if (command === 'doctor') {
     data = catalogPath ? await client.verify() : { apiUrl: client.base.href, reachable: true, stats: await client.stats() };
+    const access = env.EMOMO_API_TOKEN ? { configured: true, source: 'environment' } : { ...(catalogPath ? await accessStatus(env) : { configured: !!saved, ...(saved ? { apiUrl: saved.apiUrl } : {}) }), source: 'saved' };
+    data.auth = { ...access, used: !catalogPath && !!token };
   } else data = await client[command]();
+  if (['search', 'get', 'download', 'doctor'].includes(command)) data.library = library;
   return { command, data };
   } finally { if (catalogPath) client.close(); }
 }

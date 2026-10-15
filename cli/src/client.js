@@ -32,7 +32,7 @@ function publicUrl(raw, { api = false } = {}) {
   return url;
 }
 
-function apiUrl(raw) {
+export function apiUrl(raw) {
   const url = publicUrl(raw, { api: true });
   if (url.search) throw new EmomoError('INVALID_URL', 'The API base URL cannot contain query parameters.');
   url.pathname = url.pathname.replace(/\/+$/, '');

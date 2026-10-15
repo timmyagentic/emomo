@@ -1,0 +1,13 @@
+{
+  "name": "emomo-protocol-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "check": "node generate.mjs --check"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "1.69.0",
+    "@bufbuild/protoc-gen-es": "2.12.0"
+  }
+}

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, mkdtemp, rm, realpath, stat } from 'node:fs/promises';
 import { resolve, join, dirname, relative, isAbsolute } from 'node:path';
 import { LocalCatalog } from './local.js';
+import { importMetadata } from './refined-import.js';
 import { identifyImage } from './client.js';
 import { EmomoError, publicError } from './error.js';
 
@@ -144,7 +145,16 @@ export async function libraryMain(args) {
   const command = args[0] ?? 'help';
   try {
     let data;
-    if (command === 'help' && args.length <= 1) data = { commands: ['prepare --catalog PATH --dir NEW_PATH --collection NAME --revision NAME','validate PATH','diff BASE_PATH TARGET_PATH'], localOnly: true, publishes: false };
+    if (['help', '--help', '-h'].includes(command) && args.length <= 1) data = { commands: ['import METADATA --dir NEW_PATH [--vocabulary JSON]','prepare --catalog PATH --dir NEW_PATH --collection NAME --revision NAME','validate PATH','diff BASE_PATH TARGET_PATH'], localOnly: true, publishes: false };
+    else if (command === 'import' && args[1] && !args[1].startsWith('--')) {
+      const opts = {};
+      for (let i = 2; i < args.length; i += 2) {
+        if (!['--dir', '--vocabulary'].includes(args[i]) || !args[i + 1] || args[i + 1].startsWith('--') || opts[args[i]]) throw new EmomoError('INVALID_ARGUMENT', 'Use import METADATA --dir NEW_PATH [--vocabulary JSON].');
+        opts[args[i]] = args[i + 1];
+      }
+      if (!opts['--dir']) throw new EmomoError('INVALID_ARGUMENT', 'Choose a new catalog directory with --dir.');
+      data = await importMetadata(args[1], opts['--dir'], opts['--vocabulary']);
+    }
     else if (command === 'prepare') {
       const opts = {};
       for (let i=1;i<args.length;i+=2) {

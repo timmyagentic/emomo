@@ -7,7 +7,7 @@ import { SearchRequestSchema, SearchResponseSchema, GetMemeResponseSchema, GetCa
 import { MemeSchema, SearchResultSchema } from '../gen/emomo/v1/meme_pb.js';
 import { TextPresence } from '../gen/emomo/v1/types_pb.js';
 import { ID, validateStorageKey } from './metadata.js';
-import { matchExpression } from './terms.js';
+import { keywordPlan, subjectFilter } from './terms.js';
 
 const JSON_OPTIONS = { useProtoFieldName: true, enumAsInteger: true, alwaysEmitImplicit: true };
 const MAX_BODY = 8192;
@@ -75,17 +75,19 @@ async function search(request: Request, env: Env): Promise<Response> {
   if (topK < 1 || topK > 100 || !Number.isInteger(topK)) throw new HttpError(400, 'top_k must be 1–100.');
   if (![0, 1, 2, 3].includes(parsed.textPresence)) throw new HttpError(400, 'Invalid text_presence.');
   if (parsed.profile && parsed.profile !== 'keyword' || parsed.collection && parsed.collection !== 'keyword') throw new HttpError(400, 'Only the keyword profile is available.');
-  let expression: string;
-  try { expression = matchExpression(query); }
+  let plan: ReturnType<typeof keywordPlan>;
+  try { plan = keywordPlan(query); }
   catch { throw new HttpError(400, 'Use 1–64 short keyword terms.'); }
+  const subjects = subjectFilter(plan, "coalesce(json_extract(m.meme_json, '$.tags'), '[]')");
   const rows = await env.DB.prepare(`
     SELECT m.meme_json, m.description, m.text_presence,
       bm25(meme_fts, 4.0, 1.0, 2.0) AS rank
     FROM meme_fts JOIN memes m ON m.rowid=meme_fts.rowid
     WHERE meme_fts MATCH ?
       AND ((?='' AND m.category<>'object_sticker') OR m.category=?) AND (?=0 OR m.text_presence=?)
+      ${subjects.sql}
     ORDER BY rank ASC, m.id ASC LIMIT ?
-  `).bind(expression, parsed.category, parsed.category, parsed.textPresence, parsed.textPresence, topK).all<SearchRow>();
+  `).bind(plan.expression, parsed.category, parsed.category, parsed.textPresence, parsed.textPresence, ...subjects.values, topK).all<SearchRow>();
   const results = rows.results.map(row => create(SearchResultSchema, {
     meme: publicMeme(row.meme_json, env.IMAGE_BASE_URL),
     description: row.description,
@@ -146,7 +148,7 @@ export default {
       // Query text is not put in cache URLs or logs. Bound before hashing.
       const content = expected === 'POST' ? await body(request) : '';
       const normalized = expected === 'POST' ? new Request(request.url, { method: 'POST', headers: request.headers, body: content }) : request;
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`static-catalog-v1\n${env.IMAGE_BASE_URL}\n${path}\n${content}`));
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`keyword-groups-v2\n${env.IMAGE_BASE_URL}\n${path}\n${content}`));
       const hash = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
       const key = new Request(`${url.origin}/__emomo-cache/${hash}`);
       const cached = await caches.default.match(key);

@@ -5,7 +5,8 @@ import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { EmomoError } from './error.js';
 import { identifyImage, saveImage } from './client.js';
-import { refinedSearch } from './refined-search.js';
+import { normalize, tokens, indexTerms, keywordPlan, subjectFilter } from './keyword-search.js';
+export { normalize, tokens } from './keyword-search.js';
 
 const MAX_IMAGE = 25 * 1024 * 1024;
 const MAX_METADATA = 32 * 1024 * 1024;
@@ -14,16 +15,6 @@ const array = value => Array.isArray(value) && value.every(x => typeof x === 'st
 const plain = value => value && typeof value === 'object' && !Array.isArray(value);
 const bad = () => new EmomoError('INVALID_CATALOG', 'The local catalog is invalid. Rebuild it from reviewed metadata.');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-export const normalize = text => text.normalize('NFKC').toLowerCase();
-export function tokens(text) {
-  const value = normalize(text);
-  const out = new Set(value.match(/[a-z0-9]+/g) ?? []);
-  for (const part of value.match(/[\u3400-\u9fff]+/g) ?? []) {
-    if (part.length === 1) out.add(part);
-    else for (let i = 0; i < part.length - 1; i++) out.add(part.slice(i, i + 2));
-  }
-  return [...out].sort();
-}
 async function sqlite() {
   try { return (await import('node:sqlite')).DatabaseSync; }
   catch { throw new EmomoError('LOCAL_RUNTIME_UNSUPPORTED', 'Local catalogs require Node.js 22.13 or newer with SQLite FTS5.'); }
@@ -127,7 +118,7 @@ export class LocalCatalog {
       throw new EmomoError('LOCAL_CATALOG_UNAVAILABLE', 'The configured local catalog cannot be opened. Mount its disk or select a valid catalog; no remote fallback was used.');
     }
   }
-  close() { this.db?.close(); this.db = undefined; }
+  close() { this.searchDb?.close(); this.searchDb = undefined; this.db?.close(); this.db = undefined; }
   async contained(asset) {
     if (typeof asset !== 'string' || isAbsolute(asset) || asset.split(/[\\/]/).includes('..')) throw bad();
     const path = await realpath(join(this.root, asset));
@@ -142,62 +133,53 @@ export class LocalCatalog {
       textPresence: r.imageText ? 'with_text' : 'unknown', image: r.image, imageText: r.imageText, subjects: r.subjects, scenarios: r.scenarios,
       mediaKind: r.mediaKind, previewOnly: r.previewOnly, quality: r.quality, contentFlags: r.contentFlags, publicReleaseClearance: r.publicReleaseClearance };
   }
-  subjectTerms(query) {
-    let text = normalize(query), found = [];
-    for (const name of ['熊猫', '哆啦A梦', '天线宝宝', '负鼠', '仓鼠']) {
-      const terms = this.lexicon.subjects[name] ?? [];
-      if (terms.some(t => text.includes(normalize(t)))) {
-        found.push(name);
-        for (const t of terms) text = text.replaceAll(normalize(t), ' ');
-      }
-    }
-    for (const [name, terms] of Object.entries(this.lexicon.subjects)) if (!found.includes(name) && terms.some(t => text.includes(normalize(t)))) found.push(name);
-    return found;
-  }
   async search(query, { limit = 8, category, textPresence, profile, collection, media, subject, intent, includeObjects = false } = {}) {
     if (profile && profile !== 'keyword' || collection && collection !== 'local') throw new EmomoError('INVALID_ARGUMENT', 'Local catalogs support the keyword profile and local collection only.');
-    if (this.lexicon.searchMode === 'facets') return refinedSearch(this, query, { limit, category, textPresence, media, subject, intent, includeObjects });
-    const q = normalize(query.trim());
-    const gap = Object.entries(this.lexicon.gaps).find(([term]) => q.includes(normalize(term)));
-    if (gap) return { query, expandedQuery: '', total: 0, results: [], reason: 'gallery_gap', detail: gap[1], source: 'local' };
-    const intents = Object.entries(this.lexicon.intents).filter(([, aliases]) => aliases.some(a => q.includes(normalize(a)))).map(([name]) => name);
-    if (intent && !intents.includes(intent)) intents.push(intent);
-    const subjects = this.subjectTerms(q);
-    if (subject && !subjects.includes(subject)) subjects.push(subject);
-    const ts = tokens([query, ...intents, ...subjects].join(' '));
-    if (!ts.length) return { query, expandedQuery: '', total: 0, results: [], reason: 'no_match', source: 'local' };
-    const clauses = ['search MATCH ?'], params = [ts.map(t => `"${t}"`).join(' OR ')];
-    if (category) { clauses.push('items.category = ?'); params.push(category); }
-    else if (!includeObjects) clauses.push("items.category = 'usable'");
-    if (media) { clauses.push('items.media = ?'); params.push(media); }
-    if (textPresence === 2) clauses.push('items.text_present = 1');
-    if (textPresence === 1) clauses.push('items.text_present = 0');
-    // No OCR text is treated as unknown, not reliable evidence of text absence.
-    if (textPresence === 3) return { query, expandedQuery: '', total: 0, results: [], reason: 'text_absence_unverified', source: 'local' };
-    const candidates = this.db.prepare(`SELECT items.data FROM search JOIN items ON items.id=search.rowid WHERE ${clauses.join(' AND ')} ORDER BY bm25(search,7,3,2,5,1) LIMIT 200`).all(...params);
-    const raw = new Set(tokens(query)), ranked = [];
-    for (const row of candidates) {
-      const r = JSON.parse(row.data);
-      const matchedIntents = intents.filter(t => r.tags.includes(t)), matchedSubjects = subjects.filter(t => r.subjects.includes(t));
-      if (subject && !r.subjects.includes(subject) || intent && !r.tags.includes(intent)) continue;
-      const literal = ['imageText', 'description'].filter(field => q.length >= 2 && normalize(r[field]).includes(q));
-      const overlap = tokens(r.imageText + ' ' + r.description).filter(t => raw.has(t));
-      if (!matchedIntents.length && !matchedSubjects.length && !literal.length && !overlap.length) continue;
-      if (!matchedIntents.length && !matchedSubjects.length && !literal.length && q.length >= 4 && overlap.length < 2) continue;
-      if (intents.length && !matchedIntents.length && !literal.length || subjects.length && !matchedSubjects.length) continue;
-      if (intents.includes('讽刺同意') && !r.tags.includes('讽刺同意') || intents.includes('老板奖励') && !r.tags.includes('老板奖励')) continue;
-      const food = (this.lexicon.intents['饭食'] ?? []).filter(a => !['吃饭','饿了'].includes(a) && q.includes(normalize(a)));
-      if (food.some(a => !normalize(r.description + ' ' + r.imageText).includes(normalize(a)))) continue;
-      let score = matchedIntents.length * 30 + matchedSubjects.length * 12 + literal.length * 35 + Math.min(overlap.length, 8) * 4;
-      if (intents.length && matchedIntents.length === intents.length) score += 25;
-      score += Math.min(Math.log2(Math.max(r.image.width, r.image.height)), 10) * 0.1;
-      ranked.push({ record: r, id: r.id, score: Math.round(score * 100) / 100, match: { intents: matchedIntents, subjects: matchedSubjects, literalFields: literal, tokens: overlap } });
+    const empty = reason => ({ query, expandedQuery: '', total: 0, results: [], reason, source: 'local' });
+    if (textPresence === 3) return empty('text_absence_unverified');
+    const gap = Object.entries(this.lexicon.gaps).find(([term]) => normalize(query).includes(normalize(term)));
+    if (gap) return { ...empty('gallery_gap'), detail: gap[1] };
+    let plan;
+    try { plan = keywordPlan(query, this.lexicon); }
+    catch { return empty('no_match'); }
+    if (!this.searchDb) {
+      // Existing catalog files stay read-only. One ephemeral index normalizes old
+      // and reviewed catalogs to the hosted index without migrating user data.
+      const Database = await sqlite();
+      this.searchDb = new Database(':memory:');
+      this.searchDb.exec('CREATE TABLE records(id INTEGER PRIMARY KEY, tags TEXT, category TEXT, media TEXT, text_present INTEGER, data TEXT); CREATE VIRTUAL TABLE keywords USING fts5(caption,description,tags); BEGIN;');
+      const record = this.searchDb.prepare('INSERT INTO records VALUES(?,?,?,?,?,?)');
+      const index = this.searchDb.prepare('INSERT INTO keywords(rowid,caption,description,tags) VALUES(?,?,?,?)');
+      for (const item of this.db.prepare('SELECT id,data FROM items').all()) {
+        const r = JSON.parse(item.data);
+        if (r.searchable === false) continue;
+        const tags = [...new Set([...r.tags, ...r.subjects])];
+        record.run(item.id, JSON.stringify(tags), r.category, r.mediaKind, r.imageText ? 1 : 0, item.data);
+        index.run(item.id, indexTerms(r.imageText), indexTerms(r.description), indexTerms([...tags, ...r.aliases, ...r.scenarios].join(' ')));
+      }
+      this.searchDb.exec('COMMIT');
     }
-    ranked.sort((a, b) => b.score - a.score || Number(a.id.slice(6)) - Number(b.id.slice(6)) || a.id.localeCompare(b.id));
-    // Each validation reads a full image. Keep only one read active even at limit 100.
+    const filters = subjectFilter(plan, 'r.tags');
+    const clauses = ['keywords MATCH ?'], values = [plan.expression];
+    if (category) { clauses.push('r.category = ?'); values.push(category); }
+    else if (!includeObjects) clauses.push("r.category <> 'object_sticker'");
+    if (media) { clauses.push('r.media = ?'); values.push(media); }
+    if (textPresence === 2 || textPresence === 1) { clauses.push('r.text_present = ?'); values.push(textPresence === 2 ? 1 : 0); }
+    for (const [field, value] of [['subjects', subject], ['tags', intent]]) if (value) {
+      clauses.push(`EXISTS (SELECT 1 FROM json_each(r.data, '$.${field}') WHERE value = ?)`); values.push(value);
+    }
+    const rows = this.searchDb.prepare(`SELECT r.data, bm25(keywords,4,1,2) AS rank FROM keywords JOIN records r ON r.id=keywords.rowid WHERE ${clauses.join(' AND ')}${filters.sql} ORDER BY rank ASC,json_extract(r.data,'$.id') ASC`).all(...values, ...filters.values);
     const results = [];
-    for (const { record, score, match } of ranked.slice(0, limit)) results.push({ ...await this.candidate(record, score), match });
-    return { query, expandedQuery: [...intents, ...subjects].join(' '), total: ranked.length, results, reason: ranked.length ? 'matched' : 'no_match', source: 'local' };
+    for (const row of rows.slice(0, limit)) {
+      const score = Math.max(0, -row.rank) / (1 + Math.max(0, -row.rank));
+      const keys = new Set(plan.groups.map(group => group.key));
+      results.push({ ...await this.candidate(JSON.parse(row.data), score), match: {
+        terms: plan.groups.map(group => group.key),
+        intents: Object.keys(this.lexicon.intents).filter(key => keys.has(key)),
+        subjects: plan.groups.filter(group => group.subject).map(group => group.key),
+      } });
+    }
+    return { query, expandedQuery: '', total: rows.length, results, reason: rows.length ? 'matched' : 'no_match', source: 'local' };
   }
   item(id) {
     const row = this.db.prepare('SELECT data FROM items WHERE json_extract(data,\'$.id\') = ?').get(id);

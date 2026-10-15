@@ -11,7 +11,7 @@ test('invalid requests fail before executing commands', () => {
   assert.throws(() => plan('check', 'production'), /Usage/);
 });
 test('default profile excludes legacy dependencies; full retains mobile generation checks', () => {
-  assert.deepEqual(plan('bootstrap', 'agent').map(x => x.cwd), ['deployments/cloudflare/agent-search', 'website']);
+  assert.deepEqual(plan('bootstrap', 'agent').map(x => x.cwd), ['protocol', 'deployments/cloudflare/agent-search', 'website']);
   const full = plan('check', 'full');
   assert.ok(full.some(x => x.args.join(' ') === 'git diff --exit-code -- gen'));
   assert.ok(full.some(x => x.args.join(' ') === 'go test ./...'));

@@ -2,6 +2,11 @@
 export const REFINED_VOCABULARY = {
   "searchMode": "facets",
   "subjects": {
+    "熊猫": ["熊猫", "熊猫头"],
+    "哆啦A梦": ["哆啦A梦"],
+    "天线宝宝": ["天线宝宝"],
+    "负鼠": ["负鼠"],
+    "仓鼠": ["仓鼠"],
     "猫": [
       "猫",
       "猫咪",
@@ -56,6 +61,8 @@ export const REFINED_VOCABULARY = {
     ]
   },
   "intents": {
+    "礼貌": ["礼貌"],
+    "拒绝": ["拒绝"],
     "投降": ["投降", "认输"],
     "生气": [
       "生气",
