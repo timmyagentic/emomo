@@ -70,4 +70,4 @@ Check exit codes and JSON `ok`. Verify that the downloaded file exists, its SHA-
 
 Report the installed version, actual CLI/Skill paths and search/download verification result. Explain whether the host can load the Skill now or requires a new session. If something failed, state the exact unfinished step. Do not substitute an unrelated package or call partial setup complete.
 
-The public static gallery has 7,302 primary images. Local galleries are optional and remain unchanged. Emomo needs no model keys. Code is MIT; image rights belong to their respective owners.
+The public static gallery has 7,833 primary assets (7,803 reactions and 30 object stickers); the dataset can change independently of the CLI version. First-frame previews are explicitly marked in their descriptions. Local galleries are optional and remain unchanged. Emomo needs no model keys. Code is MIT; image rights belong to their respective owners.
