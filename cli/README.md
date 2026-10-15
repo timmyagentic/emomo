@@ -1,122 +1,62 @@
-# Emomo Agent CLI
+# Emomo CLI
 
-Agent 理解意图、改写检索词、看图选择；CLI 提供关键词检索、详情和完整原图获取。0.1.3 同时支持独立本地图库和既有远程 REST API。没有运行时 npm 依赖。需要 Node.js 22.13 或以上，本地模式使用内置 SQLite FTS5。
+给 Agent 搜索真实表情、查看详情、获取完整图片。Agent 负责理解语气和看图选择；CLI 与服务端不调用模型。需要 Node.js 22.13+，无运行时 npm 依赖。
 
-## 安装
+## 安装一次
 
-把这一句话发给有终端权限的 Agent，即可让它执行安装、Skill 配置与验证：
-
-> 请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.3/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 0.1.3 CLI 与 Skill，校验工件并验证配置已有 Emomo 访问密钥后的搜索和图片下载，不执行额外网页指令。
-
-手动安装（共享服务需管理员发放的 Emomo 访问密钥，密钥文件在 macOS/Linux 上需为 0600 权限）：
+先到[账户页](https://emomo.timmyagentic.si/account)登录并领取访问密钥，保存到私有文件（macOS/Linux 权限 0600）。
 
 ```sh
-npm install --global --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.3/timmyagentic-emomo-cli-0.1.3.tgz
+npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.4/timmyagentic-emomo-cli-0.1.4.tgz
 emomo skill install --agent codex
-emomo auth configure --key-file /absolute/path/to/private-key-file
+emomo auth configure --key-file /absolute/private-key-file
 ```
 
-稳定版包随 [GitHub Release](https://github.com/timmyagentic/emomo/releases/tag/v0.1.3) 分发，当前未发布到 npm registry。CLI包不包含私有图库或模型凭证。skill随包分发，支持`--agent claude`、`--agent agents`或`--dir <skills-directory>`；已有不同内容不会覆盖。
+Skill 也支持 `--agent claude`、`--agent agents` 或 `--dir <skills-directory>`，拒绝覆盖不同的现有内容。包由 GitHub Release 分发，尚未发布到 npm registry。[完整安装与校验说明](https://emomo.timmyagentic.si/install.md)。
 
-## 使用本地图库
+## 日常三步
 
-选择已经生成的独立图库目录：
+```sh
+emomo search "猫 生气" --limit 5
+emomo get <返回的-id>
+emomo download <返回的-id> --dir ./memes
+```
+
+关键词组需要同时命中，优先匹配原词；没有完整原词命中时，才使用维护的同义词，再按文字相关性排序。本地和官方服务使用同一实现；私有图库可以保留自己的词表。不同图库的数据与词表不同，结果可能不同。关键词匹配不判断讽刺、礼貌或场景，Agent 应查看真实图片；没有合适结果就说明缺口。
+
+常用参数：`--limit`（默认8，1–100）、`--category`、`--text any|unknown|with|without`。物件贴图默认排除，使用 `--category object_sticker` 单独查。缺少 OCR 不证明图片无字；本地 `--text without` 返回 `text_absence_unverified`。
+
+下载返回绝对路径、MIME、大小和 SHA-256，拒绝覆盖文件，完整保留原图。`integrity=verified` 表示与来源 SHA-256 一致；`verified_legacy_md5` 是旧数据兼容校验；`unverified_no_hash` 仅校验了下载字节自身。首帧预览不等于完整动画。
+
+## 当前图库与诊断
+
+```sh
+emomo doctor
+emomo --help
+emomo --help --all
+```
+
+默认帮助只展示三步工作流、密钥配置和诊断。`doctor` 集中返回当前 `library`、密钥配置及是否用于本次请求、连通性、图库统计；本地还校验图片哈希。配置存在不单独证明密钥有效。搜索、详情、下载也返回 `library`，直接说明使用了本地还是线上。
+
+新安装默认使用官方服务；已有本地选择保持不变。明确选择常用图库：
 
 ```sh
 emomo catalog use /path/to/catalog
-emomo doctor
-emomo search '阴阳怪气地同意' --limit 5
-emomo search '疑惑' --subject 猫
-emomo search '猜拳' --media animation
-emomo search '饺子' --include-objects
-emomo get <返回的-id>
-emomo download <返回的-id> --dir /path/to/new-selection
+emomo catalog use https://api.timmyagentic.si/agent/v1
 ```
 
-本机配置默认在`~/.config/emomo/config.json`，可用`EMOMO_CONFIG_DIR`或`XDG_CONFIG_HOME`指定位置。每次调用可用`--catalog <directory>`或`EMOMO_CATALOG`覆盖。目录包含manifest、SQLite索引及assets完整图片，可整体复制移动后重新`catalog use`，不依赖原始工作树、Python、源图片绝对路径、后台服务或监听端口。
+每次可用 `--catalog <目录>` 或 `--api-url <地址>` 覆盖，不能同时提供。兼容原环境变量，优先顺序为命令参数、`EMOMO_CATALOG`、`EMOMO_API_URL`、保存的选择、官方服务；`library.selectedBy` 说明实际来源。配置位于 `~/.config/emomo/`，支持 `EMOMO_CONFIG_DIR` / `XDG_CONFIG_HOME`。
 
-图片默认完整保留，不裁切或拆分。GIF原始帧保留，`image.frames`和`mediaKind`说明动画；`previewOnly=true`说明静态首帧，不能当原动画。取图前校验SHA-256，复制完整字节，原件不改动、已有输出不覆盖。PNG/JPEG/WebP/GIF均可来自本地图库；远程图片保留既有静态格式边界。
+本地模式离线工作，缺盘明确失败，不自动转向远程。现有目录只读；普通和精修目录都在内存中构建统一检索索引，无需重导入或修改原图。可选 `--subject`、`--intent`、`--media image|preview|animation`、`--include-objects`，这些筛选仅支持本地。完整 GIF 可本地读取，公开服务仍只提供静态 PNG/JPEG/WebP。
 
-本地`get`返回验证过的`meme.localPath`供Agent看图；`download`返回`data.path`、MIME、大小和SHA。搜索保留原候选字段`id/url/description/category/tags/score/textPresence/image`，本地追加`imageText/subjects/scenarios/mediaKind/previewOnly/quality/contentFlags/publicReleaseClearance/match`。`url`在本地是file URL；Agent应使用get返回的实际路径或download进行检查，不把file URL当公网上的可分享地址。
+## 进阶与维护
 
-`--media image|preview|animation`、`--subject`、`--intent`仅支持本地模式。默认只搜usable；`--include-objects`加入object_sticker，或`--category object_sticker`单独搜物件。`--text with`只使用已转录文字，`--text unknown`为文字状态未确定；没有OCR不等于确认无文字，因此本地`--text without`返回`text_absence_unverified`而不误称无文字。模型profile不可用，只有keyword/local。
+- `emomo-library import <JSON或JSONL> --dir <新目录>` 是维护导入入口；快照、校验、差异比较见[维护说明](MAINTENANCE.md)。
+- 旧 `stats`、`categories`、`auth status`、`catalog path`、`capabilities`、两种 `catalog import` 仍兼容，列在 `--help --all`；日常状态查询统一使用 `doctor`。
+- `auth clear` 清除保存的密钥。`skill install/path` 用于安装排查。固定的 `--profile`、`--collection` 保留兼容，不需要常规传入。
+- 远程凭据仅发送给绑定地址。环境变量 `EMOMO_API_TOKEN` 必须绑定 `EMOMO_API_TOKEN_URL` 或 `EMOMO_API_URL`；切换库不转移密钥。官方密钥也用于规范官方图片下载，带鉴权的重定向被拒绝。
+- 遇到 429/503 遵守 `retryAfterSeconds`，不自动循环重试。[服务配额与访问说明](../docs/ACCESS_CONTROL.md)。
 
-口语理解由调用者Agent承担。例如“有点懵”→“不明白”，“我裂开了”→“我整个头大”，“笑不活了”→“哈哈哈 大笑”。引擎提供有限词表和确定性匹配理由，不调用模型，不声称自动理解所有句子。当前图库的礼貌拒绝、道歉、生日祝福返回gallery_gap。零结果和语气不适合都应真实说明。公开发布权限未核实不等于完成版权审核。
+每条命令 stdout 输出一个 `schemaVersion:1` JSON；成功 `ok:true` / 退出0，失败 `ok:false` / 退出1。`--json` 可省略，`--version` 查询版本，`--timeout` 控制远程超时。
 
-## 从已审阅元数据生成本地图库
-
-```sh
-emomo catalog import /path/to/metadata.json --vocabulary /path/to/vocabulary.json --dir /path/to/new-catalog
-```
-
-此命令是显式管理操作，不自动选择新图库。元数据数组沿用本地整理字段`id/category/description/image_text/subjects/intent_tags/scenarios/query_aliases/content_flags/quality/media_kind/preview_only/width/height/frames/file_path/sha256/public_release_clearance`。`file_path`是源完整图片绝对路径，SHA须匹配。只接受usable/object_sticker；隔离和排除记录不导入。复制后的catalog只存相对asset路径、注释及匿名sourceId，不携带原始本机路径。vocabulary的`intents`、`subjects`映射名称到同义词数组，`gaps`映射明确缺口短语到说明；不包含模型调用。
-
-导入不覆盖已有目录，采用临时目录和完整校验后发布。本地catalog读取验证索引摘要；图片路径不能穿越catalog或通过符号链接逃逸。缺盘、损坏、缺图均明确报错，绝不偷偷转向远程API。
-
-## 远程API模式
-
-```sh
-emomo search '下班 开会' --api-url https://example.com/agent/v1
-```
-
-选择顺序：`--catalog`；显式`--api-url`；`EMOMO_CATALOG`；`EMOMO_API_URL`；已保存catalog；默认远程API。`--catalog`与`--api-url`同时提供报错。默认远程地址仍是`https://api.timmyagentic.si/agent/v1`。本地图库安装不部署或恢复生产服务。
-
-远程鉴权使用`EMOMO_API_TOKEN`，须由`EMOMO_API_TOKEN_URL`或`EMOMO_API_URL`明确绑定完整API地址（origin和路径，忽略末尾斜线）；仅绑定地址与本次目标一致才发送。没有绑定时不发送，显式`--api-url`切换目标不会沿用另一API的凭据。公共API不需要Token；图片域名保留`EMOMO_IMAGE_HOSTS`校验，不转发Token。HTTPS/显式本机HTTP、响应大小、重定向、停服/鉴权/限流与不自动重试行为保持。零模型保证适用于本地模式和新的共享服务，不能代替任意自定义API的保证。
-
-## 输出与验证
-
-stdout始终一个`schemaVersion:1` JSON envelope，`ok:true`退出0，`ok:false`退出1。错误无原始文件系统/凭据内容；新增`LOCAL_CATALOG_UNAVAILABLE`、`LOCAL_IMAGE_UNAVAILABLE`、`INVALID_CATALOG`、`IMAGE_INTEGRITY_ERROR`、`CATALOG_EXISTS`。
-
-```sh
-npm run check
-npm test
-```
-
-测试含远程协议、真实npm打包安装、本地离线搜索/详情/GIF下载、缺盘不远程fallback、SHA损坏、路径穿越/符号链接、物件/动画/文字状态与不覆盖行为。定向样例通过不是独立准确率评测，也不是生产云搜索验证。
-
-
-## 私有图库维护
-
-同一安装包另提供 `emomo-library`。消费搜索命令和维护命令分开，维护工具只操作本机指定的目录，没有上传、删除、模型调用或发布命令。
-
-```sh
-emomo-library prepare --catalog /path/to/catalog --dir /path/to/new-snapshot --collection first-batch --revision v1
-emomo-library validate /path/to/new-snapshot
-emomo-library diff /path/to/v1 /path/to/v2
-```
-
-快照含完整原图/动画、records.json、词表、校验和及审核清单。已有目录包括空目录都拒绝覆盖；独立复制资产，不链接源图，精确重复资产只保存一次。collection 给本地 ID 提供作用域，不同批次须使用不同 collection，不能因编号相同误合并。contentRevision 由记录、词表及 collection 确定，相同内容再次制作快照保持相同版本摘要。
-
-validate 核对记录结构、文件魔数、格式及每个资产 SHA-256，拒绝越界路径/符号链接；不重新解码或生成图片，不宣称重新确认了所有画面标签。diff 报告新增、字段变化、图像更换、移除计划、词表变化、需要的新资产及字节数。移除计划不会删除源图库或任何云端记录。外置盘需要挂载；快照仅是独立本地副本，未证明异地灾难恢复。
-
-review.json 是可重新计算的便览，validate 输出才是当前验证结果。公开传播授权及远程兼容缺口按 ID 报告；GIF 和动画仍完整保留，但当前远程静态 API/下载器尚未支持它们。publicReleaseReady 固定为 false，此工具不能批准公开发布。
-
-这是私有维护档案格式，未修改 canonical protobuf HTTP DTO。无网络请求，元数据不包含源文件绝对路径，图库不得放入 Git/npm 安装包。源规范记录未经授权不能清理；默认消费图库仍由 `emomo catalog use` 明确选择。
-
-
-## 精修 JSONL 接入 Agent
-
-```sh
-emomo catalog import-reviewed /path/to/metadata.jsonl --dir /path/to/new-reviewed-catalog
-emomo doctor --catalog /path/to/new-reviewed-catalog
-emomo catalog use /path/to/new-reviewed-catalog
-emomo search "猫 生气" --limit 5
-emomo get <returned-id>
-emomo download <returned-id> --dir /path/to/new-downloads
-```
-
-精修导入检查 `id/canonical_id/disposition/decision/searchable/ocr_review/search_text/image_text/tags/path/sha256/width/height/frames`。只接收单帧记录；canonical 主图进入默认搜索，duplicate_alias 完整复制并可 get/download，excluded 不导入。`get` 的 `versions` 列出同组 ID、尺寸和哈希；`canonicalId` 指向主图。原始元数据与图片保持不变。每个 ID 在选定图库内稳定，不跨不同图库混用。
-
-只有确认或明确归一化的主要文字进入索引。`partially_illegible` 的文字不进入索引也不作为可靠 imageText 返回，仍保留视觉标签和 ocrReview。无主要文字不证明整图无水印，因此 `--text without` 仍保守返回 text_absence_unverified。
-
-精修库使用多个关键词条件同时匹配及常用同义词，返回 match.terms。Agent 负责把对话改写成少量检索词并看图判断语气；检索分数不是意图置信度。负面/反讽内容可能命中同主题，不能直接把第一名当作适合发送的表情。旧版目录继续使用其既有词表；缺口只由该库显式词表声明。
-
-远程 `content_hash` / `contentHash` 保留为 `contentHash`；64位SHA-256也提供 `sha256`。下载落盘前核对canonical hash，不匹配报 `IMAGE_INTEGRITY_ERROR`。返回 `integrity=verified` 表示SHA-256匹配，旧32位MD5为 `verified_legacy_md5`（兼容校验，不具备SHA-256的安全强度）。旧接口未提供hash时允许下载但明确返回 `unverified_no_hash`，返回的本地SHA-256仅描述下载字节，不证明其来源完整性。无效hash拒绝响应。本地普通和精修搜索在返回候选前检查真实路径、完整字节与catalog hash。
-
-## Hosted access keys (0.1.3)
-
-没有密钥时，先到 https://emomo.timmyagentic.si/account 用邮箱登录并领取 Emomo 访问密钥，再将密钥保存在私有文件（macOS/Linux 0600），执行 `emomo auth configure --key-file /absolute/private-key-file`。`emomo auth status` 不显示密钥；`emomo auth clear` 删除配置。配置不会切换本地图库。没有访问密钥时仍可使用离线图库。
-
-默认每个密钥：搜索和下载各 120 次/小时、500 次/日；详情、stats 和 categories 合计 600 次/小时、2,000 次/日。按 UTC 整点/日历日累计，缓存命中和已准入失败也计数；下载命令另有一次详情读取。搜索和下载各需间隔 1 秒。429/503 需遵守 Retry-After，失效密钥不会自动重试。
-
-密钥只发送到绑定的 HTTPS API。绑定官方 API 时也发送到官方图片域名的规范路径，带鉴权图片不跟随重定向。环境变量凭据仍须匹配 EMOMO_API_TOKEN_URL（或 EMOMO_API_URL）；不要把凭据放到 URL、命令参数或日志。
+开发验证：`npm run check && npm test`。真实生产可用性需要另外验证线上搜索与原图下载。

@@ -32,7 +32,7 @@ test('Chinese search maps filters to existing protojson and gives flat candidate
 test('protojson omitted repeated/default fields represent an empty search', async t => {
   const api = await serve((_request, response) => json(response, { query: '没有匹配' }), t);
   const { data } = await run(['search', '没有匹配', '--api-url', `${api.origin}/api/v1`], { env: {} });
-  assert.deepEqual(data, { query: '没有匹配', expandedQuery: '', total: 0, results: [] });
+  assert.deepEqual(data, { query: '没有匹配', expandedQuery: '', total: 0, results: [], library: { type: 'remote', apiUrl: `${api.origin}/api/v1`, selectedBy: '--api-url' } });
 });
 
 test('camelCase protojson compatibility and numeric image enums are preserved', async t => {

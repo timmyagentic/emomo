@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working in this repository. It covers the monorepo layout; subproject-specific instructions live in each subdirectory.
 
+Current product: `cli/`, `deployments/cloudflare/agent-search/`, `website/`. Use `node scripts/dev.mjs bootstrap agent` and `check agent`; `protocol/` independently generates their DTOs. The old app commands below are retained-product guidance. See `AGENTS.md` for current boundaries.
+
 ## Subproject Map
 
 Open the nearest CLAUDE.md to whatever you are touching:
@@ -39,7 +41,7 @@ cd frontend && npm run gen
 # Frontend lint / build
 cd frontend && npm install && npm run lint && npm run build
 
-# Ingest all local static image data; import-data.sh is the only supported ingest entrypoint
+# Legacy backend ingestion only; current reviewed-library maintenance uses emomo-library
 cd backend && ./scripts/import-data.sh -p ./data/memes
 
 # Containerized API + Grafana Alloy

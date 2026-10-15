@@ -201,7 +201,8 @@ test('actual installed CLI searches local D1, gets real metadata and downloads a
 });
 
 test('the bundled dependency graph contains only canonical protobuf and deterministic source modules', () => {
-  assert.ok(bundleInputs.every(path => path.startsWith('src/') || path.startsWith('gen/') || path.startsWith('node_modules/@bufbuild/protobuf/')));
+  const shared = new Set(['../../../cli/src/keyword-search.js', '../../../cli/src/refined-vocabulary.js']);
+  assert.ok(bundleInputs.every(path => shared.has(path) || path.startsWith('src/') || path.startsWith('gen/') || path.startsWith('node_modules/@bufbuild/protobuf/')));
   assert.equal(outboundCalls, 0);
 });
 

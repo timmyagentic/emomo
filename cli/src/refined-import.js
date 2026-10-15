@@ -1,11 +1,17 @@
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { importRows } from './local.js';
+import { importRows, importCatalog } from './local.js';
 import { REFINED_VOCABULARY } from './refined-vocabulary.js';
 import { EmomoError } from './error.js';
 
 const subjectTerms = new Set([...Object.values(REFINED_VOCABULARY.subjects).flat(), '企鹅','熊猫','熊猫头','草莓熊','海绵宝宝','派大星','章鱼哥','男人','女人','女子','卡通女孩','卡通动物','白色卡通动物','鸡','鸭','牛','兔子','青蛙','佩佩蛙','蜡笔小新','大雄','哆啦A梦','汤姆','白猫','白色小狗','小人'].map(s=>s.normalize('NFKC').toLowerCase()));
 const bad = () => new EmomoError('INVALID_REVIEWED_METADATA', 'Expected complete reviewed JSONL with valid canonical links and OCR evidence.');
+export async function importMetadata(source, directory, vocabularyPath) {
+  if ((await stat(resolve(source))).size > 32 * 1024 * 1024) throw bad();
+  if ((await readFile(resolve(source), 'utf8')).trimStart().startsWith('[')) return importCatalog(source, directory, vocabularyPath);
+  if (vocabularyPath) throw new EmomoError('INVALID_ARGUMENT', 'Reviewed JSONL already supplies its vocabulary.');
+  return importReviewed(source, directory);
+}
 export async function importReviewed(source, directory) {
   const path=resolve(source);
   if ((await stat(path)).size > 32*1024*1024) throw bad();

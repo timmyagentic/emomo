@@ -75,3 +75,24 @@ test('refined search applies the same image integrity boundary', async t => {
   await symlink(join(s.root, 'one.png'), asset);
   assert.equal((await cli(['search', '赞同'], env)).error.code, 'INVALID_CATALOG');
 });
+
+test('literal keywords take precedence over broad legacy vocabulary groups', async t => {
+  const s = await setup(t);
+  // Old vocabularies used some categories as broad query aliases, not synonyms.
+  const manifestPath = join(s.catalog, 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath));
+  manifest.lexicon.intents.饭食 = ['饺子', '猫'];
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const result = await run(['search', '饺子', '--include-objects', '--catalog', s.catalog], { env: s.env });
+  assert.deepEqual(result.data.results.map(r => r.id), ['local-3']);
+});
+
+test('offline diagnosis reports broken hosted credentials without blocking the local library', async t => {
+  const s = await setup(t);
+  await run(['catalog', 'use', s.catalog], { env: s.env });
+  await writeFile(join(s.env.EMOMO_CONFIG_DIR, 'access.json'), '{}', { mode: 0o600 });
+  const result = await run(['doctor'], { env: s.env });
+  assert.equal(result.data.checkedImages, 3);
+  assert.equal(result.data.auth.error, 'INVALID_AUTH_CONFIG');
+  assert.equal(result.data.auth.used, false);
+});

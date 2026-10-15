@@ -74,7 +74,8 @@ try {
   const workerRoot=fileURLToPath(new URL('../',import.meta.url).href);
   const bundle=await build({entryPoints:[join(workerRoot,'src/index.ts')],write:false,bundle:true,format:'esm',platform:'browser',target:'es2022',metafile:true,external:['cloudflare:workers']});
   const inputs=Object.keys(bundle.metafile!.inputs);
-  assert.ok(inputs.every(p=>{const rel=relative(workerRoot,resolve(p));return rel.startsWith('src/')||rel.startsWith('gen/')||rel.startsWith('node_modules/@bufbuild/protobuf/');}));
+  const shared = new Set(['../../../cli/src/keyword-search.js', '../../../cli/src/refined-vocabulary.js']);
+  assert.ok(inputs.every(p=>{const rel=relative(workerRoot,resolve(p));return shared.has(rel)||rel.startsWith('src/')||rel.startsWith('gen/')||rel.startsWith('node_modules/@bufbuild/protobuf/');}));
   mf=new Miniflare({modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],
     durableObjects:{...admission,PER_IP_LIMITER:{className:'PerIpLimiter',useSQLite:true}},
     bindings:{...bindings,AGENT_API_ENABLED:'true',IMAGE_BASE_URL:origin},d1Databases:{DB:'actual-static-index'},

@@ -1,3 +1,5 @@
+> 当前维护命令见 [CLI 维护说明](../cli/MAINTENANCE.md)，当前发布见 [PUBLIC_RELEASE](PUBLIC_RELEASE.md)。下文为历史设计与按日期保留的实施记录。
+
 # Emomo 后续图库维护方案
 
 2026-10-06，Asia/Shanghai。基于实际图库审计和当前代码的设计方案；本次只交付文档，没有新增维护命令、运行标注、修改生产数据、创建资源或上线。

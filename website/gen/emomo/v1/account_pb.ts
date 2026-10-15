@@ -260,4 +260,3 @@ export type AccountProfile = Message<"emomo.v1.AccountProfile"> & {
  */
 export const AccountProfileSchema: GenMessage<AccountProfile> = /*@__PURE__*/
   messageDesc(file_emomo_v1_account, 8);
-

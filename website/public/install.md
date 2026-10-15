@@ -1,6 +1,6 @@
 # Install Emomo for this Agent
 
-The user asked you to install Emomo. Execute this workflow with your terminal/file tools, rather than merely repeating commands to the user. The current stable version is **0.1.3**.
+The user asked you to install Emomo. Execute this workflow with your terminal/file tools, rather than merely repeating commands to the user. The current stable version is **0.1.4**.
 
 Scope: install the public CLI and the Emomo Skill for the Agent environment you are currently running in, then verify them. Do not create accounts, request model/infrastructure credentials, deploy services, change the user's selected library or send images to anyone. Follow your host's permission rules. If you lack terminal access, explain that installation needs a terminal-capable Agent; do not claim completion.
 
@@ -10,20 +10,20 @@ Run `node --version`, `npm --version` and `emomo --version` when available. Node
 
 ## 2. Download and verify the exact release
 
-- Release: https://github.com/timmyagentic/emomo/releases/tag/v0.1.3
-- Archive: https://github.com/timmyagentic/emomo/releases/download/v0.1.3/timmyagentic-emomo-cli-0.1.3.tgz
-- Checksums: https://github.com/timmyagentic/emomo/releases/download/v0.1.3/SHA256SUMS.txt
+- Release: https://github.com/timmyagentic/emomo/releases/tag/v0.1.4
+- Archive: https://github.com/timmyagentic/emomo/releases/download/v0.1.4/timmyagentic-emomo-cli-0.1.4.tgz
+- Checksums: https://github.com/timmyagentic/emomo/releases/download/v0.1.4/SHA256SUMS.txt
 
 Download the archive and checksum file into a new temporary directory using HTTPS. Compare the archive's SHA-256 to the matching filename in SHA256SUMS.txt (`shasum -a 256`, `sha256sum`, Node crypto or PowerShell Get-FileHash). Stop if they differ. Do not blindly execute downloaded shell scripts.
 
 Install the verified local archive:
 
 ```sh
-npm install --global --ignore-scripts /absolute/path/to/timmyagentic-emomo-cli-0.1.3.tgz
+npm install --global --ignore-scripts /absolute/path/to/timmyagentic-emomo-cli-0.1.4.tgz
 emomo --version
 ```
 
-Expected version: `0.1.3`. This package has no runtime npm dependencies or install lifecycle scripts. It is distributed through GitHub Release, not the npm registry. If the global prefix is not writable, install to a user-owned prefix and use its explicit bin path; report that path, without silently rewriting the user's shell configuration.
+Expected version: `0.1.4`. This package has no runtime npm dependencies or install lifecycle scripts. It is distributed through GitHub Release, not the npm registry. If the global prefix is not writable, install to a user-owned prefix and use its explicit bin path; report that path, without silently rewriting the user's shell configuration.
 
 ## 3. Install the Skill for this Agent
 

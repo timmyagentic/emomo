@@ -28,3 +28,9 @@ The scripts set tool-specific caches/config/log locations under ignored `.dev-ca
 No setup/check command provisions resources, imports production data, deploys a Worker, changes user configuration, publishes a package or starts the legacy model services. The website is static and needs no dependency install or build; browser layout, copy/install links and image behavior require separate manual verification. Mobile checks do not build/sign an iOS or Android application. Frontend checks do not run browser E2E. Production search availability, release assets, native UI and real private-library coverage are outside this test contract.
 
 For a cloud acceptance record, capture the checkout SHA, OS, `node --version`, `npm --version`, selected profile, setup exit status and check exit status. Record real Linux cloud execution separately from local macOS and GitHub Actions. A local pass or an environment saved in the UI alone does not establish cloud cold-start success.
+
+## Protocol generation and retained checks
+
+The agent bootstrap installs `protocol/` tooling independently of the old frontend. `npm --prefix protocol run check` regenerates Worker and website DTOs directly from the unchanged canonical schemas in `backend/proto/` and compares bytes. `npm --prefix protocol run generate` updates them. The current product needs no Go/React/Expo dependency installation.
+
+Required CI always runs CLI platform checks and the Agent product gate. Retained backend/frontend/mobile/gateway jobs run for their changed paths; schema, protocol-tooling, workflow and shared-script changes run all retained gates. Unknown diff ranges and manual runs also run all gates. Existing job names remain stable.

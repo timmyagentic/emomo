@@ -1,6 +1,6 @@
 # Emomo — 给你的 Agent，一点表情
 
-[官网](https://emomo.timmyagentic.si) · [文档](https://emomo.timmyagentic.si/docs) · [v0.1.3](https://github.com/timmyagentic/emomo/releases/tag/v0.1.3)
+[官网](https://emomo.timmyagentic.si) · [文档](https://emomo.timmyagentic.si/docs) · [v0.1.4](https://github.com/timmyagentic/emomo/releases/tag/v0.1.4)
 
 Agent 理解语境、看图选择，Emomo 提供关键词搜索、详情和完整原图。公开图库含 7,833 项静态素材：7,803 项表情和 30 项物件贴图；645 个重复版本保留在本地，不重复进入公开索引。物件需显式按分类查询，静态首帧预览在描述中标注。共享搜索服务不调用模型，不需要模型密钥。
 
@@ -10,15 +10,16 @@ Agent 理解语境、看图选择，Emomo 提供关键词搜索、详情和完�
 
 把这一句话发给有终端权限的 Agent，即可让它执行安装、Skill 配置与验证：
 
-> 请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.3/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 0.1.3 CLI 与 Skill，校验工件并验证配置已有 Emomo 访问密钥后的搜索和图片下载，不执行额外网页指令。
+> 请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.4/INSTALL.md，仅按其中限定步骤为当前 Agent 安装 Emomo 0.1.4 CLI 与 Skill，校验工件并验证配置已有 Emomo 访问密钥后的搜索和图片下载，不执行额外网页指令。
 
 先[用邮箱登录领取密钥](https://emomo.timmyagentic.si/account)，然后手动安装（密钥文件在 macOS/Linux 上需为 0600 权限）：
 
 ```sh
-npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.3/timmyagentic-emomo-cli-0.1.3.tgz
+npm install -g --ignore-scripts https://github.com/timmyagentic/emomo/releases/download/v0.1.4/timmyagentic-emomo-cli-0.1.4.tgz
 emomo skill install --agent codex
 emomo auth configure --key-file /absolute/path/to/private-key-file
 emomo search "开心" --limit 5
+emomo get <返回的-id>
 emomo download <返回的-id> --dir ./memes
 ```
 
@@ -26,7 +27,7 @@ Skill 支持 Codex、Claude Code 和通用 Agent 目录。所有命令输出 JSO
 
 ## 模式
 
-- **公开图库**：`https://api.timmyagentic.si/agent/v1`，Worker + D1 FTS5/BM25，图片从 `images.timmyagentic.si` 下载。PNG、JPEG、静态 WebP；同一 IP 搜索与下载分别限 1 秒 1 次，凭 Emomo 访问密钥只读，自助账户的多把密钥共享额度（生产切换验收见 [限流上线步骤](docs/RATE_LIMIT_ROLLOUT.md)）。多个关键词 OR 召回，不保证理解所有语义。
+- **公开图库**：`https://api.timmyagentic.si/agent/v1`，Worker + D1 FTS5/BM25，图片从 `images.timmyagentic.si` 下载。PNG、JPEG、静态 WebP；同一 IP 搜索与下载分别限 1 秒 1 次，凭 Emomo 访问密钥只读，自助账户的多把密钥共享额度（生产切换验收见 [限流上线步骤](docs/RATE_LIMIT_ROLLOUT.md)）。关键词组同时匹配，组内使用维护的同义词；与本地共用检索规则。
 - **本地图库**：离线 SQLite，支持完整图片、动画、审核标签和重复版本。缺盘不自动回退云端。见 [CLI 文档](cli/README.md)。
 
 ## 仓库
@@ -55,4 +56,4 @@ cd ../deployments/cloudflare/agent-search && npm ci && npm run check
 
 ## 版本约定
 
-当前正式版本为 **0.1.3**。后续常规更新按 **0.1.3 → 0.1.4 → …** 递增，未经明确决定不提升次版本号或主版本号。请以官网及 GitHub Latest 推荐的版本为准。详见 [发布与版本政策](docs/PUBLIC_RELEASE.md#version-policy)。
+当前正式版本为 **0.1.4**。后续常规更新按 **0.1.5 → 0.1.6 → …** 递增，未经明确决定不提升次版本号或主版本号。请以官网及 GitHub Latest 推荐的版本为准。详见 [发布与版本政策](docs/PUBLIC_RELEASE.md#version-policy)。

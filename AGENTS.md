@@ -17,6 +17,7 @@ When in doubt about which conventions apply to a file, follow the AGENTS.md near
 ```
 backend/      Go application (cmd/, internal/, gen/, proto/, configs/, Dockerfile)
 cli/          Dependency-free Node CLI, packaged skill, and protocol/install tests
+protocol/     Independent generation tools for current Worker and website DTOs
 frontend/    React + Vite SPA (src/, gen/, e2e/, public/)
 mobile/      Expo + React Native app (src/, gen/, assets/, App.tsx)
 deployments/ Docker Compose orchestration (referenced by both backend and ops)
@@ -28,7 +29,7 @@ Single-language helpers (e.g. `import-data.sh`, Vite config, Expo config) live i
 
 ## Cloud development
 
-Use `node scripts/dev.mjs bootstrap agent` then `node scripts/dev.mjs check agent` for the current CLI and deterministic search product. Use the `full` profile for the retained gateway, Go, frontend and mobile checks. See [docs/CLOUD_DEVELOPMENT.md](docs/CLOUD_DEVELOPMENT.md) for requirements, isolation and verification boundaries. Never copy private image libraries or environment files into cloud development.
+Use `node scripts/dev.mjs bootstrap agent` then `node scripts/dev.mjs check agent` for the current CLI and deterministic search product. Use the `full` profile for the retained gateway, Go, frontend and mobile checks. Current Worker/website DTOs generate directly through `protocol/`; they do not copy old frontend output. Required CI scopes retained-product checks to changed paths and runs all on shared/schema changes. See [docs/CLOUD_DEVELOPMENT.md](docs/CLOUD_DEVELOPMENT.md) for requirements, isolation and verification boundaries. Never copy private image libraries or environment files into cloud development.
 
 ## Common Commands
 
@@ -36,7 +37,7 @@ Use `node scripts/dev.mjs bootstrap agent` then `node scripts/dev.mjs check agen
 - `cd backend && go test ./... && go build ./...` — backend build + tests.
 - `cd frontend && npm install && npm run lint && npm run build` — frontend lint + build.
 - `cd mobile && npm install && npm run gen && npm run test && npm run typecheck && npm run lint` — mobile generated DTOs + unit/static checks.
-- `cd backend && ./scripts/import-data.sh -p ./data/memes` — ingest all local static image data; this script is the only supported data ingest entrypoint.
+- `cd backend && ./scripts/import-data.sh -p ./data/memes` — retained backend ingest only; this script owns the legacy model pipeline. Current reviewed-library maintenance uses `emomo-library` and never starts the old pipeline.
 - `cd backend && GOTOOLCHAIN=go1.26.2 go run github.com/bufbuild/buf/cmd/buf@v1.69.0 generate` — regenerate Go code under `backend/gen/` after `.proto` changes.
 - `cd frontend && npm run gen` — regenerate TS code under `frontend/gen/` after `.proto` changes.
 - `docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d` — run API container + Grafana Alloy locally.

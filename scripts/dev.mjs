@@ -14,6 +14,7 @@ export function plan(action, profile) {
   const commands = [];
   const add = (cwd, ...args) => commands.push({ cwd, args });
   if (action === 'bootstrap') {
+    add('protocol', 'npm', 'ci', '--no-audit', '--no-fund');
     add(search, 'npm', 'ci', '--no-audit', '--no-fund');
     add('website', 'npm', 'ci', '--no-audit', '--no-fund');
     if (profile === 'full') {
@@ -21,7 +22,7 @@ export function plan(action, profile) {
       add('backend', 'go', 'mod', 'download');
     }
   } else {
-    add('.', 'node', '--test', 'scripts/test/dev.test.mjs');
+    add('.', 'node', '--test', 'scripts/test/dev.test.mjs', 'scripts/test/ci-scope.test.mjs');
     add('cli', 'npm', 'run', 'check');
     add('cli', 'npm', 'test');
     add(search, 'npm', 'run', 'check');

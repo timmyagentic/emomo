@@ -4,15 +4,15 @@
 
 这消除了新版搜索服务的模型调用费用；Workers、D1、R2、日志、域名及保留的其他服务仍可能收费。限流和缓存不是账户账单硬上限。任意自定义 CLI API、旧 Go 服务及另行运行旧摄入流水线不在零模型保证内。
 
-## 0.1.1 正式服务
+## 当前正式服务
 
-官网 https://emomo.timmyagentic.si，API https://api.timmyagentic.si/agent/v1，图片 https://images.timmyagentic.si。正式配置已启用，使用独立 D1。公开索引为 7,302 张审核主图，重复版本不导入，不确定 OCR 不索引。发布流程见 [PUBLIC_RELEASE](../../../docs/PUBLIC_RELEASE.md)。以下旧库导出记录仅作历史参考。
+官网 https://emomo.timmyagentic.si，API https://api.timmyagentic.si/agent/v1，图片 https://images.timmyagentic.si。正式配置已启用，使用独立 D1。公开索引为 7,833 项审核主图（7,803 项表情、30 项物件），重复版本不导入，不确定 OCR 不索引。发布流程见 [PUBLIC_RELEASE](../../../docs/PUBLIC_RELEASE.md)。以下旧库导出记录仅作历史参考。
 
 ## 检索契约
 
 - 复用已有 description、OCR、事实 tags，不把爬虫来源词作为图片语义标签。中文使用确定性单字/相邻双字索引，查询双字词；“无语”与单字“猫”可检索。英文按词归一化，无模型分词。
-- 字面词 OR 查询，BM25 排序：OCR 权重 4、描述 1、标签 2。score 单调归一化，不能解释为语义概率；未知同义词不会自动匹配，Agent 可改写一次。
-- 沿用 canonical protobuf HTTP DTO，gen/ 同步 frontend/gen/ 生成输出，唯一 schema 源是 backend/proto/。total 为返回候选数。OCR 用于检索，原候选 DTO 没有 OCR 字段，未扩展 HTTP schema。
+- 与本地共用关键词分组与维护的同义词；各组需同时匹配，BM25 排序：OCR 权重 4、描述 1、标签 2。score 单调归一化，不能解释为语义概率；未知同义词不会自动匹配，Agent 可改写一次。
+- 沿用 canonical protobuf HTTP DTO，gen/ 经独立 protocol/ 工具直接生成，唯一 schema 源是 backend/proto/。total 为返回候选数。OCR 用于检索，原候选 DTO 没有 OCR 字段，未扩展 HTTP schema。
 - 仅 search、单图详情、categories、stats，profile 为 keyword，collection 留空或 keyword。旧 /api/v1 返回 410，整库列表、SSE、管理及浏览器 Origin 关闭。类别最多列出 100 项。
 - 查询 1–160 字/最多 64 词、默认 8 / 最多 100 候选、请求体 8 KiB；SQL 参数绑定，FTS 运算符不能注入。同一 IP 搜索至少间隔 1 秒，由 SQLite Durable Object 序列化并持久化计数，跨边缘节点共享；独立下载 Worker 对 GET/HEAD 原图请求同样限制 1 秒 1 次。另有每个边缘节点约 30 次/60 秒的最终一致辅助保护；Worker 内部成功响应缓存 60 秒，搜索缓存键只用请求哈希；错误不缓存。缓存读前限流，对外响应 no-store。详情读取不消耗搜索的秒级额度。限流不可用时返回 503，超限 429 + Retry-After。
 - 下载 Worker 流式读取 R2，保留 URL、完整字节与 SHA-256；仅允许审核目录的静态图片，不支持 Range。官网仅两张固定展示图作为站内资源。
@@ -40,6 +40,7 @@ annotation 可缺省/null，text presence 此时为 unknown。已有 annotation.
 
 ```sh
 npm ci
+npm --prefix ../../../protocol ci
 npm run index:build -- /tmp/emomo-metadata.jsonl /tmp/emomo-index-data.sql
 npx wrangler d1 migrations apply emomo-agent-index --local
 npx wrangler d1 execute emomo-agent-index --local --file /tmp/emomo-index-data.sql
