@@ -28,7 +28,8 @@ export function keywordPlan(query, vocabulary = {}) {
   // Explicit keys win over aliases shared by multiple entries.
   for (const [key, values] of Object.entries(aliases)) for (const value of values) if (!reverse.has(normalize(value))) reverse.set(normalize(value), key);
   for (const key of Object.keys(aliases)) reverse.set(normalize(key), key);
-  const words = [...reverse.keys()].filter(Boolean).sort((a, b) => b.length - a.length || a.localeCompare(b));
+  // Distinct equal-length words cannot both match the same prefix.
+  const words = [...reverse.keys()].filter(Boolean).sort((a, b) => b.length - a.length);
   const groups = [];
   const add = word => {
     if (!word || /^[的了我你他她很地]+$/.test(word) && normalize(query).trim() !== word) return;
