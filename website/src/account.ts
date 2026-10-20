@@ -6,7 +6,7 @@ export const random = (bytes: number) => [...crypto.getRandomValues(new Uint8Arr
 export const digest = async (text: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, '0')).join('');
 type Code = { challenge: string; hash: string; expires: number; attempts: number; email: string };
 type Key = { id: string; name: string; hash: string; createdAt: number; revokedAt?: number };
-type State = { email?: string; createdAt?: number; code?: Code; lastCode?: number; sessions: Record<string, number>; keys: Key[]; keyDay?: number; keyCount?: number };
+type State = { email?: string; createdAt?: number; code?: Code; lastCode?: number; pendingCode?: { challenge: string; expires: number }; sessions: Record<string, number>; keys: Key[]; keyDay?: number; keyCount?: number };
 const empty = (): State => ({ sessions: {}, keys: [] });
 const sessionOK = (s: State, hash: string) => !!s.email && (s.sessions[hash] ?? 0) > Date.now();
 const publicKeys = (s: State) => s.keys.map(({ hash: _, ...key }) => key).sort((a, b) => b.createdAt - a.createdAt);
@@ -23,12 +23,32 @@ export class Account extends DurableObject {
       s.hourly++; s.daily++; await tx.put('budget', s); await tx.setAlarm((day + 1) * DAY + 60_000); return 0;
     });
   }
-  async beginCode(email: string, challenge: string, hash: string): Promise<number> {
+  // Claim before touching cross-object send budgets. A bounded lease recovers
+  // abandoned requests without replacing a still-usable verification code.
+  async claimCode(challenge: string): Promise<number> {
     return this.ctx.storage.transaction(async tx => {
       const s = await tx.get<State>('account') ?? empty(), now = Date.now();
-      if ((s.lastCode ?? 0) + 60_000 > now) return Math.ceil(((s.lastCode ?? 0) + 60_000 - now) / 1000);
+      const until = Math.max((s.lastCode ?? 0) + 60_000, s.pendingCode?.expires ?? 0);
+      if (until > now) return Math.ceil((until - now) / 1000);
+      s.pendingCode = { challenge, expires: now + 60_000 };
+      await tx.put('account', s); if (!s.email && !s.code) await tx.setAlarm(now + 660_000);
+      return 0;
+    });
+  }
+  async releaseCode(challenge: string) {
+    await this.ctx.storage.transaction(async tx => {
+      const s = await tx.get<State>('account');
+      if (s?.pendingCode?.challenge === challenge) { delete s.pendingCode; await tx.put('account', s); }
+    });
+  }
+  async beginCode(email: string, challenge: string, hash: string): Promise<boolean> {
+    return this.ctx.storage.transaction(async tx => {
+      const s = await tx.get<State>('account'), now = Date.now();
+      // Fence requests that resume after their lease has expired or been replaced.
+      if (s?.pendingCode?.challenge !== challenge || s.pendingCode.expires <= now) return false;
+      delete s.pendingCode;
       s.lastCode = now; s.code = { email, challenge, hash, expires: now + 600_000, attempts: 0 };
-      await tx.put('account', s); if (!s.email) await tx.setAlarm(now + 660_000); return 0;
+      await tx.put('account', s); if (!s.email) await tx.setAlarm(now + 660_000); return true;
     });
   }
   async cancelCode(challenge: string) {

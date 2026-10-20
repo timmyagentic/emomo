@@ -66,14 +66,19 @@ async function api(request: Request, env: WebsiteEnv): Promise<Response> {
     const data = await body(request, RequestLoginCodeSchema), email = emailAddress(data.email);
     const accountId = (await hmac(env.ACCOUNT_SECRET, `account:${email}`)).slice(0, 24);
     const ipHash = await hmac(env.ACCOUNT_SECRET, `ip:${ip}`);
-    await limited(env, `send-ip/${ipHash}`, 5, 20);
-    await limited(env, `send-email/${accountId}`, 5, 10);
-    await limited(env, 'send-global', 100, 500);
     const challenge = random(16), code = otp();
     const hash = await hmac(env.ACCOUNT_SECRET, `code:${accountId}:${challenge}:${code}`);
     const account = env.ACCOUNT_STORE.getByName(`user/${accountId}`);
-    const retry = await account.beginCode(email, challenge, hash);
+    const retry = await account.claimCode(challenge);
     if (retry) throw new HttpError(429, '验证码已发送，请稍后再试。', retry);
+    try {
+      // Keep conservative, non-refundable reservations, including partial
+      // admission and delivery failure. Cooldown rejects never reach budgets.
+      await limited(env, `send-ip/${ipHash}`, 5, 20);
+      await limited(env, `send-email/${accountId}`, 5, 10);
+      await limited(env, 'send-global', 100, 500);
+      if (!await account.beginCode(email, challenge, hash)) throw new HttpError(503, '请求已过期，请重新获取验证码。');
+    } finally { await account.releaseCode(challenge); }
     try {
       await env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'Emomo' }, to: email,
         subject: '你的 Emomo 登录验证码',

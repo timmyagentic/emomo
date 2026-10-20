@@ -1,15 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createHmac } from 'node:crypto';
 import { build } from 'esbuild';
 import { Miniflare, Response as MFResponse } from 'miniflare';
 
 const bundle = await build({ stdin: { resolveDir: process.cwd(), contents: `
 import handler from './src/index.ts';
 import { authenticate, admit, AccessError, accessError } from '../deployments/cloudflare/agent-search/src/access.ts';
-export { Account } from './src/account.ts';
+import { Account as RealAccount } from './src/account.ts';
+export class Account extends RealAccount {
+ async inspect(key) { return await this.ctx.storage.get(key) ?? null; }
+ async seed(key,value) { await this.ctx.storage.put(key,value); }
+}
 export { Admission } from '../deployments/cloudflare/agent-search/src/access.ts';
-let offset = 0; const realNow = Date.now; Date.now = () => realNow() + offset;
+let offset = 0; Date.now = () => 1800000000000 + offset;
 export default { async fetch(r,e,c) {
+ if (new URL(r.url).pathname === '/__code-rpc') { const {name,method,args}=await r.json(); const a=e.ACCOUNT_STORE.getByName(name); return Response.json(await a[method](...args) ?? null); }
+ if (new URL(r.url).pathname === '/__storage') { const {name,key,value}=await r.json(); const a=e.ACCOUNT_STORE.getByName(name); if(value!==undefined)await a.seed(key,value); return Response.json(await a.inspect(key)); }
  if (new URL(r.url).pathname === '/__advance') { offset += Number(await r.text()); return new Response('ok'); }
  if (new URL(r.url).pathname === '/__access') {
   try { const identity = await authenticate(r,'{}','read',e.ACCOUNT_STORE); identity.quota={hour:2,day:2}; const reservation=await admit(e,'read',identity); await reservation.finish(false); return Response.json({id:identity.id}); }
@@ -26,12 +33,18 @@ async function fixture(mailFails = false) {
   serviceBindings: {CAPTURE:async (r: { json(): Promise<unknown> })=>{mail.push(await r.json() as {to:string;text:string});return new MFResponse('ok',{status:mailFails?503:200});}},
  });
  let n = 1;
- const call = (path:string,data?:object,cookie='',origin='https://emomo.test') => mf.dispatchFetch('https://emomo.test/api/account/'+path,{
-  method:data?'POST':'GET',headers:{'content-type':'application/json',origin,cookie,'cf-connecting-ip':`192.0.2.${n++}`},body:data?JSON.stringify(data):undefined,
+ const call = (path:string,data?:object,cookie='',origin='https://emomo.test',ip?:string) => mf.dispatchFetch('https://emomo.test/api/account/'+path,{
+  method:data?'POST':'GET',headers:{'content-type':'application/json',origin,cookie,'cf-connecting-ip':ip ?? `192.0.2.${n++}`},body:data?JSON.stringify(data):undefined,
  });
  const code = async(email:string) => {const r=await call('code',{email});assert.equal(r.status,200);const challenge=(await r.json() as any).challenge;const sent=[...mail].reverse().find(m=>m.to===email)!;return {email,challenge,code:sent.text.match(/\d{6}/)![0]};};
  const login=async(email:string)=>{const r=await call('verify',await code(email));assert.equal(r.status,200);return r.headers.get('set-cookie')!.split(';')[0];};
- return {mf,mail,call,code,login};
+ const advance = (ms=60001) => mf.dispatchFetch('https://emomo.test/__advance',{method:'POST',body:String(ms)});
+ const storage = async(name:string) => ({ get: async(key:string) => (await mf.dispatchFetch('https://emomo.test/__storage',{method:'POST',body:JSON.stringify({name,key})})).json(), put: async(key:string,value:unknown) => mf.dispatchFetch('https://emomo.test/__storage',{method:'POST',body:JSON.stringify({name,key,value})}) });
+ const hash = (value:string) => createHmac('sha256','fixture-only-secret-not-used-in-production').update(value).digest('hex');
+ const accountId = (email:string) => hash('account:'+email).slice(0,24);
+ const budgets = async(email:string,ip:string) => Promise.all([`send-ip/${hash('ip:'+ip)}`,`send-email/${accountId(email)}`,'send-global'].map(async name => (await storage(name)).get('budget')));
+ const rpc = async(email:string,method:string,...args:unknown[]) => (await mf.dispatchFetch('https://emomo.test/__code-rpc',{method:'POST',body:JSON.stringify({name:'user/'+accountId(email),method,args})})).json();
+ return {mf,mail,call,code,login,advance,storage,accountId,budgets,rpc};
 }
 test('email registration creates a private session; key is shown once, authenticated and revoked',async()=>{
  const f=await fixture();try{
@@ -97,5 +110,109 @@ test('session expiry and key history pruning preserve active credentials',async(
   const access=await f.mf.dispatchFetch('https://emomo.test/__access',{headers:{authorization:`Bearer ${original.token}`}});assert.equal(access.status,200);
   await f.mf.dispatchFetch('https://emomo.test/__advance',{method:'POST',body:String(14*86400000)});
   assert.equal((await f.call('me',undefined,cookie)).status,401);
+ }finally{await f.mf.dispose();}
+});
+
+
+test('cooldown repeats and concurrent requests leave all send budgets unchanged',async()=>{
+ const f=await fixture();try{
+  const email='repeat@example.com',ip='192.0.2.200';
+  const send=()=>f.call('code',{email},'','https://emomo.test',ip);
+  const first=await send();assert.equal(first.status,200);
+  const challenge=(await first.json() as any).challenge;
+  const before=await f.budgets(email,ip);
+  const repeated=await Promise.all(Array.from({length:12},send));
+  assert.ok(repeated.every(r=>r.status===429));
+  assert.deepEqual(await f.budgets(email,ip),before);assert.equal(f.mail.length,1);
+  assert.equal((await f.call('verify',{email,challenge,code:f.mail[0].text.match(/\d{6}/)![0]})).status,200);
+  await f.advance();
+  const race=await Promise.all(Array.from({length:12},send));
+  assert.equal(race.filter(r=>r.status===200).length,1);assert.equal(f.mail.length,2);
+  for(const budget of await f.budgets(email,ip))assert.equal((budget as any).daily,2);
+  for(let i=0;i<3;i++){await f.advance();assert.equal((await send()).status,200);}
+  await f.advance();assert.equal((await send()).status,429);assert.equal(f.mail.length,5);
+ }finally{await f.mf.dispose();}
+});
+
+test('budget rejection preserves the previous code and does not start a cooldown',async()=>{
+ const f=await fixture();try{
+  const email='budget@example.com',ip='192.0.2.201';
+  const code=await f.code(email);await f.advance();
+  const budget=await f.storage('send-ip/'+createHmac('sha256','fixture-only-secret-not-used-in-production').update('ip:'+ip).digest('hex'));
+  const now=1800000060001,hour=Math.floor(now/3600000),day=Math.floor(now/86400000);
+  await budget.put('budget',{hour,day,hourly:5,daily:5});
+  assert.equal((await f.call('code',{email},'','https://emomo.test',ip)).status,429);
+  assert.equal((await f.call('verify',code)).status,200);
+  assert.equal((await f.call('code',{email})).status,200);
+ }finally{await f.mf.dispose();}
+});
+
+test('failed delivery consumes one send budget and cooldown, and cancels its code',async()=>{
+ const f=await fixture(true);try{
+  const email='failed@example.com',ip='192.0.2.202';
+  const send=()=>f.call('code',{email},'','https://emomo.test',ip);
+  assert.equal((await send()).status,503);
+  const state=await (await f.storage('user/'+f.accountId(email))).get('account') as any;
+  assert.equal(state.code,undefined);assert.equal(state.lastCode,1800000000000);
+  assert.equal((await send()).status,429);assert.equal(f.mail.length,1);
+  for(const budget of await f.budgets(email,ip))assert.equal((budget as any).daily,1);
+  await f.advance();assert.equal((await send()).status,503);assert.equal(f.mail.length,2);
+  for(const budget of await f.budgets(email,ip))assert.equal((budget as any).daily,2);
+ }finally{await f.mf.dispose();}
+});
+
+
+test('abandoned claims expire; stale commit, release and delivery failure cannot replace a newer code',async()=>{
+ const f=await fixture();try{
+  const email='lease@example.com';
+  assert.equal(await f.rpc(email,'claimCode','old'),0);
+  assert.equal((await f.call('code',{email})).status,429);
+  assert.deepEqual(await f.budgets(email,'192.0.2.1'),[null,null,null]);
+  await f.advance();
+  assert.equal(await f.rpc(email,'beginCode',email,'old','hash'),false);
+  assert.equal(await f.rpc(email,'claimCode','new'),0);
+  await f.rpc(email,'releaseCode','old');
+  assert.equal(await f.rpc(email,'beginCode',email,'old','hash'),false);
+  assert.equal(await f.rpc(email,'beginCode',email,'new','new-hash'),true);
+  await f.rpc(email,'cancelCode','old');
+  const state=await (await f.storage('user/'+f.accountId(email))).get('account') as any;
+  assert.equal(state.code.challenge,'new');assert.equal(state.pendingCode,undefined);
+ }finally{await f.mf.dispose();}
+});
+
+test('email and global hourly/daily limits retain conservative partial admission semantics',async()=>{
+ for(const dimension of ['email','global'])for(const period of ['hourly','daily']){
+  const f=await fixture();try{
+   const email='limit@example.com',ip='192.0.2.203',name=dimension==='email'?'send-email/'+f.accountId(email):'send-global';
+   const hour=Math.floor(1800000000000/3600000),day=Math.floor(1800000000000/86400000);
+   const limit=dimension==='email'?(period==='hourly'?5:10):(period==='hourly'?100:500);
+   await (await f.storage(name)).put('budget',{hour,day,hourly:0,daily:0,[period]:limit});
+   const response=await f.call('code',{email},'','https://emomo.test',ip);
+   assert.equal(response.status,429);assert.ok(Number(response.headers.get('retry-after'))>60);assert.equal(f.mail.length,0);
+   const budgets=await f.budgets(email,ip) as any[];
+   assert.equal(budgets[0].daily,1);if(dimension==='global')assert.equal(budgets[1].daily,1);
+   const state=await (await f.storage('user/'+f.accountId(email))).get('account') as any;
+   assert.equal(state.code,undefined);assert.equal(state.lastCode,undefined);assert.equal(state.pendingCode,undefined);
+  }finally{await f.mf.dispose();}
+ }
+});
+
+
+test('ten actual email sends across hourly windows exhaust the daily budget',async()=>{
+ const f=await fixture();try{
+  const email='daily@example.com';
+  for(let i=0;i<10;i++){
+   if(i===5)await f.advance(3600000);else if(i)await f.advance();
+   assert.equal((await f.call('code',{email})).status,200);
+  }
+  await f.advance();assert.equal((await f.call('code',{email})).status,429);assert.equal(f.mail.length,10);
+ }finally{await f.mf.dispose();}
+});
+
+test('concurrent distinct emails cannot exceed one IP send allowance',async()=>{
+ const f=await fixture();try{
+  const results=await Promise.all(Array.from({length:12},(_,i)=>f.call('code',{email:`race${i}@example.com`},'','https://emomo.test','192.0.2.204')));
+  assert.equal(results.filter(r=>r.status===200).length,5);
+  assert.equal(results.filter(r=>r.status===429).length,7);assert.equal(f.mail.length,5);
  }finally{await f.mf.dispose();}
 });

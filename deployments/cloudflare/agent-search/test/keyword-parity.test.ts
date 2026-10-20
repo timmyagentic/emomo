@@ -51,6 +51,8 @@ test('local and hosted search agree on every keyword, aliases, subjects, filters
   await db.batch(schema.split('-- statement').map(s => s.trim()).filter(Boolean).map(s => db.prepare(s)));
   await db.batch(samples.map(s => db.prepare(importSQL(indexRow({ meme: { id: 'local-' + s.id, storage_key: s.id + '.png', tags: s.tags, category: s.category || 'usable' }, annotation: { meme_id: 'local-' + s.id, description: s.tags.join('；'), ocr_text: s.text }, text_presence: s.text ? 2 : 1 })))));
   const cases: [string, string?, string[]?][] = [
+    ['找一个猫表情包', undefined, ['local-cat', 'local-happy']],
+    ['找一只猫表情包', undefined, ['local-cat', 'local-happy']],
     ['猫 生气', undefined, ['local-cat']], ['猫愤怒', undefined, ['local-cat']],
     ['熊猫 生气', undefined, ['local-panda']], ['猫 生日快乐', undefined, []],
     ['礼貌拒绝', undefined, ['local-refusal']], ['饺子', undefined, []],

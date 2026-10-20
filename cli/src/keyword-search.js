@@ -37,7 +37,13 @@ export function keywordPlan(query, vocabulary = {}) {
     const expressions = alternatives.map(value => tokens(value).map(token => `"${token}"`).join(' AND ')).filter(Boolean);
     if (expressions.length) groups.push({ key: key ?? word, terms: alternatives, subject: !!key && Object.hasOwn(subjects, key), intent: !!key && Object.hasOwn(intents, key), literal: '(' + tokens(word).map(token => `"${token}"`).join(' AND ') + ')', expression: '(' + expressions.map(expr => '(' + expr + ')').join(' OR ') + ')' });
   };
-  const text = normalize(query).replace(/^(?:(?:请|帮我|给我|我想|想要|找一张|找个|找|来一张|来个))+/, '').replace(/(?:的表情包|的表情|表情包|图片|表情)$/, '').trim() || normalize(query);
+  // Only unwrap a classifier around a complete reviewed subject in an image
+  // request. Unknown names such as 一只耳 or 一个人的夜晚 stay literal.
+  const requestText = normalize(query).replace(/^(?:(?:请|帮我|给我|我想|想要))*找(?:一个|一只)(.+?)(?:的表情包|的表情|表情包|图片|表情)$/, (whole, subject) => {
+    const key = reverse.get(subject);
+    return key && Object.hasOwn(subjects, key) ? subject : whole;
+  });
+  const text = requestText.replace(/^(?:(?:请|帮我|给我|我想|想要|找一张|找个|找|来一张|来个))+/, '').replace(/(?:的表情包|的表情|表情包|图片|表情)$/, '').trim() || normalize(query);
   for (const chunk of text.match(/[\p{L}\p{N}]+/gu) ?? []) {
     let pos = 0, unknown = '';
     while (pos < chunk.length) {
