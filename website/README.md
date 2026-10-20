@@ -15,3 +15,12 @@ Run `npm ci && npm run check`. The repository's `node scripts/dev.mjs bootstrap 
 Rollout requires explicit production authorization. Publish the website Worker first with `ACCOUNTS_ENABLED=false` to register Account, then API/image Workers with their `ACCOUNT_STORE` remote binding, then publish the website with the normal enabled configuration. The website binds back to the existing API-owned Admission for usage display. Keep manual registry secrets unchanged. Verify a real email code, browser session, key creation, CLI search/download, revocation, logout and missing-key denial. Never include a real code, session cookie or key in screenshots or task records.
 
 Keep current CLI version/download links aligned with the published release; `public/SKILL.md` mirrors the packaged Skill. Validate desktop/mobile layouts, links, complete example images, and the real CLI flow. Static-only preview can use `python3 -m http.server 8765 --directory public`; authentication needs a local workerd fixture or the deployed service. Production assets provide clean `/docs` and `/account` URLs.
+
+
+## timmyagentic visual system
+
+The product website follows the approved timmyagentic main-site visual language: Instrument Sans and Noto Sans SC, paper/ink colors, blue emphasis, quiet image backgrounds, generous spacing, and a shared parent-brand navigation and footer. Product content, languages, existing links and JavaScript interactions stay owned by this website.
+
+The self-hosted visual assets live under `brand/` in the static directory. Font licenses are included in `brand/fonts/`; Chinese subsets cover the current HTML/JavaScript copy (800 characters). Regenerate those subsets when adding new characters; system fallbacks remain configured. The ambient image is the same approved asset used on the main site. No third-party font request is made by visitors.
+
+See `docs/website-design-qa.md` and `docs/website-brand-preview.jpg` for the validated design.
