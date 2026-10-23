@@ -168,6 +168,12 @@ jobs:
         working-directory: mobile
         run: npm run gen
 
+      - name: Verify mobile dependency security and compatibility
+        working-directory: mobile
+        run: |
+          npm run test:security
+          npm run audit:security
+
       - name: Verify generated mobile DTOs are committed
         working-directory: mobile
         run: git diff --exit-code -- gen
