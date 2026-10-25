@@ -64,4 +64,4 @@ docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d
 
 ## Repository governance
 
-Follow [AGENTS.md](AGENTS.md#repository-workflow-and-branch-protection) for the mandatory PR and squash merge policy, remote-branch automatic deletion and local Workspace archive boundaries. Existing CI requirements remain unchanged.
+Follow [AGENTS.md](AGENTS.md#repository-workflow-and-branch-protection) for the mandatory PR and squash merge policy, remote-branch automatic deletion and local Workspace archive boundaries. The required CI summary and manual compatibility matrix are documented in AGENTS.md.
