@@ -10,10 +10,12 @@ test('invalid requests fail before executing commands', () => {
   assert.throws(() => plan('deploy', 'agent'), /Usage/);
   assert.throws(() => plan('check', 'production'), /Usage/);
 });
-test('default profile excludes legacy dependencies; full retains mobile generation checks', () => {
+test('default profile excludes legacy dependencies; full checks retained backend and frontend', () => {
   assert.deepEqual(plan('bootstrap', 'agent').map(x => x.cwd), ['protocol', 'deployments/cloudflare/agent-search', 'website']);
   const full = plan('check', 'full');
-  assert.ok(full.some(x => x.args.join(' ') === 'git diff --exit-code -- gen'));
+  assert.ok(full.some(x => x.cwd === 'frontend' && x.args.join(' ') === 'npm run build'));
+  assert.deepEqual(plan('bootstrap', 'full').map(x => x.cwd), ['protocol', 'deployments/cloudflare/agent-search', 'website', 'deployments/cloudflare/api-gateway', 'frontend', 'backend']);
+  assert.ok(full.every(x => x.cwd !== 'mobile' && !x.args.some(arg => /expo|check-mobile-ci/.test(arg))));
   assert.ok(full.some(x => x.args.join(' ') === 'go test ./...'));
   for (const action of ['bootstrap', 'check']) for (const profile of ['agent', 'full']) {
     assert.ok(plan(action, profile).every(x => !x.args.includes('deploy') && !x.args.includes('--remote')));

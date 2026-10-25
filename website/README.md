@@ -2,7 +2,7 @@
 
 The static public site and the account API run on `emomo-official`. The existing 0.1.1 CLI accepts self-service keys without a client upgrade.
 
-`/account` combines registration and login through a six-digit email code. A code expires after ten minutes, permits five attempts, and is consumed atomically. A successful verification creates a 14-day Secure, HttpOnly, SameSite=Lax host-only session. POST requests require the same Origin. Account JSON DTOs come from `backend/proto/emomo/v1/account.proto`; regenerate frontend/mobile/Go outputs, then run `node scripts/sync-proto.mjs` here.
+`/account` combines registration and login through a six-digit email code. A code expires after ten minutes, permits five attempts, and is consumed atomically. A successful verification creates a 14-day Secure, HttpOnly, SameSite=Lax host-only session. POST requests require the same Origin. Account JSON DTOs come from `backend/proto/emomo/v1/account.proto`; run `npm --prefix protocol run generate` from the repository root to regenerate the current Worker and website DTOs directly. The retired native app is not part of protocol generation.
 
 Account storage is a SQLite Durable Object per pseudonymous account ID. `ACCOUNT_SECRET` is the stable HMAC identity/OTP secret; generate at least 32 random bytes and keep it outside the repository. **Do not rotate it without an account-ID migration**, because it maps email addresses to existing account objects. Store it as a Worker secret. Codes, session secrets and raw access keys are never logged. Only hashes are persisted for authentication secrets; the email address is stored for account access.
 
