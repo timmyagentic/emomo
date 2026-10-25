@@ -1,14 +1,12 @@
 name: Required CI
-
-on:
-  pull_request:
+'on':
+  pull_request: null
   push:
-    branches: [main]
-  workflow_dispatch:
-
+    branches:
+    - main
+  workflow_dispatch: null
 permissions:
   contents: read
-
 jobs:
   changes:
     name: Changed components
@@ -18,127 +16,152 @@ jobs:
       frontend: ${{ steps.scope.outputs.frontend }}
       gateway: ${{ steps.scope.outputs.gateway }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-      - id: scope
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: node scripts/ci-scope.mjs
-
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 22
+    - id: scope
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        HEAD_SHA: ${{ github.sha }}
+        EVENT_NAME: ${{ github.event_name }}
+      run: node scripts/ci-scope.mjs
+    timeout-minutes: 20
   cli-platforms:
     name: CLI / ${{ matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [22, 24]
+        os:
+        - ubuntu-latest
+        - macos-latest
+        - windows-latest
+        node:
+        - 22
+        - 24
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ matrix.node }}
-      - run: npm run check
-        working-directory: cli
-      - run: npm test
-        working-directory: cli
-        env:
-          EMOMO_CONFIG_DIR: ${{ runner.temp }}/emomo-config
-          npm_config_cache: ${{ runner.temp }}/emomo-npm
-
+    - uses: actions/checkout@v6
+    - uses: actions/setup-node@v6
+      with:
+        node-version: ${{ matrix.node }}
+    - run: npm run check
+      working-directory: cli
+    - run: npm test
+      working-directory: cli
+      env:
+        EMOMO_CONFIG_DIR: ${{ runner.temp }}/emomo-config
+        npm_config_cache: ${{ runner.temp }}/emomo-npm
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    timeout-minutes: 20
   agent-cli-required:
     name: Agent CLI and search checks
     needs: changes
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Bootstrap secret-free Agent development
-        run: node scripts/dev.mjs bootstrap agent
-
-      - name: Verify Agent development contract
-        run: node scripts/dev.mjs check agent
-
-      - name: Install gateway dependencies
-        if: needs.changes.result != 'success' || needs.changes.outputs.gateway != 'false'
-        working-directory: deployments/cloudflare/api-gateway
-        run: npm ci
-
-      - name: Test and typecheck Agent gateway
-        if: needs.changes.result != 'success' || needs.changes.outputs.gateway != 'false'
-        working-directory: deployments/cloudflare/api-gateway
-        run: |
-          npm test
-          npm run typecheck
-
+    - name: Checkout
+      uses: actions/checkout@v6
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: 22
+    - name: Bootstrap secret-free Agent development
+      run: node scripts/dev.mjs bootstrap agent
+    - name: Verify Agent development contract
+      run: node scripts/dev.mjs check agent
+    - name: Install gateway dependencies
+      if: needs.changes.result != 'success' || needs.changes.outputs.gateway != 'false'
+      working-directory: deployments/cloudflare/api-gateway
+      run: npm ci
+    - name: Test and typecheck Agent gateway
+      if: needs.changes.result != 'success' || needs.changes.outputs.gateway != 'false'
+      working-directory: deployments/cloudflare/api-gateway
+      run: |
+        npm test
+        npm run typecheck
+    timeout-minutes: 20
   backend-required:
     name: Backend required checks
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.backend != 'false') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
-
-      - name: Setup Node for Go isolation regression
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Verify persistent Go configuration is isolated
-        run: node --test scripts/test/goenv.test.mjs
-
-      - name: Test backend
-        working-directory: backend
-        run: go test ./...
-
-      - name: Build backend
-        working-directory: backend
-        run: go build ./...
-
+    - name: Checkout
+      uses: actions/checkout@v6
+    - name: Setup Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: backend/go.mod
+        cache-dependency-path: backend/go.sum
+    - name: Setup Node for Go isolation regression
+      uses: actions/setup-node@v6
+      with:
+        node-version: 22
+    - name: Verify persistent Go configuration is isolated
+      run: node --test scripts/test/goenv.test.mjs
+    - name: Test backend
+      working-directory: backend
+      run: go test ./...
+    - name: Build backend
+      working-directory: backend
+      run: go build ./...
+    timeout-minutes: 20
   frontend-required:
     name: Frontend required checks
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.frontend != 'false') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Lint frontend
-        working-directory: frontend
-        run: npm run lint
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
+    - name: Checkout
+      uses: actions/checkout@v6
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: frontend/package-lock.json
+    - name: Install dependencies
+      working-directory: frontend
+      run: npm ci
+    - name: Lint frontend
+      working-directory: frontend
+      run: npm run lint
+    - name: Build frontend
+      working-directory: frontend
+      run: npm run build
+    timeout-minutes: 20
+  ci:
+    name: CI
+    needs:
+    - changes
+    - agent-cli-required
+    - backend-required
+    - frontend-required
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Verify all applicable current-head checks
+      env:
+        CI_NEEDS: ${{ toJSON(needs) }}
+      run: |
+        node <<'NODE'
+        const jobs = JSON.parse(process.env.CI_NEEDS);
+        for (const id of ['changes', 'agent-cli-required']) {
+          if (jobs[id]?.result !== 'success') throw new Error(id + ' did not pass');
+        }
+        for (const scope of ['backend', 'frontend']) {
+          const changed = jobs.changes.outputs[scope];
+          const result = jobs[scope + '-required']?.result;
+          if (!['true', 'false'].includes(changed)) throw new Error('Unknown scope: ' + scope);
+          if (changed === 'true' && result !== 'success') throw new Error(scope + ' did not run successfully');
+          if (changed === 'false' && !['success', 'skipped'].includes(result)) throw new Error(scope + ' failed');
+        }
+        console.log('Agent/CLI/search and all applicable retained-product checks passed');
+        NODE
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
