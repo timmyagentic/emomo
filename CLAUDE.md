@@ -61,3 +61,7 @@ docker compose --env-file backend/.env -f deployments/docker-compose.yml up -d
 - Backend runtime expects `cwd = backend/` (so `./configs`, `./data` resolve correctly). Don't introduce code that assumes the repo root is the cwd.
 - Protobuf's boundary is intentionally narrow: it defines backend HTTP request/response/SSE DTOs, generated frontend/backend DTOs, closed cross-boundary enums, and the allowlisted DB JSON values `memes.image_info` and `meme_annotations.labels`. Source `.proto` files live in `backend/proto/emomo/v1/` (`types.proto` / `meme.proto` / `api.proto`); generated Go lands in `backend/gen/`, generated TS in `frontend/gen/`. Do not use protobuf to own relational table shape, migrations, runtime config, open string sets, repository internals, or React UI state. The schema is **not** an RPC contract — emomo's HTTP API is RESTful via Gin, with handlers (de)serializing message bodies via `protojson`.
 - Backend database migrations are managed entirely in code: GORM AutoMigrate plus the explicit migration helpers in `backend/internal/repository/db.go`. There is no separate SQL migration runner; do not add files under `backend/migrations/`.
+
+## Repository governance
+
+Follow [AGENTS.md](AGENTS.md#repository-workflow-and-branch-protection) for the mandatory PR and squash merge policy, remote-branch automatic deletion and local Workspace archive boundaries. Existing CI requirements remain unchanged.
