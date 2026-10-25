@@ -1,4 +1,6 @@
-# emomo Privacy Policy
+# emomo Privacy Policy — retired native app
+
+> Historical policy for the native app retired on 2026-10-25. Retained for existing installations; this is not the policy for the current CLI, website or account service. See [retirement record](MOBILE_RETIREMENT.md) and [current product documentation](PUBLIC_RELEASE.md).
 
 Last updated: 2026-06-03
 

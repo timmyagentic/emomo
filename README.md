@@ -37,7 +37,9 @@ Skill 支持 Codex、Claude Code 和通用 Agent 目录。所有命令输出 JSO
 | `cli/` | 零运行时依赖 CLI、Skill、本地图库工具 |
 | `deployments/cloudflare/agent-search/` | 确定性公开文字检索 |
 | `website/` | 新官网、安装与接口文档 |
-| `backend/`、`frontend/`、`mobile/` | 保留的旧产品源码，不是本次公开服务 |
+| `backend/`、`frontend/` | 保留的旧产品源码，不是本次公开服务 |
+
+原生 iOS / Android App 已于 2026-10-25 正式退役，停止维护和构建；源码保留在 Git 历史。详见[移动端退役记录](docs/MOBILE_RETIREMENT.md)。
 
 HTTP DTO 以 `backend/proto/` 为唯一源。旧模型后台不会作为搜索兜底；旧 HF 自动推送已改为手动触发。发布运行说明见 [稳定版发布](docs/PUBLIC_RELEASE.md)。
 

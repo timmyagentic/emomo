@@ -18,7 +18,7 @@ export function plan(action, profile) {
     add(search, 'npm', 'ci', '--no-audit', '--no-fund');
     add('website', 'npm', 'ci', '--no-audit', '--no-fund');
     if (profile === 'full') {
-      for (const cwd of [gateway, 'frontend', 'mobile']) add(cwd, 'npm', 'ci', '--no-audit', '--no-fund');
+      for (const cwd of [gateway, 'frontend']) add(cwd, 'npm', 'ci', '--no-audit', '--no-fund');
       add('backend', 'go', 'mod', 'download');
     }
   } else {
@@ -35,13 +35,6 @@ export function plan(action, profile) {
       add('backend', 'go', 'build', './...');
       add('frontend', 'npm', 'run', 'lint');
       add('frontend', 'npm', 'run', 'build');
-      add('mobile', 'npm', 'run', 'gen');
-      add('mobile', 'git', 'diff', '--exit-code', '--', 'gen');
-      add('mobile', 'npm', 'test', '--', '--runInBand');
-      add('mobile', 'npm', 'run', 'typecheck');
-      add('mobile', 'npm', 'run', 'lint');
-      add('mobile', 'npx', '--yes', 'expo-doctor');
-      add('.', 'bash', 'scripts/check-mobile-ci.sh');
     }
   }
   return commands;
@@ -78,7 +71,6 @@ export function developmentEnv(root, source = process.env) {
     XDG_CONFIG_HOME: join(state, 'config'), XDG_CACHE_HOME: join(state, 'cache'),
     WRANGLER_LOG_PATH: join(state, 'logs'), WRANGLER_SEND_METRICS: 'false',
     CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: 'false',
-    EXPO_NO_DOTENV: '1', EXPO_NO_TELEMETRY: '1',
     GOENV: 'off', GOTOOLCHAIN: 'go1.26.2', GOPATH: join(state, 'go'),
     GOMODCACHE: join(state, 'go', 'pkg', 'mod'), GOCACHE: join(state, 'go-build'),
   });
