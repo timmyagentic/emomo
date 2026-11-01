@@ -216,20 +216,58 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
   .brand-site .nav-links { gap: 12px; font-size: 10px; }
   .brand-site .studio-identity .brand-ledger .brand-name { max-width: 156px; }
 }
-/* Keep the copy on the site's reading grid; the film can extend into the wide outer gutter. */
-.brand-emomo .hero {
-  --film-overhang: clamp(0px, calc((100vw - 1100px) / 2 - 48px), 132px);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  align-items: center;
-  gap: clamp(24px, 3.4vw, 52px);
-  padding-block: clamp(36px, 4.5vw, 72px);
+/* The landing page uses the viewport as its canvas, with one shared safe gutter. */
+.emomo-home {
+  --screen: 100vh;
+  --page-gutter: clamp(16px, 3vw, 80px);
+  --inset-start: max(var(--page-gutter), env(safe-area-inset-left, 0px));
+  --inset-end: max(var(--page-gutter), env(safe-area-inset-right, 0px));
+  --nav-height: clamp(64px, 8vh, 96px);
+  --stage-height: calc(var(--screen) - var(--nav-height) - env(safe-area-inset-top, 0px));
+  --stage-pad: clamp(12px, 2.6vmin, 48px);
+  --stage-bottom: max(var(--stage-pad), env(safe-area-inset-bottom, 0px));
+  --caption-size: clamp(14px, 1vw, 20px);
+  --caption-gap: 8px;
 }
-.brand-emomo .hero::before { inset-inline-end: calc(0px - var(--film-overhang)); }
-.hero-demo { margin-inline-end: calc(0px - var(--film-overhang)); }
-.brand-emomo .hero h1 { font-size: clamp(25px, 3.7vw, 50px); line-height: 1.18; margin: 20px 0; }
-.brand-emomo .hero .lede { font-size: clamp(16px, 1.25vw, 18px); }
-.brand-emomo .hero .actions { flex-wrap: wrap; gap: 18px; margin: 24px 0 12px; }
+@supports (height: 100dvh) {
+  .emomo-home { --screen: 100dvh; }
+}
+.emomo-home .wrap, .emomo-home .studio-signoff {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: var(--inset-start) var(--inset-end);
+}
+.emomo-home > header { padding-top: env(safe-area-inset-top, 0px); }
+.emomo-home > header > nav { min-height: var(--nav-height); padding-block: 0; }
+.emomo-home .studio-home { font-size: clamp(21px, 1.7vw, 38px); }
+.emomo-home .navlinks { font-size: clamp(14px, 1vw, 22px); }
+.emomo-home .hero {
+  /* On very wide screens the film meets the right gutter at its height-limited width. */
+  --film-room: max(8rem, calc(var(--stage-height) - var(--stage-pad) - var(--stage-bottom) - var(--caption-gap) - 1.5 * var(--caption-size)));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(var(--film-share, 67%), calc(var(--film-room) * 16 / 9));
+  min-height: var(--stage-height);
+  padding-block: var(--stage-pad) var(--stage-bottom);
+  align-items: center;
+  gap: clamp(16px, 3vw, 88px);
+}
+.emomo-home .hero h1 {
+  font-size: clamp(26px, min(3.8vw, 8vh), 132px);
+  line-height: 1.16;
+  letter-spacing: -.035em;
+  margin: clamp(12px, 2vmin, 32px) 0;
+}
+.emomo-home .hero .lede {
+  max-width: 32em;
+  font-size: clamp(16px, 1.3vw, 28px);
+  line-height: 1.65;
+}
+.emomo-home .hero .actions { flex-wrap: wrap; gap: 16px; margin: clamp(16px, 2.6vmin, 36px) 0 10px; }
+.emomo-home .hero .button { font-size: clamp(14px, 1.08vw, 22px); }
+.emomo-home .hero .eyebrow { font-size: clamp(10px, .8vw, 16px); }
+.emomo-home .hero .subtle { font-size: clamp(11px, .85vw, 18px); }
+.hero-demo { display: grid; min-width: 0; gap: var(--caption-gap); }
 .hero-demo video {
   display: block;
   width: 100%;
@@ -238,22 +276,37 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
   background: #173c3d;
   box-shadow: 0 1px 3px #14262918, 0 12px 32px #14262912;
 }
-.hero-demo .text-link { margin-top: 10px; }
-@media (max-width: 639px) and (orientation: portrait), (max-width: 599px) {
-  .brand-emomo .hero { grid-template-columns: minmax(0, 1fr); gap: 20px; width: calc(100% - 32px); padding-block: 20px 36px; }
-  .studio-hero-copy { padding-inline: 6px; }
-  .brand-emomo .hero h1 { font-size: clamp(28px, 7.6vw, 40px); margin: 8px 0; }
-  .brand-emomo .hero h1 br, .brand-emomo .hero .lede br { display: none; }
-  .brand-emomo .hero h1 span { display: inline-block; }
-  .brand-emomo .hero .lede { line-height: 1.55; }
-  .brand-emomo .hero .actions { margin: 14px 0 6px; }
+.hero-demo .text-link { justify-self: start; font-size: var(--caption-size); line-height: 1.5; }
+@media (max-width: 700px) {
+  .emomo-home .navlinks { top: 100%; inset-inline: var(--inset-start) var(--inset-end); }
 }
-@media (min-width: 600px) and (orientation: landscape) and (max-height: 540px) {
-  .brand-emomo .hero { padding-block: 8px 16px; align-items: start; }
-  .brand-emomo .hero h1 { font-size: clamp(24px, 3.6vw, 36px); margin: 8px 0; }
-  .brand-emomo .hero .lede { font-size: 15px; line-height: 1.5; }
-  .brand-emomo .hero .actions { margin: 12px 0 6px; gap: 12px; }
-  .studio-hero-copy .button { min-height: 42px; padding: 8px 14px; font-size: 14px; gap: 8px; }
+@media (max-width: 639px) {
+  .emomo-home .hero { --film-share: 56%; }
+}
+@media (max-aspect-ratio: 3/4) {
+  .emomo-home .hero { grid-template-columns: minmax(0, 1fr); align-content: space-evenly; gap: clamp(12px, 3vh, 40px); }
+  .emomo-home .hero h1 { font-size: clamp(31px, min(9vw, 7vh), 96px); margin: .32em 0; }
+  .emomo-home .hero .lede br { display: none; }
+}
+@media (min-aspect-ratio: 5/2) and (min-width: 1200px) {
+  .emomo-home .hero h1 br { display: none; }
+  .emomo-home .hero h1 { font-size: clamp(40px, min(3.5vw, 9.5vh), 150px); }
+}
+@media (orientation: portrait) and (max-height: 700px) {
+  .emomo-home .hero .eyebrow { display: none; }
+  .emomo-home .hero .actions { margin: 10px 0 6px; }
+}
+@media (max-aspect-ratio: 3/4) and (max-height: 700px) {
+  .emomo-home .hero h1 br { display: none; }
+  .emomo-home .hero h1 span { display: inline-block; }
+}
+@media (max-height: 540px) {
+  .emomo-home { --nav-height: 54px; --stage-pad: 10px; }
+  .emomo-home .hero .eyebrow, .emomo-home .hero .subtle { display: none; }
+  .emomo-home .hero h1 { font-size: clamp(22px, min(3.7vw, 8vh), 38px); margin: 0 0 8px; }
+  .emomo-home .hero .lede { font-size: 14px; line-height: 1.45; }
+  .emomo-home .hero .actions { margin: 10px 0 0; gap: 8px 12px; }
+  .emomo-home .hero .button { min-height: 40px; padding: 7px 12px; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
