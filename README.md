@@ -6,9 +6,9 @@ Agent 理解语境、看图选择，Emomo 提供关键词搜索、详情和完�
 
 ## 聊天演示
 
-![把聊天截图交给 Agent，从三个表情中挑出学位帽猫，回到微信发送](docs/media/emomo-v9.gif)
+![把聊天截图交给 Agent，从三个表情中挑出学位帽猫，回到微信发送](docs/media/emomo-v10.gif)
 
-[观看高清有声版](https://emomo.timmyagentic.si/demo/emomo-v9.mp4) · [安装与使用](#开始)
+[观看高清有声版](https://emomo.timmyagentic.si/demo/emomo-v10.mp4) · [安装与使用](#开始)
 
 ## 开始
 
