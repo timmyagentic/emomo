@@ -1,0 +1,3 @@
+/* Budget the actual header and playback row, including wrapped controls. */
+.emomo-home { --header-block: calc(var(--nav-height) + env(safe-area-inset-top, 0px)); --controls-block: max(44px, calc(1.5 * var(--caption-size))); }
+.emomo-home .hero { --stage-height: calc(var(--screen) - var(--header-block)); --film-room: max(8rem, calc(var(--stage-height) - var(--stage-pad) - var(--stage-bottom) - var(--caption-gap) - var(--controls-block))); }
