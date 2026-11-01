@@ -24,8 +24,10 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://emomo.timmyagentic.si/assets/social-card.png">
 <meta name="twitter:image:alt" content="Emomo — 给你的 Agent，一点表情。">
+<link rel="stylesheet" href="/viewport.css">
+<script src="/viewport.js" defer></script>
 </head>
-<body class="brand-site brand-emomo emomo-home">
+<body class="brand-site brand-emomo emomo-home viewport-home" data-viewport-page>
 <a class="skip" href="#main">跳到正文</a>
 <header>
 <nav class="wrap" aria-label="主导航">
@@ -59,7 +61,7 @@
 <video id="demo-video" controls muted loop playsinline preload="metadata" width="1920" height="1080" poster="/demo/emomo-v10-cover.webp" aria-label="从聊天截图中找到合适的表情">
 <source src="/demo/emomo-v10-loop.mp4" type="video/mp4">
 </video>
-<div class="demo-video-links"><button class="demo-playback" type="button" data-demo-playback aria-controls="demo-video" hidden>播放演示</button>
+<div class="demo-video-links" data-viewport-controls><button class="demo-playback" type="button" data-demo-playback aria-controls="demo-video" hidden>播放演示</button>
 <a class="text-link" href="/demo/emomo-v10.mp4">观看高清有声版 ↗</a></div>
 </div>
 </section>
