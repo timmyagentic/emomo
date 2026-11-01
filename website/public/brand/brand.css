@@ -129,7 +129,8 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
 .brand-site .copy-card { background: #202c3b; border-color: #49586b; }
 .brand-site .copy-top { border-color: #49586b; }
 .brand-site .copy-card pre { font-size: 12px; line-height: 1.9; }
-.brand-site .install .text-link { color: #fff; }
+.brand-emomo .install-section .install-list .text-link { color: #263c8e; text-decoration: underline; text-underline-offset: .2em; }
+.brand-emomo .install-list li > .text-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; }
 .brand-site .faq-list p { font-size: 14px; line-height: 1.9; }
 .brand-site .faq-list summary { font-size: 16px; }
 /* SMB Share: real Android screen, without a decorative phone orbit. */
@@ -319,3 +320,6 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
 @media (max-width: 760px) { .brand-cc .hero { display: block; } .brand-cc .hero-links { align-items: flex-start; margin-top: 24px; } }
 
 .brand-site .header-inner { display: flex; align-items: center; }
+
+.demo-playback { min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
+.demo-video-links { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; }
