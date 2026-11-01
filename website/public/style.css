@@ -890,3 +890,5 @@ td code {
   .navcta-long { display: none; }
   .navcta-short { display: inline; }
 }
+
+.hero-demo {min-width:0;width:100%;align-self:center}.hero-demo video {display:block;width:100%;height:auto;border-radius:16px}.hero-demo .text-link {display:inline-block;margin-top:12px}
