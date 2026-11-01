@@ -216,14 +216,20 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
   .brand-site .nav-links { gap: 12px; font-size: 10px; }
   .brand-site .studio-identity .brand-ledger .brand-name { max-width: 156px; }
 }
-/* Keep the complete 16:9 film in view above its caption and actions. */
+/* Keep the copy on the site's reading grid; the film can extend into the wide outer gutter. */
 .brand-emomo .hero {
-  display: block;
-  width: calc(100% - 48px);
-  max-width: min(1440px, calc((100svh - 224px) * 16 / 9));
-  padding-block: 16px clamp(40px, 5vw, 72px);
+  --film-overhang: clamp(0px, calc((100vw - 1100px) / 2 - 48px), 132px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: center;
+  gap: clamp(24px, 3.4vw, 52px);
+  padding-block: clamp(36px, 4.5vw, 72px);
 }
-.brand-emomo .hero::before { content: none; }
+.brand-emomo .hero::before { inset-inline-end: calc(0px - var(--film-overhang)); }
+.hero-demo { margin-inline-end: calc(0px - var(--film-overhang)); }
+.brand-emomo .hero h1 { font-size: clamp(25px, 3.7vw, 50px); line-height: 1.18; margin: 20px 0; }
+.brand-emomo .hero .lede { font-size: clamp(16px, 1.25vw, 18px); }
+.brand-emomo .hero .actions { flex-wrap: wrap; gap: 18px; margin: 24px 0 12px; }
 .hero-demo video {
   display: block;
   width: 100%;
@@ -232,25 +238,22 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
   background: #173c3d;
   box-shadow: 0 1px 3px #14262918, 0 12px 32px #14262912;
 }
-.hero-caption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-top: 20px;
+.hero-demo .text-link { margin-top: 10px; }
+@media (max-width: 639px) and (orientation: portrait), (max-width: 599px) {
+  .brand-emomo .hero { grid-template-columns: minmax(0, 1fr); gap: 20px; width: calc(100% - 32px); padding-block: 20px 36px; }
+  .studio-hero-copy { padding-inline: 6px; }
+  .brand-emomo .hero h1 { font-size: clamp(28px, 7.6vw, 40px); margin: 8px 0; }
+  .brand-emomo .hero h1 br, .brand-emomo .hero .lede br { display: none; }
+  .brand-emomo .hero h1 span { display: inline-block; }
+  .brand-emomo .hero .lede { line-height: 1.55; }
+  .brand-emomo .hero .actions { margin: 14px 0 6px; }
 }
-.brand-emomo .hero h1 { font-size: clamp(27px, 2.6vw, 42px); line-height: 1.25; letter-spacing: -.04em; margin: 0; }
-.brand-emomo .hero h1 span { display: inline-block; }
-.brand-emomo .hero .lede { margin: 7px 0 0; font-size: 16px; line-height: 1.55; }
-.brand-emomo .hero .actions { flex: none; flex-wrap: wrap; gap: 18px; margin: 0; }
-@media (max-width: 820px) {
-  .brand-emomo .hero { width: calc(100% - 16px); padding-block: 12px 40px; }
-  .hero-caption { flex-direction: column; align-items: flex-start; gap: 16px; margin: 20px 14px 0; }
-}
-/* Short landscape screens can scroll to the caption after seeing the entire film. */
-@media (orientation: landscape) and (max-height: 540px) {
-  .brand-emomo .hero { max-width: calc((100svh - 120px) * 16 / 9); }
-  .hero-caption { flex-wrap: wrap; }
+@media (min-width: 600px) and (orientation: landscape) and (max-height: 540px) {
+  .brand-emomo .hero { padding-block: 8px 16px; align-items: start; }
+  .brand-emomo .hero h1 { font-size: clamp(24px, 3.6vw, 36px); margin: 8px 0; }
+  .brand-emomo .hero .lede { font-size: 15px; line-height: 1.5; }
+  .brand-emomo .hero .actions { margin: 12px 0 6px; gap: 12px; }
+  .studio-hero-copy .button { min-height: 42px; padding: 8px 14px; font-size: 14px; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
