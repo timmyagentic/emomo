@@ -273,7 +273,7 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
   width: 100%;
   height: auto;
   border-radius: clamp(12px, 1.25vw, 20px);
-  background: #173c3d;
+  background: var(--paper);
   box-shadow: 0 1px 3px #14262918, 0 12px 32px #14262912;
 }
 .hero-demo .text-link { justify-self: start; font-size: var(--caption-size); line-height: 1.5; }
