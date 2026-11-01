@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="14" fill="#f26640"/><circle cx="16" cy="19" r="3" fill="white"/><circle cx="32" cy="19" r="3" fill="white"/><path d="M14 28q10 12 20 0" fill="none" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="Emomo 淡黄与墨青双贴纸简化标志">
+  <rect x="14" y="18" width="133" height="133" rx="22" fill="#386e70" transform="rotate(-11 80 85)"/>
+  <g transform="rotate(5 103 101)">
+    <path d="M57 34H151Q173 34 173 56V118Q173 126 167 132L136 163Q130 169 120 169H57Q35 169 35 147V56Q35 34 57 34Z" fill="#ffebac" stroke="#23393d" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M124 168Q132 164 132 153V146Q132 131 148 131H155Q166 131 172 121Q170 128 165 133L136 162Q130 168 124 168Z" fill="#f7f8e5" stroke="#23393d" stroke-width="3.6" stroke-linejoin="round"/>
+    <path d="M67 72L80 81L66 87M127 71L113 80L126 86" fill="none" stroke="#23393d" stroke-width="8.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M70 101Q98 104 126 96C123 116 111 127 97 127C84 127 74 117 70 101Z" fill="#23393d"/>
+  </g>
+</svg>
