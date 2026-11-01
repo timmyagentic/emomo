@@ -99,15 +99,6 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
 .brand-cc .landscape { display: none; }
 .brand-cc .demo-tabs { border-radius: 8px; }
 .brand-cc .feishu-section, .brand-cc .get-started { background: #edf1f8; }
-/* Emomo reuses the two original images already shown in its example switcher. */
-.brand-emomo .hero { display: grid; grid-template-columns: 1.2fr .8fr; align-items: center; gap: 55px; }
-.brand-emomo .hero h1 { font-size: clamp(44px, 5.4vw, 70px); }
-.brand-emomo .hero .lede { font-size: 18px; max-width: 560px; }
-.brand-emomo .hero .actions { justify-content: flex-start; }
-.studio-meme-images { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 18px; padding: 40px 8px; }
-.studio-meme-images img { width: 100%; height: auto; border-radius: 12px; box-shadow: 0 20px 45px #26334217; }
-.studio-meme-images img:first-child { transform: rotate(-8deg); margin-top: 70px; }
-.studio-meme-images img:last-child { transform: rotate(7deg); margin-top: -65px; }
 .brand-emomo .example-shell { background: #edf1f8; border-radius: 16px; }
 .brand-emomo .example-preview { background: #e6ebf5; }
 .brand-emomo .example-tabs [aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: white; }
@@ -168,9 +159,6 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
   .brand-quota .showcase-panel { min-height: 340px; }
   .brand-fan .hero, .brand-route .hero, .brand-ledger .hero, .brand-smb .hero { gap: 28px; }
   .brand-site .hero .intro, .brand-site .hero-description, .brand-site .hero-lead { font-size: 16px; }
-  .brand-emomo .hero { gap: 28px; grid-template-columns: 1.3fr .7fr; }
-  .brand-emomo .hero h1 { font-size: 46px; }
-  .studio-meme-images { gap: 8px; padding-inline: 0; }
   .brand-smb .hero h1 { font-size: 50px; }
 }
 @media (max-width: 760px) {
@@ -199,9 +187,6 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
   .brand-cc .install-command code { font-size: 11px; white-space: normal; overflow-wrap: anywhere; }
   .brand-cc .install-command button { font-size: 11px; padding: 10px; }
   .brand-cc .hero h1 { font-size: clamp(32px, 8.6vw, 47px); }
-  .studio-meme-images { width: min(340px, 100%); margin: 0 auto; padding: 25px 12px; gap: 20px; }
-  .studio-meme-images img:first-child { margin-top: 30px; }
-  .studio-meme-images img:last-child { margin-top: -30px; }
   .brand-site .section { padding-top: 60px; padding-bottom: 60px; }
   .brand-site .section-title, .brand-site h2.section-title, .brand-site .section > h2, .brand-site .section-head h2, .brand-site .section-heading h2, .brand-site .detail-intro h2 { font-size: 30px; letter-spacing: -.7px; }
   .brand-site .fact strong { font-size: 16px; }
@@ -230,6 +215,42 @@ body.brand-site { background: var(--paper); color: var(--ink); font-family: var(
   .brand-quota .showcase-panel { min-height: 315px; }
   .brand-site .nav-links { gap: 12px; font-size: 10px; }
   .brand-site .studio-identity .brand-ledger .brand-name { max-width: 156px; }
+}
+/* Keep the complete 16:9 film in view above its caption and actions. */
+.brand-emomo .hero {
+  display: block;
+  width: calc(100% - 48px);
+  max-width: min(1440px, calc((100svh - 224px) * 16 / 9));
+  padding-block: 16px clamp(40px, 5vw, 72px);
+}
+.brand-emomo .hero::before { content: none; }
+.hero-demo video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: clamp(12px, 1.25vw, 20px);
+  background: #173c3d;
+  box-shadow: 0 1px 3px #14262918, 0 12px 32px #14262912;
+}
+.hero-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 20px;
+}
+.brand-emomo .hero h1 { font-size: clamp(27px, 2.6vw, 42px); line-height: 1.25; letter-spacing: -.04em; margin: 0; }
+.brand-emomo .hero h1 span { display: inline-block; }
+.brand-emomo .hero .lede { margin: 7px 0 0; font-size: 16px; line-height: 1.55; }
+.brand-emomo .hero .actions { flex: none; flex-wrap: wrap; gap: 18px; margin: 0; }
+@media (max-width: 820px) {
+  .brand-emomo .hero { width: calc(100% - 16px); padding-block: 12px 40px; }
+  .hero-caption { flex-direction: column; align-items: flex-start; gap: 16px; margin: 20px 14px 0; }
+}
+/* Short landscape screens can scroll to the caption after seeing the entire film. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .brand-emomo .hero { max-width: calc((100svh - 120px) * 16 / 9); }
+  .hero-caption { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
