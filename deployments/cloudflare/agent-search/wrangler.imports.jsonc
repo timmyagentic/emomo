@@ -17,6 +17,5 @@
   "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "emomo-reviewed-public", "remote": false }],
   "secrets": { "required": ["IMPORT_KEY_SHA256"] },
   "vars": { "IMAGE_BASE_URL": "https://images.timmyagentic.si" },
-  "limits": { "cpu_ms": 100 },
   "observability": { "enabled": true, "head_sampling_rate": 0.1 }
 }
