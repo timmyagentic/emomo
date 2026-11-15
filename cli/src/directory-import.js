@@ -249,12 +249,13 @@ export async function ingestDirectory(source, output, client = null, vision = nu
     await validateSnapshot(snapshotPath);
   }
   await saveJSON(join(batch, 'prepared.json'), { ...plan, confirmation });
+  const modelReviews = annotations.filter(row => row.llm);
   const report = { status: 'ready', batch, confirmation, totalFiles: manifest.images.length, newImages: imports.length,
     exactDuplicates: manifest.images.length - manifest.unique.length, alreadyOnline: manifest.existing.length,
     excluded: annotations.filter(row => row.decision === 'exclude').length, similarDuplicates: annotations.filter(row => row.decision === 'duplicate').length,
     rejected: manifest.rejected, checks, catalogPath: imports.length ? catalogPath : null, snapshotPath: imports.length ? snapshotPath : null,
-    remoteDuplicatesChecked: manifest.remoteDuplicatesChecked, modelReviewedImages: annotations.filter(row => row.llm).length,
-    onlineSimilarCandidatesChecked: annotations.filter(row => row.llm).every(row => row.llm.onlineCandidatesChecked), publishCommand: `emomo-library publish "${batch}" --confirm ${confirmation}` };
+    remoteDuplicatesChecked: manifest.remoteDuplicatesChecked, modelReviewedImages: modelReviews.length,
+    onlineSimilarCandidatesChecked: modelReviews.length > 0 && modelReviews.every(row => row.llm.onlineCandidatesChecked === true), publishCommand: `emomo-library publish "${batch}" --confirm ${confirmation}` };
   await saveJSON(join(batch, 'review.json'), report);
   return report;
 }
