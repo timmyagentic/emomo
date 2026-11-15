@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "emomo-library-imports",
+  "main": "src/import.ts",
+  "compatibility_date": "2026-11-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "imports.timmyagentic.si", "custom_domain": true }],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "emomo-agent-index",
+    "database_id": "576f07ac-6950-41fe-922f-637cface62f8",
+    "remote": false,
+    "migrations_dir": "migrations"
+  }],
+  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "emomo-reviewed-public", "remote": false }],
+  "secrets": { "required": ["IMPORT_KEY_SHA256"] },
+  "vars": { "IMAGE_BASE_URL": "https://images.timmyagentic.si" },
+  "limits": { "cpu_ms": 100 },
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 }
+}

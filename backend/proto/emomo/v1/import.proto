@@ -1,0 +1,29 @@
+syntax = "proto3";
+package emomo.v1;
+import "emomo/v1/types.proto";
+import "emomo/v1/meme.proto";
+option go_package = "github.com/timmy/emomo/gen/emomo/v1;emomov1";
+
+// POST /admin/v1/imports uses multipart/form-data with one metadata JSON
+// part containing this message and one image file. Maintenance credentials only.
+message ImportMetadata {
+  string sha256 = 1;
+  ImageInfo image_info = 2;
+  string category = 3;
+  string description = 4;
+  string ocr_text = 5;
+  TextPresence text_presence = 6;
+  repeated string tags = 7;
+  repeated string search_aliases = 8;
+  bool preview_only = 9;
+}
+message ImportResponse {
+  Meme meme = 1;
+  bool duplicate = 2;
+  string description = 3;
+  TextPresence text_presence = 4;
+}
+// POST /admin/v1/lookup checks exact hashes before annotation/upload.
+message ImportLookupRequest { repeated string sha256 = 1; }
+message ImportLookupResponse { repeated Meme existing = 1; }
+message ImportErrorResponse { string code = 1; string message = 2; }
