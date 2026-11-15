@@ -140,3 +140,13 @@ test('definitively rejected submissions can rebuild pending inputs without retry
   const retry = await ingestDirectory(source, batch, null, vision, null, { mode: 'batch' });
   assert.equal(retry.status, 'batch_pending'); assert.equal(state.creates, 1);
 });
+
+test('Batch input paths cannot escape the batch directory', async t => {
+  const { source, batch } = await inputs(t), { vision } = provider();
+  await ingestDirectory(source, batch, null, vision, null, { mode: 'batch' });
+  const path = join(batch, 'openai-batch.json');
+  const state = JSON.parse(await readFile(path, 'utf8'));
+  state.parts[0].file = '../private-file.json';
+  await writeFile(path, JSON.stringify(state));
+  await assert.rejects(batchStatus(batch, vision), { code: 'INVALID_OPENAI_BATCH' });
+});

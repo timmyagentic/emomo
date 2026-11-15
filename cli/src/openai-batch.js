@@ -1,5 +1,6 @@
-import { openAsBlob } from 'node:fs';
-import { open, readFile, writeFile, mkdir, rename, unlink } from 'node:fs/promises';
+import { openAsBlob, createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { open, readFile, writeFile, mkdir, rename, unlink, realpath, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { canonical } from './library.js';
@@ -24,6 +25,36 @@ async function save(directory, state) {
 }
 function validateState(state, vision) {
   if (state?.schemaVersion !== 1 || state.model !== vision.model || state.reasoningEffort !== vision.reasoningEffort || state.promptVersion !== VISION_PROMPT_VERSION || !Array.isArray(state.parts)) throw fail('The stored Batch does not match the configured model and prompt version.');
+  const ids = new Set();
+  for (const part of state.parts) {
+    if (!/^[a-f0-9-]{36}$/.test(part.submission) || part.file !== `batch-inputs/${part.submission}.jsonl` || !Array.isArray(part.jobs) || !part.jobs.length || part.jobs.length > MAX_REQUESTS || !Number.isSafeInteger(part.bytes) || part.bytes < 1 || part.bytes > MAX_FILE_BYTES || !Number.isSafeInteger(part.inputTokens) || part.inputTokens < 1) throw fail('The saved Batch shard is invalid.');
+    for (const job of part.jobs) {
+      if (!/^[a-f0-9]{64}$/.test(job.sha256) || job.customId !== `annotation_${job.sha256}` || ids.has(job.customId) || job.operation !== 'meme_annotation' || job.hashes?.length !== 1 || job.hashes[0] !== job.sha256 || !/^[a-f0-9]{64}$/.test(job.annotationDigest)) throw fail('The saved Batch image mapping is invalid.');
+      ids.add(job.customId);
+    }
+  }
+}
+async function verifyInput(directory, part, vision) {
+  const expected = join(await realpath(directory), part.file);
+  if (await realpath(expected) !== expected || (await stat(expected)).size !== part.bytes) throw fail('A Batch input file moved or changed.');
+  const jobs = new Map(part.jobs.map(job => [job.customId, job]));
+  const seen = new Set();
+  const lines = createInterface({ input: createReadStream(expected), crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      const input = JSON.parse(line);
+      const job = jobs.get(input.custom_id);
+      const content = input.body?.input?.[0]?.content;
+      if (!job || seen.has(input.custom_id) || input.method !== 'POST' || input.url !== '/v1/responses' || !Array.isArray(content)) throw fail('The Batch input no longer matches its image mapping.');
+      const image = content.find(item => item.type === 'input_image');
+      if (!/^data:image\/(png|jpeg|webp);base64,/.test(image?.image_url ?? '')) throw fail('Batch images must be embedded local originals.');
+      const bytes = Buffer.from(image.image_url.slice(image.image_url.indexOf(',') + 1), 'base64');
+      const prepared = vision.prepareAnnotation(bytes);
+      if (prepared.hashes[0] !== job.sha256 || digest(prepared.payload) !== digest(input.body)) throw fail('A Batch request changed model, prompt, settings or image content.');
+      seen.add(input.custom_id);
+    }
+  } finally { lines.close(); }
+  if (seen.size !== jobs.size) throw fail('The Batch input is missing image requests.');
 }
 
 async function prepare(directory, pending, vision, readImage) {
@@ -76,6 +107,7 @@ async function submit(directory, state, vision) {
     if (part.batchId || part.status === 'submission_unknown' || part.collected) continue;
     if (part.inputTokens > queueBudget) throw fail('A saved shard exceeds the current queue budget. Collect active jobs, then use batch-retry to rebuild pending inputs.');
     if (queued + part.inputTokens > queueBudget) continue;
+    await verifyInput(directory, part, vision);
     if (!part.inputFileId) {
       const form = new FormData();
       form.set('purpose', 'batch');

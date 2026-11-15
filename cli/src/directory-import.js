@@ -282,7 +282,7 @@ async function finishDirectory(source, batch, client, vision, reader, options, m
       if (!['exclude', 'duplicate'].includes(row.decision) || typeof row.reason !== 'string' || !row.reason.trim()) throw fail('Every excluded or duplicate image needs an explicit reason.');
       if (row.decision === 'duplicate' && !annotations.some(target => target.sha256 === row.duplicate_of && target.decision === 'keep') && !manifest.existing.some(target => target.content_hash === row.duplicate_of)) {
         if (!SHA256.test(row.duplicate_of) || !client) throw fail('A duplicate must point to a kept image or a verified online SHA-256.');
-        const target = (await client.lookup([row.duplicate_of])).get(row.duplicate_of);
+        const target = remoteDuplicateTargets.get(row.duplicate_of) ?? (await client.lookup([row.duplicate_of])).get(row.duplicate_of);
         if (!target) throw fail('The selected duplicate target does not exist online.');
         remoteDuplicateTargets.set(row.duplicate_of, target);
       }
