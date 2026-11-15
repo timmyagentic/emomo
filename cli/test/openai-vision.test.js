@@ -1,0 +1,161 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { mkdtemp, mkdir, writeFile, readFile, rm, chmod } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { OpenAIVision, configuredVision } from '../src/openai-vision.js';
+import { ingestDirectory } from '../src/directory-import.js';
+import { publicError } from '../src/error.js';
+import { PNG } from './helpers.js';
+const key = 'sk-test-placeholder-for-local-tests-only';
+const annotation = { decision: 'keep', description: '猫咪开心', ocr_text: '', text_presence: 3,
+  tags: ['猫', '开心'], search_aliases: ['高兴'], category: 'usable', preview_only: false,
+  queries: ['猫 开心'], reason: '', needs_review: false };
+const receipt = { model: 'gpt-6.1-sol', reasoningEffort: 'xhigh', promptVersion: 1 };
+const response = value => Response.json({ id: 'response-test', status: 'completed', model: 'gpt-6.1-sol',
+  output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] }],
+  usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30 } });
+
+test('all vision operations use the official endpoint, requested model/effort and strict image JSON', async () => {
+  const requests = [];
+  const client = new OpenAIVision({ apiKey: key }, async (url, options) => {
+    assert.equal(url, 'https://api.openai.com/v1/responses');
+    assert.equal(options.redirect, 'manual');
+    const body = JSON.parse(options.body); requests.push(body);
+    assert.equal(body.model, 'gpt-6.1-sol'); assert.equal(body.reasoning.effort, 'xhigh');
+    assert.equal(body.store, false); assert.equal(body.text.format.strict, true);
+    assert.ok(!options.body.includes(key));
+    assert.ok(body.input[0].content.some(part => part.type === 'input_image' && part.image_url.startsWith('data:image/png;base64,')));
+    return response(body.text.format.name === 'meme_duplicate_review' ? { duplicate: true, reason: 'Same picture and wording', needs_review: false } : annotation);
+  });
+  const first = await client.annotate(PNG);
+  assert.equal(first.value.description, annotation.description);
+  await client.annotate(PNG, { previous: annotation, failedQueries: ['wrong query'] });
+  assert.equal((await client.compare(PNG, PNG)).value.duplicate, true);
+  assert.deepEqual(requests.map(body => body.text.format.name), ['meme_annotation', 'meme_annotation_repair', 'meme_duplicate_review']);
+  assert.ok(!JSON.stringify(client).includes(key));
+  assert.equal(first.receipt.imageHashes.length, 1);
+  assert.equal(first.receipt.totalTokens, 30);
+});
+
+test('API failures, redirects, malformed metadata and incomplete output cannot become annotations or leak keys', async () => {
+  for (const status of [302, 401, 429, 503]) {
+    const client = new OpenAIVision({ apiKey: key }, async () => new Response(JSON.stringify({ error: { message: key } }), { status }));
+    try { await client.annotate(PNG); assert.fail(); }
+    catch (error) { assert.equal(error.code, 'OPENAI_REQUEST_FAILED'); assert.ok(!JSON.stringify(publicError(error)).includes(key)); }
+  }
+  const invalid = new OpenAIVision({ apiKey: key }, async () => response({ ...annotation, tags: [] }));
+  await assert.rejects(invalid.annotate(PNG), { code: 'OPENAI_RESPONSE_INVALID' });
+  const incomplete = new OpenAIVision({ apiKey: key }, async () => Response.json({ status: 'incomplete', output: [] }));
+  await assert.rejects(incomplete.annotate(PNG), { code: 'OPENAI_RESPONSE_INVALID' });
+});
+
+test('private OpenAI config is optional and rejects readable credentials', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-config-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const env = { EMOMO_CONFIG_DIR: dir };
+  assert.equal(await configuredVision(env), null);
+  const file = join(dir, 'openai.json');
+  await writeFile(file, JSON.stringify({ apiKey: key, model: 'gpt-6.1-sol', reasoningEffort: 'xhigh' }), { mode: 0o600 });
+  assert.equal((await configuredVision(env)).model, 'gpt-6.1-sol');
+  if (process.platform !== 'win32') {
+    await chmod(file, 0o644);
+    await assert.rejects(configuredVision(env), { code: 'INVALID_OPENAI_CONFIG' });
+  }
+});
+
+test('normal directory preparation annotates, repairs failed queries once and reuses saved results', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-ingest-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source); await writeFile(join(source, 'cat.png'), PNG);
+  let calls = 0;
+  const vision = {
+    annotate: async (bytes, feedback) => {
+      calls++; assert.deepEqual(bytes, PNG);
+      return { value: { ...annotation, queries: feedback ? ['猫 开心'] : ['zzzxqmissing'] }, receipt };
+    }, compare: async () => assert.fail('Only one image')
+  };
+  const ready = await ingestDirectory(source, batch, null, vision);
+  assert.equal(ready.status, 'ready'); assert.equal(calls, 2); assert.equal(ready.modelReviewedImages, 1);
+  assert.equal((await ingestDirectory(source, batch, null, vision)).confirmation, ready.confirmation);
+  assert.equal(calls, 2);
+  const stored = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
+  assert.equal(stored[0].llm.repair.model, 'gpt-6.1-sol');
+});
+
+test('uncertain model review stays pending across retries and errors keep the pending row intact', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-review-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source); await writeFile(join(source, 'cat.png'), PNG);
+  let calls = 0;
+  const vision = { annotate: async () => { calls++; return { value: { ...annotation, needs_review: true, reason: 'Text unclear' }, receipt }; } };
+  assert.equal((await ingestDirectory(source, batch, null, vision)).status, 'needs_review');
+  assert.equal((await ingestDirectory(source, batch, null, vision)).status, 'needs_review');
+  assert.equal(calls, 1);
+  const failBatch = join(dir, 'failed');
+  await assert.rejects(ingestDirectory(source, failBatch, null, { annotate: async () => { throw new Error('unavailable'); } }));
+  assert.equal(JSON.parse(await readFile(join(failBatch, 'annotations.json'), 'utf8'))[0].decision, 'pending');
+});
+
+test('similar candidates use the shared model and preserve canonical references across resume', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-duplicates-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source);
+  const second = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP8zwACTGCSAQANHQEDgslx/wAAAABJRU5ErkJggg==', 'base64');
+  await writeFile(join(source, 'a.png'), PNG); await writeFile(join(source, 'b.png'), second);
+  let annotations = 0, comparisons = 0;
+  const vision = {
+    annotate: async () => { annotations++; return { value: annotation, receipt }; },
+    compare: async (first, other) => { comparisons++; assert.notDeepEqual(first, other); return { value: { duplicate: true, needs_review: false, reason: 'Same content fixture decision' }, receipt }; }
+  };
+  const ready = await ingestDirectory(source, batch, null, vision);
+  assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 1); assert.equal(ready.similarDuplicates, 1);
+  const rows = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
+  assert.equal(rows[1].duplicate_of, rows[0].sha256);
+  await ingestDirectory(source, batch, null, vision);
+  assert.equal(annotations, 2); assert.equal(comparisons, 1);
+});
+
+test('repairing away a canonical target reopens and rechecks its duplicate images', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-reconcile-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source);
+  const second = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP8zwACTGCSAQANHQEDgslx/wAAAABJRU5ErkJggg==', 'base64');
+  await writeFile(join(source, 'a.png'), PNG); await writeFile(join(source, 'b.png'), second);
+  let calls = 0;
+  const vision = {
+    annotate: async (bytes, feedback) => {
+      calls++;
+      if (bytes.equals(PNG)) return { value: feedback ? { ...annotation, decision: 'exclude', reason: 'Canonical image is unusable' } : { ...annotation, queries: ['zzzxqmissing'] }, receipt };
+      return { value: annotation, receipt };
+    },
+    compare: async () => ({ value: { duplicate: true, needs_review: false, reason: 'Duplicate fixture decision' }, receipt })
+  };
+  const ready = await ingestDirectory(source, batch, null, vision);
+  assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 1); assert.equal(ready.excluded, 1);
+  const rows = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
+  assert.equal(rows[0].decision, 'exclude'); assert.equal(rows[1].decision, 'keep'); assert.equal(rows[1].duplicate_of, '');
+  assert.ok(rows[1].llm.previous.reopenedFrom);
+  assert.equal(calls, 4);
+  await ingestDirectory(source, batch, null, vision);
+  assert.equal(calls, 4);
+});
+
+test('local preparation stays usable with vision and read access but no maintenance access', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-local-only-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source); await writeFile(join(source, 'cat.png'), PNG);
+  let calls = 0;
+  const vision = { annotate: async () => { calls++; return { value: annotation, receipt }; } };
+  const reader = { search: async () => assert.fail('External duplicate references require maintenance verification access') };
+  const ready = await ingestDirectory(source, batch, null, vision, reader);
+  assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 1);
+  assert.equal(ready.onlineSimilarCandidatesChecked, false);
+  assert.equal((await ingestDirectory(source, batch, null, vision, reader)).status, 'ready');
+  assert.equal(calls, 1);
+});

@@ -48,7 +48,7 @@ test('invalid or pending annotations cannot publish, remote exact duplicates avo
   await mkdir(source); await writeFile(join(source, 'cat.png'), PNG);
   const existing = new Map([[sha256, { id: 'historical-id', content_hash: sha256 }]]);
   const ready = await ingestDirectory(source, batch, { apiUrl: 'https://imports.example/admin/v1', lookup: async () => existing });
-  assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 0); assert.equal(ready.alreadyOnline, 1);
+  assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 0); assert.equal(ready.alreadyOnline, 1); assert.equal(ready.onlineSimilarCandidatesChecked, false);
   const pending = await ingestDirectory(source, join(root, 'pending'));
   await assert.rejects(publishDirectory(pending.batch, 'anything', {}));
   const annotations = JSON.parse(await readFile(pending.annotations, 'utf8'));
