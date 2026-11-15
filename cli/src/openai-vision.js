@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { EmomoError } from './error.js';
 import { staticImageInfo } from './image-info.js';
-import { OpenAIScheduler } from './openai-scheduler.js';
+import { OpenAIScheduler, ImageMemoryBudget } from './openai-scheduler.js';
 import { importMetadata } from './import-metadata.js';
 
 export const OPENAI_MODEL = 'gpt-6.1-sol';
@@ -65,7 +65,9 @@ export class OpenAIVision {
     this.transport = transport;
     this.scheduler = scheduler;
     this.concurrency = scheduler.limits.concurrency;
+    this.imageMemory = new ImageMemoryBudget(scheduler.limits.imageBytesInFlight);
   }
+  withImageBytes(bytes, action) { return this.imageMemory.run(bytes, action); }
   prepare(operation, prompt, images, schema) {
     const content = [{ type: 'input_text', text: prompt }];
     const hashes = [];

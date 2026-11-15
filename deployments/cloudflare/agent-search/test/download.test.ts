@@ -68,9 +68,14 @@ test('missing identity, limiter and R2 bindings fail closed; edge bulk guard ret
     await broken.setOptions({ ...options(), r2Buckets: {} });
     assert.equal((await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.10' } })).status, 503);
     await broken.setOptions({ ...options(), ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1005', simple: { limit: 1, period: 60 } } } });
-    await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.11' } });
-    const denied = await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.11' } });
-    assert.equal(denied.status, 429); assert.equal(denied.headers.get('retry-after'), '60');
+    // Three requests cover both sides of a fixed-minute boundary when the
+    // native edge bucket allows one request per minute.
+    let denied;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const response = await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.11' } });
+      if (response.headers.get('retry-after') === '60') { denied = response; break; }
+    }
+    assert.ok(denied); assert.equal(denied.status, 429);
   } finally { await broken.dispose(); }
   assert.equal(outbound, 0);
 });

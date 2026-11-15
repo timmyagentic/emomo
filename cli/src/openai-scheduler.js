@@ -7,6 +7,7 @@ export const OPENAI_LIMITS = Object.freeze({
   imagesPerMinute: 50_000,
   batchQueueTokens: 200_000_000,
   concurrency: 16,
+  imageBytesInFlight: 64 * 1024 * 1024,
   utilization: 0.8,
   maxRetries: 3
 });
@@ -26,10 +27,10 @@ export function retryDelay(headers, attempt, now = Date.now()) {
 export class OpenAIScheduler {
   constructor(options = {}, { now = Date.now, sleep = delay } = {}) {
     this.limits = Object.fromEntries(Object.entries(OPENAI_LIMITS).map(([key, value]) => [key, options[key] === undefined ? value : options[key]]));
-    for (const field of ['tokensPerMinute', 'requestsPerMinute', 'imagesPerMinute', 'batchQueueTokens', 'concurrency']) {
+    for (const field of ['tokensPerMinute', 'requestsPerMinute', 'imagesPerMinute', 'batchQueueTokens', 'concurrency', 'imageBytesInFlight']) {
       if (!Number.isSafeInteger(this.limits[field]) || this.limits[field] < 1) throw new EmomoError('INVALID_OPENAI_CONFIG', 'OpenAI rate limits must be positive integers.');
     }
-    if (this.limits.concurrency > 64 || !(this.limits.utilization > 0 && this.limits.utilization <= 1) || !Number.isInteger(this.limits.maxRetries) || this.limits.maxRetries < 0 || this.limits.maxRetries > 5) throw new EmomoError('INVALID_OPENAI_CONFIG', 'Use concurrency 1–64, utilization (0,1], and retries 0–5.');
+    if (this.limits.concurrency > 256 || !(this.limits.utilization > 0 && this.limits.utilization <= 1) || !Number.isInteger(this.limits.maxRetries) || this.limits.maxRetries < 0 || this.limits.maxRetries > 5) throw new EmomoError('INVALID_OPENAI_CONFIG', 'Use concurrency 1–256, utilization (0,1], and retries 0–5.');
     this.now = now;
     this.sleep = sleep;
     this.active = 0;
@@ -110,4 +111,21 @@ export async function mapConcurrent(items, concurrency, action) {
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
   if (error) throw error;
   return results;
+}
+
+// Reserve raw image bytes before the directory workflow reads them. Serialized
+// data URLs and request JSON add overhead, so the default raw budget is 64 MiB.
+export class ImageMemoryBudget {
+  constructor(maximum) { this.maximum = maximum; this.used = 0; this.waiters = []; this.admissions = Promise.resolve(); }
+  async run(bytes, action) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > this.maximum) throw new EmomoError('IMAGE_MEMORY_LIMIT', 'This image operation exceeds the configured in-flight image budget.');
+    const admit = this.admissions.then(async () => {
+      while (this.used + bytes > this.maximum) await new Promise(resolve => this.waiters.push(resolve));
+      this.used += bytes;
+    });
+    this.admissions = admit.catch(() => {});
+    await admit;
+    try { return await action(); }
+    finally { this.used -= bytes; for (const resume of this.waiters.splice(0)) resume(); }
+  }
 }

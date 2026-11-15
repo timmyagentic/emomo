@@ -75,6 +75,15 @@ function similarCandidates(row, annotations) {
     .slice(0, 3).map(candidate => candidate.row);
 }
 
+async function withModelImages(batch, hashes, vision, action) {
+  if (!vision.withImageBytes) return action();
+  let bytes = 0;
+  for (const sha256 of hashes) {
+    if (!SHA256.test(sha256)) throw fail('Invalid model image hash.');
+    bytes += (await stat(join(batch, 'assets', sha256))).size;
+  }
+  return vision.withImageBytes(bytes, action);
+}
 async function modelReview(row, stage, action, checkpoint, candidateHash) {
   try {
     const result = await action();
@@ -111,7 +120,7 @@ async function automatedReview(batch, manifest, annotations, vision, reader) {
       previous: { description: row.description, ocr_text: row.ocr_text, tags: row.tags, queries: row.queries },
       reviewReason: 'The earlier canonical target is no longer kept. Independently assess this image again.'
     } : null;
-    const generated = await modelReview(row, 'annotation', async () => vision.annotate(await asset(batch, image), feedback), checkpoint);
+    const generated = await modelReview(row, 'annotation', () => withModelImages(batch, [row.sha256], vision, async () => vision.annotate(await asset(batch, image), feedback)), checkpoint);
     applyVisionAnnotation(row, generated);
     await checkpoint();
   });
@@ -164,11 +173,10 @@ async function automatedReview(batch, manifest, annotations, vision, reader) {
       row.llm.candidateOrder = candidates;
       await checkpoint();
     }
-    const bytes = await asset(batch, manifest.unique.find(item => item.sha256 === row.sha256));
     for (const sha256 of row.llm.candidateOrder) {
       let comparison = row.llm.comparisons.find(item => item.sha256 === sha256);
       if (!comparison) {
-        comparison = { sha256, ...await modelReview(row, 'comparison', async () => vision.compare(bytes, await asset(batch, { sha256 })), checkpoint, sha256) };
+        comparison = { sha256, ...await modelReview(row, 'comparison', () => withModelImages(batch, [row.sha256, sha256], vision, async () => vision.compare(await asset(batch, { sha256: row.sha256 }), await asset(batch, { sha256 }))), checkpoint, sha256) };
         row.llm.comparisons.push(comparison);
         await checkpoint();
       }
@@ -203,7 +211,7 @@ async function automatedReview(batch, manifest, annotations, vision, reader) {
         if (target && target !== sha256) {
           proof = row.llm.comparisons.find(item => item.sha256 === target);
           if (!proof) {
-            proof = { sha256: target, ...await modelReview(row, 'canonical_comparison', async () => vision.compare(await asset(batch, { sha256: row.sha256 }), await asset(batch, { sha256: target })), checkpoint, target) };
+            proof = { sha256: target, ...await modelReview(row, 'canonical_comparison', () => withModelImages(batch, [row.sha256, target], vision, async () => vision.compare(await asset(batch, { sha256: row.sha256 }), await asset(batch, { sha256: target }))), checkpoint, target) };
             row.llm.comparisons.push(proof);
             await checkpoint();
           }
@@ -316,10 +324,10 @@ async function finishDirectory(source, batch, client, vision, reader, options, m
         const checkpoint = checkpointWriter(join(batch, 'annotations.json'), annotations);
         await mapConcurrent(repairable, vision.concurrency ?? 1, async row => {
           const image = expected.find(item => item.sha256 === row.sha256);
-          const repaired = await modelReview(row, 'repair', async () => vision.annotate(await asset(batch, image), {
+          const repaired = await modelReview(row, 'repair', () => withModelImages(batch, [row.sha256], vision, async () => vision.annotate(await asset(batch, image), {
             previous: { description: row.description, ocr_text: row.ocr_text, tags: row.tags, queries: row.queries },
             failedQueries: checks.filter(check => !check.passed && check.sha256 === row.sha256).map(check => check.query)
-          }), checkpoint);
+          })), checkpoint);
           const provenance = row.llm;
           Object.assign(row, repaired.value, { decision: repaired.value.needs_review ? 'pending' : repaired.value.decision,
             llm: { ...provenance, repair: repaired.receipt, needsReview: repaired.value.needs_review } });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { setImmediate } from 'node:timers/promises';
-import { OpenAIScheduler, mapConcurrent, durationMs, retryDelay } from '../src/openai-scheduler.js';
+import { OpenAIScheduler, ImageMemoryBudget, mapConcurrent, durationMs, retryDelay } from '../src/openai-scheduler.js';
 import { OpenAIVision } from '../src/openai-vision.js';
 import { PNG } from './helpers.js';
 
@@ -75,4 +75,19 @@ test('synchronous output reservations expand once only when the response is actu
   const result = await client.compare(PNG, PNG);
   assert.deepEqual(caps, [4096, 16384]);
   assert.equal(result.receipt.retryUsage[0].totalTokens, 4096);
+});
+
+
+test('image memory is reserved before work starts and released after failure', async () => {
+  const memory = new ImageMemoryBudget(10);
+  let release;
+  const first = memory.run(8, async () => { await new Promise(resolve => { release = resolve; }); throw new Error('failure'); });
+  const rejected = assert.rejects(first);
+  let secondStarted = false;
+  const second = memory.run(4, async () => { secondStarted = true; assert.equal(memory.used, 4); });
+  await setImmediate(); assert.equal(secondStarted, false);
+  release(); await rejected; await second;
+  assert.equal(memory.used, 0);
+  await assert.rejects(memory.run(11, async () => {}), { code: 'IMAGE_MEMORY_LIMIT' });
+  assert.equal(new OpenAIScheduler({ concurrency: 256 }).parallelism, 256);
 });
