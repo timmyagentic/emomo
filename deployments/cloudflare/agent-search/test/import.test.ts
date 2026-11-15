@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { Miniflare, FormData, Response as MFResponse } from 'miniflare';
@@ -14,7 +16,7 @@ const token = `emomo_import_${'a'.repeat(64)}`;
 const metadata = { sha256: hash(PNG), image_info: { width: 1, height: 1, format: 2 }, category: 'usable', description: '猫咪开心', ocr_text: '', text_presence: 3, tags: ['猫', '开心'], search_aliases: ['高兴'] };
 
 test('maintenance API requires full metadata and isolated credentials, persists R2 then searchable D1 and is retry-safe', async t => {
-  const bundle = await build({ entryPoints: ['src/import.ts'], write: false, bundle: true, format: 'esm', platform: 'browser', target: 'es2022', external: ['node:buffer'] });
+  const bundle = await build({ entryPoints: ['src/import.ts'], write: false, bundle: true, format: 'esm', platform: 'browser', target: 'es2022', external: ['node:buffer', 'cloudflare:workers'] });
   let outbound = 0;
   const mf = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-07-30', compatibilityFlags: ['nodejs_compat'],
     bindings: { IMPORT_KEY_SHA256: hash(token), IMAGE_BASE_URL: 'https://images.example' }, d1Databases: { DB: 'imports' }, r2Buckets: { IMAGES: 'images' },
@@ -64,10 +66,25 @@ test('maintenance API requires full metadata and isolated credentials, persists 
   assert.deepEqual(await db.prepare("SELECT * FROM memes WHERE id='old'").first(), old);
   const client = new ImportClient('https://imports.test/admin/v1', token, async (url: string, options: RequestInit) => {
     const request = new Request(url, options);
-    const response = await mf.dispatchFetch(url, { method: request.method, headers: Object.fromEntries(request.headers), body: new Uint8Array(await request.arrayBuffer()) });
+    const response = await mf.dispatchFetch(url, { method: request.method, headers: Object.fromEntries(request.headers), body: request.method === 'POST' ? new Uint8Array(await request.arrayBuffer()) : undefined });
     return new Response(await response.arrayBuffer(), { status: response.status, headers: Object.fromEntries(response.headers) });
   });
   assert.equal((await client.lookup([metadata.sha256])).get(metadata.sha256).id, id);
   assert.equal((await client.upload(metadata, PNG)).duplicate, true);
+  const candidates = await client.search('猫 开心', { limit: 3 });
+  assert.equal(candidates.results[0].id, id);
+  const directory = await mkdtemp(join(tmpdir(), 'emomo-maintenance-image-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const downloaded = await client.download(id, directory);
+  assert.deepEqual(await readFile(downloaded.path), PNG);
+  const search = await mf.dispatchFetch('https://imports.test/admin/v1/search', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ query: '猫 开心', top_k: 3 }) });
+  assert.equal(search.status, 200); assert.equal(search.headers.get('cache-control'), 'no-store');
+  assert.equal((await search.json() as {results:{meme:{id:string}}[]}).results[0].meme.id, id);
+  const original = await mf.dispatchFetch(`https://imports.test/admin/v1/images/${metadata.sha256}`, { headers: { authorization: `Bearer ${token}` } });
+  assert.equal(original.status, 200); assert.deepEqual(Buffer.from(await original.arrayBuffer()), PNG);
+  const denied = await mf.dispatchFetch(`https://imports.test/admin/v1/images/${metadata.sha256}`, { headers: { authorization: `Bearer emomo_reader_${'b'.repeat(64)}` } });
+  assert.equal(denied.status, 401);
+  const invalidSearch = await mf.dispatchFetch('https://imports.test/admin/v1/search', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ query: '猫', top_k: 1000 }) });
+  assert.equal(invalidSearch.status, 400);
   assert.equal(outbound, 0);
 });

@@ -1,7 +1,8 @@
 import { create, fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { ImportMetadataSchema, ImportResponseSchema, ImportLookupRequestSchema, ImportLookupResponseSchema, ImportErrorResponseSchema } from '../gen/emomo/v1/import_pb.js';
 import { MemeSchema } from '../gen/emomo/v1/meme_pb.js';
-import { indexRow, rowValues } from './metadata.js';
+import { keywordSearch, HttpError } from './index.js';
+import { indexRow, rowValues, validateStorageKey } from './metadata.js';
 import { importMetadata, SHA256, MAX_IMPORT_IMAGE_BYTES } from '../../../../cli/src/import-metadata.js';
 import { staticImageInfo } from '../../../../cli/src/image-info.js';
 
@@ -102,16 +103,40 @@ async function ingest(request: Request, env: ImportEnv) {
   if (!stored) throw new ImportError(409, 'ID_CONFLICT', 'The generated ID is already used by another asset.');
   return result(stored, env, !inserted);
 }
+async function originalImage(hash: string, env: ImportEnv) {
+  const row = await existing(env, hash);
+  if (!row) throw new ImportError(404, 'NOT_FOUND', 'Image not found.');
+  const stored = fromJson(MemeSchema, JSON.parse(row.meme_json));
+  const object = await env.IMAGES.get(validateStorageKey(stored.storageKey));
+  if (!object) throw new ImportError(404, 'NOT_FOUND', 'Image object not found.');
+  if (object.size > MAX_IMPORT_IMAGE_BYTES) {
+    await object.body.cancel();
+    throw new ImportError(413, 'IMAGE_TOO_LARGE', 'Image exceeds the import size limit.');
+  }
+  const mime = ['', 'image/jpeg', 'image/png', 'image/webp'][stored.imageInfo?.format ?? 0];
+  if (!mime) { await object.body.cancel(); throw new ImportError(415, 'INVALID_IMAGE', 'Unsupported image format.'); }
+  return new Response(object.body, { headers: {
+    'content-type': mime, 'content-length': String(object.size), 'cache-control': 'no-store', 'x-content-type-options': 'nosniff'
+  } });
+}
 export default {
   async fetch(request: Request, env: ImportEnv): Promise<Response> {
     try {
       const url = new URL(request.url);
-      if (url.search || !['/admin/v1/imports', '/admin/v1/lookup'].includes(url.pathname)) throw new ImportError(404, 'NOT_FOUND', 'Route not found.');
+      const imageHash = /^\/admin\/v1\/images\/([a-f0-9]{64})$/.exec(url.pathname)?.[1];
+      if (url.search || !imageHash && !['/admin/v1/imports', '/admin/v1/lookup', '/admin/v1/search'].includes(url.pathname)) throw new ImportError(404, 'NOT_FOUND', 'Route not found.');
       if (request.headers.has('origin')) throw new ImportError(403, 'FORBIDDEN', 'Use the maintenance script.');
-      if (request.method !== 'POST') throw new ImportError(405, 'METHOD_NOT_ALLOWED', 'Use POST.');
+      if (request.method !== (imageHash ? 'GET' : 'POST')) throw new ImportError(405, 'METHOD_NOT_ALLOWED', 'Invalid HTTP method.');
       await authenticate(request, env);
+      if (imageHash) return await originalImage(imageHash, env);
+      if (url.pathname.endsWith('/search')) {
+        const response = await keywordSearch(request, env);
+        response.headers.set('cache-control', 'no-store');
+        return response;
+      }
       return url.pathname.endsWith('/lookup') ? await lookup(request, env) : await ingest(request, env);
     } catch (error) {
+      if (error instanceof HttpError) return json(toJson(ImportErrorResponseSchema, create(ImportErrorResponseSchema, { code: 'INVALID_QUERY', message: error.message }), OPTIONS), error.status);
       if (error instanceof ImportError) return json(toJson(ImportErrorResponseSchema, create(ImportErrorResponseSchema, { code: error.code, message: error.message }), OPTIONS), error.status);
       console.error(JSON.stringify({ event: 'import_unavailable' }));
       return json(toJson(ImportErrorResponseSchema, create(ImportErrorResponseSchema, { code: 'IMPORT_UNAVAILABLE', message: 'Import could not finish. Retry the same prepared image.' }), OPTIONS), 503);

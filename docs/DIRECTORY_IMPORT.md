@@ -23,9 +23,43 @@ node cli/bin/emomo-library.js connect --key-file /private/import-key
 | 本地查询未命中后的标注/查询修订 | 同一模型结合原图复核，自动修订一次 |
 | 格式/尺寸/hash 校验、完全重复查找、索引查询、上传 | 确定性脚本 |
 
-相似候选由标签、可靠 OCR 和公开关键词查询筛选，每张图最多比较三个本地候选及三个线上候选；覆盖情况写入回执。它不能证明全图库不存在其他视觉近似图。不同字幕、动作和表情应分别保留。线上候选使用普通 Emomo 读密钥查询与下载，并通过维护接口核对引用目标。缺少维护访问时仍可完成本地标注和本批相似图复核，回执会说明线上候选尚未检查。
+相似候选由标签、可靠 OCR 和公开关键词查询筛选，每张图最多比较三个本地候选及三个线上候选；覆盖情况写入回执。它不能证明全图库不存在其他视觉近似图。不同字幕、动作和表情应分别保留。线上候选通过维护密钥查询和读取原图，并核对引用目标。缺少维护访问时仍可完成本地标注和本批相似图复核，回执会说明线上候选尚未检查。主图归并后必要时会再次比较最终主图，避免仅凭传递关系合并图片。
 
 每张完成的标注和比较都会立即保存，中断重跑复用已经保存的结果。不确定判断返回 `needs_review`，继续保留待复核图片；模型错误保留未完成状态。模型输出不会自动批准发布。缺少 OpenAI 配置时，仍可由当前 Agent 按下面的清单逐图标注。
+
+## 实时并发与 Batch
+
+默认 `--mode realtime`。本地 `openai.json` 的 `limits` 可配置以下额度，当前按用户提供的 gpt-6.1-sol 额度设置。
+
+```json
+{
+  "tokensPerMinute": 4000000,
+  "requestsPerMinute": 10000,
+  "imagesPerMinute": 50000,
+  "batchQueueTokens": 200000000,
+  "concurrency": 16,
+  "imageBytesInFlight": 67108864,
+  "utilization": 0.8,
+  "maxRetries": 3
+}
+```
+
+独立标注、候选比较和查询修订并发计算，主图关系按输入顺序确定。并发可配置为 1–256，实际发送仍受各项额度约束；读取模型图片前先预留内存，默认最多保留 64 MiB 在途原图，序列化会产生额外开销。模型请求共享调度器，按输入估算及输出预留控制 token、请求和图片发送节奏，并采用服务端返回的更低项目额度。临时 429/503 会尊重 Retry-After、降低并发并有限重试；额度耗尽会明确停止。实时标注预留 8192 输出 token、双图比较预留 4096，真实截断时扩至 16384 重试一次。估算用于调度，计费以 API usage 为准。
+
+大批量且可异步等待时显式使用 Batch。
+
+```sh
+node cli/bin/emomo-library.js ingest /absolute/images --mode batch
+node cli/bin/emomo-library.js batch-status /absolute/images-emomo-import
+node cli/bin/emomo-library.js batch-resume /absolute/images-emomo-import
+node cli/bin/emomo-library.js batch-retry /absolute/images-emomo-import
+```
+
+Batch 使用相同的 gpt-6.1-sol/xhigh 配置处理独立首轮标注。官方完成窗口为 24 小时，价格通常为同步调用的 50%，队列额度按未完成任务的输入 token 计算。首轮结果收回后，依赖这些结果的比较和修订走实时调度。[官方说明](https://developers.openai.com/api/docs/guides/batch)
+
+输入按每文件 190 MB、最多 50,000 条以及估算的队列预算分片，保留 base64 原图。当前命令会在预算内提交并返回任务 ID。状态命令只读取一次进度，`batch_ready` 表示有结果可收回，`batch-resume` 按 custom_id/图片哈希恢复资料后继续处理。脚本会识别已有任务，普通 ingest 重跑也会先恢复它。
+
+局部失败保留成功结果，`batch-retry` 只重新准备未完成项。提交响应丢失时先按已保存的唯一标记查回任务，无法确认时返回 `batch_submission_unknown`，再次 resume 继续核对。排队期间编辑的标注会被保留并报告冲突。同一目录的并发命令通过进程锁协调，进程退出会释放锁。队列预算为本地估算，账号中其他任务占用及服务端限制由实际 API 响应决定。
 
 ## 给 Agent 一个目录
 
@@ -58,8 +92,10 @@ node cli/bin/emomo-library.js publish /absolute/images-emomo-import --confirm <c
 独立 Worker `emomo-library-imports` 使用现有 D1 和 R2，搜索服务仍执行确定性关键词查询。HTTP 消息由 `backend/proto/emomo/v1/import.proto` 定义。
 
 - `POST /admin/v1/lookup` 接受 JSON `{"sha256":["..."]}`，每次最多 100 个 hash，返回已存在的 canonical Meme。
+- `POST /admin/v1/search` 复用公开服务的 SearchRequest/SearchResponse 与关键词实现，供维护者批量查候选。
+- `GET /admin/v1/images/<sha256>` 读取已入库原图，供候选复核和全量哈希验收。
 - `POST /admin/v1/imports` 接受 multipart/form-data。`metadata` 为 ImportMetadata 的 JSON 文本，`image` 为完整图片文件。每次提交一张，图片最大 25 MiB，资料与图片哈希、格式、尺寸必须一致。
-- 两个接口都使用维护 Bearer 密钥，拒绝浏览器 Origin、重定向入口、错误方法和不完整资料。
+- 这些接口都使用维护 Bearer 密钥，拒绝浏览器 Origin、重定向入口、错误方法和不完整资料。
 
 metadata 示例中的 hash 和尺寸需根据真实文件计算。
 

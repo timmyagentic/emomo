@@ -40,7 +40,7 @@ test('all vision operations use the official endpoint, requested model/effort an
 
 test('API failures, redirects, malformed metadata and incomplete output cannot become annotations or leak keys', async () => {
   for (const status of [302, 401, 429, 503]) {
-    const client = new OpenAIVision({ apiKey: key }, async () => new Response(JSON.stringify({ error: { message: key } }), { status }));
+    const client = new OpenAIVision({ apiKey: key, limits: { maxRetries: 0 } }, async () => new Response(JSON.stringify({ error: { message: key } }), { status }));
     try { await client.annotate(PNG); assert.fail(); }
     catch (error) { assert.equal(error.code, 'OPENAI_REQUEST_FAILED'); assert.ok(!JSON.stringify(publicError(error)).includes(key)); }
   }
@@ -158,4 +158,52 @@ test('local preparation stays usable with vision and read access but no maintena
   assert.equal(ready.onlineSimilarCandidatesChecked, false);
   assert.equal((await ingestDirectory(source, batch, null, vision, reader)).status, 'ready');
   assert.equal(calls, 1);
+});
+
+test('first-round annotations run concurrently and checkpoint every result before comparison', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-parallel-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source);
+  const second = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP8zwACTGCSAQANHQEDgslx/wAAAABJRU5ErkJggg==', 'base64');
+  await writeFile(join(source, 'a.png'), PNG); await writeFile(join(source, 'b.png'), second);
+  let active = 0, max = 0, announce;
+  const started = new Promise(resolve => { announce = resolve; });
+  const releases = [];
+  const vision = { concurrency: 2,
+    annotate: async bytes => {
+      active++; max = Math.max(max, active);
+      if (active === 2) announce();
+      await new Promise(resolve => releases.push(resolve));
+      active--;
+      const word = bytes.equals(PNG) ? '猫' : '狗';
+      return { value: { ...annotation, description: word, tags: [word], queries: [word] }, receipt };
+    }, compare: async () => assert.fail('These fixtures have different subjects') };
+  const preparation = ingestDirectory(source, batch, null, vision);
+  await started;
+  releases.reverse().forEach(resolve => resolve());
+  const ready = await preparation;
+  assert.equal(max, 2); assert.equal(ready.newImages, 2);
+  const rows = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
+  assert.equal(rows.length, 2); assert.ok(rows.every(row => row.decision === 'keep'));
+});
+
+test('parallel duplicate decisions verify the final canonical image instead of assuming transitivity', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-canonical-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source);
+  const second = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP8zwACTGCSAQANHQEDgslx/wAAAABJRU5ErkJggg==', 'base64');
+  const third = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGNkYPjPwMDAxAAGAAsfAQMU4wsAAAAAAElFTkSuQmCC', 'base64');
+  await writeFile(join(source, 'a.png'), PNG); await writeFile(join(source, 'b.png'), second); await writeFile(join(source, 'c.png'), third);
+  const vision = { concurrency: 3,
+    annotate: async bytes => ({ value: { ...annotation,
+      tags: bytes.equals(PNG) ? ['猫','开心'] : bytes.equals(second) ? ['猫','开心','坐着','微笑'] : ['坐着','微笑'] }, receipt }),
+    compare: async (first, other) => ({ value: { duplicate: !(first.equals(third) && other.equals(PNG)), needs_review: false, reason: 'Direct visual fixture decision' }, receipt })
+  };
+  const result = await ingestDirectory(source, batch, null, vision);
+  assert.equal(result.status, 'needs_review');
+  const rows = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
+  assert.equal(rows[1].duplicate_of, rows[0].sha256);
+  assert.equal(rows[2].decision, 'pending'); assert.equal(rows[2].duplicate_of, '');
 });
