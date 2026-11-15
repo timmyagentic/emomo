@@ -145,14 +145,14 @@ export async function libraryMain(args) {
   const command = args[0] ?? 'help';
   try {
     let data;
-    if (['ingest', 'publish', 'connect'].includes(command)) {
+    if (['ingest', 'publish', 'connect', 'batch-status', 'batch-resume', 'batch-retry'].includes(command)) {
       const { directoryCommand } = await import('./directory-import.js');
       data = await directoryCommand(args);
-      const ok = !['validation_failed', 'needs_review', 'partial', 'verification_failed'].includes(data.status);
+      const ok = !['validation_failed', 'needs_review', 'partial', 'verification_failed', 'batch_failed', 'batch_submission_unknown'].includes(data.status);
       process.stdout.write(JSON.stringify({ schemaVersion: 1, ok, command, data }) + '\n');
       return ok ? 0 : 1;
     }
-    if (['help', '--help', '-h'].includes(command) && args.length <= 1) data = { commands: ['ingest IMAGE_DIRECTORY [--dir BATCH]', 'publish BATCH --confirm REVISION', 'connect --key-file PRIVATE_FILE [--api-url URL]', 'import METADATA --dir NEW_PATH [--vocabulary JSON]','prepare --catalog PATH --dir NEW_PATH --collection NAME --revision NAME','validate PATH','diff BASE_PATH TARGET_PATH'], publicationRequiresConfirmation: true };
+    if (['help', '--help', '-h'].includes(command) && args.length <= 1) data = { commands: ['ingest IMAGE_DIRECTORY [--dir BATCH] [--mode realtime|batch]', 'batch-status BATCH', 'batch-resume BATCH', 'batch-retry BATCH', 'publish BATCH --confirm REVISION', 'connect --key-file PRIVATE_FILE [--api-url URL]', 'import METADATA --dir NEW_PATH [--vocabulary JSON]','prepare --catalog PATH --dir NEW_PATH --collection NAME --revision NAME','validate PATH','diff BASE_PATH TARGET_PATH'], publicationRequiresConfirmation: true };
     else if (command === 'import' && args[1] && !args[1].startsWith('--')) {
       const opts = {};
       for (let i = 2; i < args.length; i += 2) {

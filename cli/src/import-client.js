@@ -1,10 +1,11 @@
 import { readFile, lstat, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { canonicalApi } from './auth.js';
 import { EmomoError } from './error.js';
-import { SHA256 } from './import-metadata.js';
+import { normalizeMeme, identifyImage, saveImage } from './client.js';
+import { SHA256, MAX_IMPORT_IMAGE_BYTES } from './import-metadata.js';
 
 export const IMPORT_API = 'https://imports.timmyagentic.si/admin/v1';
 const keyPattern = /^emomo_import_[a-f0-9]{64}$/;
@@ -40,14 +41,21 @@ export class ImportClient {
     if (!keyPattern.test(token)) throw invalid();
     this.token = token;
     this.transport = transport;
+    this.minimumIntervalMs = 0;
+    this.candidates = new Map();
   }
-  async request(path, body) {
+  async fetchResponse(path, { method = 'POST', body } = {}) {
     const headers = { authorization: `Bearer ${this.token}` };
-    if (!(body instanceof FormData)) { headers['content-type'] = 'application/json'; body = JSON.stringify(body); }
+    if (body !== undefined && !(body instanceof FormData)) { headers['content-type'] = 'application/json'; body = JSON.stringify(body); }
     let response;
-    try { response = await this.transport(`${this.apiUrl}/${path}`, { method: 'POST', headers, body, redirect: 'manual', signal: AbortSignal.timeout(90000) }); }
+    try { response = await this.transport(`${this.apiUrl}/${path}`, { method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(90000) }); }
     catch { throw new EmomoError('IMPORT_NETWORK_ERROR', 'Import response unavailable. Repeat publish with the same confirmation to resume.', { retryable: true }); }
     if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new EmomoError('IMPORT_REDIRECT', 'Maintenance redirects are rejected. Configure the final endpoint.'); }
+    if (!response.ok) { await response.body?.cancel(); throw new EmomoError('IMPORT_REJECTED', `Maintenance request failed (HTTP ${response.status}).`, { httpStatus: response.status, retryable: response.status >= 500 }); }
+    return response;
+  }
+  async request(path, body) {
+    const response = await this.fetchResponse(path, { body });
     const chunks = [];
     let size = 0;
     for await (const chunk of response.body ?? []) {
@@ -58,7 +66,6 @@ export class ImportClient {
     let result;
     try { result = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
     catch { throw new EmomoError('IMPORT_RESPONSE_INVALID', 'Maintenance response is invalid.'); }
-    if (!response.ok) throw new EmomoError('IMPORT_REJECTED', `Maintenance request failed (HTTP ${response.status}).`, { httpStatus: response.status, retryable: response.status >= 500 });
     return result;
   }
   async lookup(hashes) {
@@ -73,6 +80,33 @@ export class ImportClient {
       }
     }
     return existing;
+  }
+  async search(query, { limit = 3, category = '' } = {}) {
+    const response = await this.request('search', { query, top_k: limit, category });
+    if (!Array.isArray(response.results)) throw new EmomoError('IMPORT_RESPONSE_INVALID', 'Missing maintenance search results.');
+    const results = response.results.map(row => normalizeMeme(row.meme, row));
+    for (const row of results) if (row.sha256) this.candidates.set(row.id, row);
+    return { query, total: results.length, results };
+  }
+  async download(id, directory) {
+    const candidate = this.candidates.get(id);
+    if (!candidate || !SHA256.test(candidate.sha256)) throw new EmomoError('IMPORT_RESPONSE_INVALID', 'Search the maintenance catalog before downloading a candidate.');
+    return this.downloadHash(candidate.sha256, id, directory);
+  }
+  async downloadHash(sha256, id, directory) {
+    if (!SHA256.test(sha256)) throw new EmomoError('INVALID_ARGUMENT', 'A SHA-256 is required.');
+    const response = await this.fetchResponse(`images/${sha256}`, { method: 'GET' });
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of response.body ?? []) {
+      size += chunk.length;
+      if (size > MAX_IMPORT_IMAGE_BYTES) throw new EmomoError('IMAGE_INTEGRITY_ERROR', 'Maintenance image exceeds the size limit.');
+      chunks.push(Buffer.from(chunk));
+    }
+    const bytes = Buffer.concat(chunks);
+    const format = identifyImage(bytes);
+    if (createHash('sha256').update(bytes).digest('hex') !== sha256 || response.headers.get('content-type')?.split(';')[0] !== format.mimeType) throw new EmomoError('IMAGE_INTEGRITY_ERROR', 'Maintenance image does not match its canonical hash and MIME type.');
+    return saveImage(bytes, format, id, directory, `${this.apiUrl}/images/${sha256}`);
   }
   async upload(metadata, bytes) {
     const body = new FormData();

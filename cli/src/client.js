@@ -67,7 +67,7 @@ function nonnegative(value, fallback = 0) {
   return value;
 }
 
-function normalizeMeme(meme, result = {}) {
+export function normalizeMeme(meme, result = {}) {
   if (!object(meme) || typeof meme.id !== 'string' || !meme.id || typeof meme.url !== 'string' || !meme.url) throw invalidResponse();
   const info = field(meme, 'image_info', 'imageInfo') ?? {};
   if (!object(info)) throw invalidResponse();

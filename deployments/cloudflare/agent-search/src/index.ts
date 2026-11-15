@@ -13,7 +13,7 @@ const JSON_OPTIONS = { useProtoFieldName: true, enumAsInteger: true, alwaysEmitI
 const MAX_BODY = 8192;
 const CACHE_SECONDS = 60;
 type SearchRow = { meme_json: string; description: string; text_presence: TextPresence; rank: number };
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
@@ -60,7 +60,7 @@ function publicMeme(raw: string, base: string) {
   return meme;
 }
 
-async function search(request: Request, env: Env): Promise<Response> {
+export async function keywordSearch(request: Request, env: Pick<Env, 'DB' | 'IMAGE_BASE_URL'>): Promise<Response> {
   let parsed;
   let hasTopK = false;
   try {
@@ -101,7 +101,7 @@ async function search(request: Request, env: Env): Promise<Response> {
 }
 
 async function serve(request: Request, path: string, env: Env): Promise<Response> {
-  if (path === '/agent/v1/search') return search(request, env);
+  if (path === '/agent/v1/search') return keywordSearch(request, env);
   if (path === '/agent/v1/categories') {
     const rows = await env.DB.prepare("SELECT DISTINCT category FROM memes WHERE category<>'' ORDER BY category LIMIT 100").all<{ category: string }>();
     const categories = rows.results.map(row => row.category);
