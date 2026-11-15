@@ -148,7 +148,7 @@ export async function libraryMain(args) {
     if (['ingest', 'publish', 'connect'].includes(command)) {
       const { directoryCommand } = await import('./directory-import.js');
       data = await directoryCommand(args);
-      const ok = !['validation_failed', 'partial', 'verification_failed'].includes(data.status);
+      const ok = !['validation_failed', 'needs_review', 'partial', 'verification_failed'].includes(data.status);
       process.stdout.write(JSON.stringify({ schemaVersion: 1, ok, command, data }) + '\n');
       return ok ? 0 : 1;
     }

@@ -10,6 +10,7 @@ import { configuredImportClient, connectImport, IMPORT_API } from './import-clie
 import { readAccess } from './auth.js';
 import { EmomoClient, DEFAULT_API_URL } from './client.js';
 import { setTimeout as delay } from 'node:timers/promises';
+import { configuredVision } from './openai-vision.js';
 import { EmomoError, publicError } from './error.js';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -61,7 +62,76 @@ function annotationTemplate(row) {
     tags: [], search_aliases: [], category: 'usable', preview_only: false, queries: [], reason: '', duplicate_of: '' };
 }
 
-export async function ingestDirectory(source, output, client = null) {
+function similarCandidates(row, annotations) {
+  const words = new Set(row.tags);
+  return annotations.filter(other => other !== row && other.decision === 'keep')
+    .map(other => ({ row: other, score: other.tags.filter(tag => words.has(tag)).length +
+      (row.ocr_text && row.ocr_text === other.ocr_text ? 10 : 0) }))
+    .filter(candidate => candidate.score >= 2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3).map(candidate => candidate.row);
+}
+
+async function automatedReview(batch, manifest, annotations, vision, reader) {
+  const annotationPath = join(batch, 'annotations.json');
+  for (const row of annotations) {
+    const image = manifest.unique.find(item => item.sha256 === row.sha256);
+    if (row.decision === 'pending' && !row.llm?.needsReview) {
+      const generated = await vision.annotate(await asset(batch, image));
+      Object.assign(row, generated.value, { duplicate_of: '',
+        decision: generated.value.needs_review ? 'pending' : generated.value.decision,
+        llm: { annotation: generated.receipt, needsReview: generated.value.needs_review, comparisons: [] } });
+      await saveJSON(annotationPath, annotations);
+    }
+    // Hand-reviewed annotations stay under the existing manual workflow.
+    if (row.decision !== 'keep' || !row.llm || row.llm.duplicatesChecked) continue;
+    const bytes = await asset(batch, image);
+    const earlier = annotations.slice(0, annotations.indexOf(row));
+    const candidates = similarCandidates(row, earlier).map(candidate => ({
+      sha256: candidate.sha256,
+      image_info: manifest.unique.find(item => item.sha256 === candidate.sha256).image_info
+    }));
+    if (reader) {
+      await delay(1100);
+      const found = await reader.search(row.queries[0], { limit: 3, category: row.category });
+      for (const candidate of found.results) {
+        if (!candidate.sha256 || candidate.sha256 === row.sha256 || candidates.some(item => item.sha256 === candidate.sha256)) continue;
+        const image_info = { width: candidate.image.width, height: candidate.image.height, format: { jpeg: 1, png: 2, webp: 3 }[candidate.image.format] };
+        try { await asset(batch, { sha256: candidate.sha256, image_info }); }
+        catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+          await delay(1100);
+          const download = await reader.download(candidate.id, join(batch, 'references', randomUUID()));
+          const downloaded = await readFile(download.path);
+          if (hash(downloaded) !== candidate.sha256) throw fail('An online comparison image changed.');
+          await writeFile(join(batch, 'assets', candidate.sha256), downloaded, { flag: 'wx', mode: 0o600 });
+        }
+        candidates.push({ sha256: candidate.sha256, image_info });
+      }
+      row.llm.onlineCandidatesChecked = true;
+    } else { row.llm.onlineCandidatesChecked = false; }
+    for (const candidate of candidates) {
+      if (row.llm.comparisons.some(comparison => comparison.sha256 === candidate.sha256)) continue;
+      const comparison = await vision.compare(bytes, await asset(batch, candidate));
+      row.llm.comparisons.push({ sha256: candidate.sha256, ...comparison });
+      if (comparison.value.needs_review) {
+        row.decision = 'pending';
+        row.llm.needsReview = true;
+        row.reason = comparison.value.reason;
+      } else if (comparison.value.duplicate) {
+        row.decision = 'duplicate';
+        row.duplicate_of = candidate.sha256;
+        row.reason = comparison.value.reason;
+      }
+      await saveJSON(annotationPath, annotations);
+      if (row.decision !== 'keep') break;
+    }
+    row.llm.duplicatesChecked = true;
+    await saveJSON(annotationPath, annotations);
+  }
+}
+
+export async function ingestDirectory(source, output, client = null, vision = null, reader = null) {
   const root = await realpath(resolve(source)), batch = resolve(output ?? `${root}-emomo-import`);
   const outputRelative = relative(root, batch);
   if (!outputRelative || (outputRelative !== '..' && !outputRelative.startsWith(`..${sep}`) && !isAbsolute(outputRelative))) throw fail('Place the batch directory outside the source directory.');
@@ -92,8 +162,9 @@ export async function ingestDirectory(source, output, client = null) {
   const expected = manifest.unique.filter(row => !manifest.existing.some(item => item.content_hash === row.sha256));
   const annotations = await readJSON(join(batch, 'annotations.json'));
   if (!Array.isArray(annotations) || annotations.length !== expected.length || new Set(annotations.map(row => row.sha256)).size !== expected.length || annotations.some(row => !expected.some(image => image.sha256 === row.sha256))) throw fail('Annotate every unique new image exactly once.');
+  if (vision) await automatedReview(batch, manifest, annotations, vision, reader);
   const pending = annotations.filter(row => row.decision === 'pending');
-  if (pending.length) return { status: 'needs_annotation', batch, totalFiles: current.images.length, uniqueImages: manifest.unique.length,
+  if (pending.length) return { status: pending.some(row => row.llm?.needsReview) ? 'needs_review' : 'needs_annotation', batch, totalFiles: current.images.length, uniqueImages: manifest.unique.length,
     exactDuplicates: current.images.length - manifest.unique.length, alreadyOnline: manifest.existing.length, rejected: current.rejected,
     annotations: join(batch, 'annotations.json'), pending: pending.map(row => ({ sha256: row.sha256, image: join(batch, 'assets', row.sha256) })),
     instruction: 'View every pending image. Fill description, exact visible OCR, text_presence (1 unknown, 2 with text, 3 without), factual tags and 1–3 search queries. Decide keep/exclude/duplicate; record a reason and duplicate_of for non-kept images. Re-run the same ingest command to validate.' };
@@ -139,7 +210,25 @@ export async function ingestDirectory(source, output, client = null) {
         }
       }
     } finally { catalog.close(); }
-    if (checks.some(check => !check.passed)) return { status: 'validation_failed', batch, checks, instruction: 'Review the missing terms or inappropriate queries, then re-run ingest.' };
+    if (checks.some(check => !check.passed)) {
+      const failedHashes = new Set(checks.filter(check => !check.passed).map(check => check.sha256));
+      const repairable = annotations.filter(row => failedHashes.has(row.sha256) && row.llm && !row.llm.repair);
+      if (vision && repairable.length) {
+        for (const row of repairable) {
+          const image = expected.find(item => item.sha256 === row.sha256);
+          const repaired = await vision.annotate(await asset(batch, image), {
+            previous: { description: row.description, ocr_text: row.ocr_text, tags: row.tags, queries: row.queries },
+            failedQueries: checks.filter(check => !check.passed && check.sha256 === row.sha256).map(check => check.query)
+          });
+          const provenance = row.llm;
+          Object.assign(row, repaired.value, { decision: repaired.value.needs_review ? 'pending' : repaired.value.decision,
+            llm: { ...provenance, repair: repaired.receipt, needsReview: repaired.value.needs_review } });
+          await saveJSON(join(batch, 'annotations.json'), annotations);
+        }
+        return ingestDirectory(source, batch, client);
+      }
+      return { status: 'validation_failed', batch, checks, instruction: 'Review the missing terms or inappropriate queries, then re-run ingest.' };
+    }
     try { await stat(snapshotPath); } catch (error) {
       if (error.code !== 'ENOENT') throw error;
       await prepareSnapshot(catalogPath, snapshotPath, { collection: 'reviewed', revision: confirmation.slice(0, 16) });
@@ -151,7 +240,8 @@ export async function ingestDirectory(source, output, client = null) {
     exactDuplicates: manifest.images.length - manifest.unique.length, alreadyOnline: manifest.existing.length,
     excluded: annotations.filter(row => row.decision === 'exclude').length, similarDuplicates: annotations.filter(row => row.decision === 'duplicate').length,
     rejected: manifest.rejected, checks, catalogPath: imports.length ? catalogPath : null, snapshotPath: imports.length ? snapshotPath : null,
-    remoteDuplicatesChecked: manifest.remoteDuplicatesChecked, publishCommand: `emomo-library publish "${batch}" --confirm ${confirmation}` };
+    remoteDuplicatesChecked: manifest.remoteDuplicatesChecked, modelReviewedImages: annotations.filter(row => row.llm).length,
+    onlineSimilarCandidatesChecked: annotations.filter(row => row.llm).every(row => row.llm.onlineCandidatesChecked), publishCommand: `emomo-library publish "${batch}" --confirm ${confirmation}` };
   await saveJSON(join(batch, 'review.json'), report);
   return report;
 }
@@ -240,7 +330,10 @@ export async function directoryCommand(args, env = process.env) {
   const client = await configuredImportClient(env);
   if (command === 'ingest') {
     if (options['--confirm']) throw fail('Use publish after reviewing the prepared batch.');
-    return ingestDirectory(args[1], options['--dir'], client);
+    const vision = await configuredVision(env);
+    const access = vision ? await readAccess(env) : null;
+    const reader = access?.apiUrl === DEFAULT_API_URL ? new EmomoClient({ baseUrl: DEFAULT_API_URL, token: access.token }) : null;
+    return ingestDirectory(args[1], options['--dir'], client, vision, reader);
   }
   if (options['--dir']) throw fail('Use publish BATCH --confirm REVISION.');
   const report = await publishDirectory(args[1], options['--confirm'], client);
