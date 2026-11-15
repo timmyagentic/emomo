@@ -3,3 +3,5 @@ worker-configuration.d.ts
 index-data*.sql
 download-configuration.d.ts
 dist-downloads/
+import-configuration.d.ts
+dist-imports/

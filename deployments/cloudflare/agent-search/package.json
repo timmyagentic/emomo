@@ -12,9 +12,9 @@
     "gen:check": "node ../../../protocol/generate.mjs worker --check",
     "index:build": "tsx scripts/build-index.ts",
     "test": "tsx --test test/*.test.ts",
-    "types:generate": "wrangler types --strict-vars=false && wrangler types download-configuration.d.ts --config wrangler.downloads.jsonc --env-interface DownloadEnv --include-runtime=false --strict-vars=false",
+    "types:generate": "wrangler types --strict-vars=false && wrangler types download-configuration.d.ts --config wrangler.downloads.jsonc --env-interface DownloadEnv --include-runtime=false --strict-vars=false && wrangler types import-configuration.d.ts --config wrangler.imports.jsonc --env-interface ImportEnv --include-runtime=false --strict-vars=false",
     "typecheck": "npm run types:generate && tsc --noEmit",
-    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist && wrangler deploy --config wrangler.downloads.jsonc --dry-run --outdir dist-downloads",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist && wrangler deploy --config wrangler.downloads.jsonc --dry-run --outdir dist-downloads && wrangler deploy --config wrangler.imports.jsonc --dry-run --outdir dist-imports",
     "check": "npm run gen:check && npm run typecheck && npm test && npm run deploy:dry-run",
     "static:prepare": "tsx scripts/prepare-static.ts",
     "static:verify": "tsx scripts/verify-static.ts"

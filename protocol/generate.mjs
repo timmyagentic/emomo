@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const targets = {
-  worker: ['deployments/cloudflare/agent-search', ['api', 'meme', 'types']],
+  worker: ['deployments/cloudflare/agent-search', ['api', 'meme', 'types', 'import']],
   website: ['website', ['account']],
 };
 const args = process.argv.slice(2);
