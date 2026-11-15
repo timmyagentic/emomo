@@ -86,5 +86,13 @@ test('maintenance API requires full metadata and isolated credentials, persists 
   assert.equal(denied.status, 401);
   const invalidSearch = await mf.dispatchFetch('https://imports.test/admin/v1/search', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ query: '猫', top_k: 1000 }) });
   assert.equal(invalidSearch.status, 400);
+  const withTrailer = Buffer.concat([PNG, Buffer.from('legacy-source-metadata')]);
+  const trailerMetadata = { ...metadata, sha256: hash(withTrailer) };
+  assert.equal((await client.upload(trailerMetadata, withTrailer)).duplicate, false);
+  const trailerObject = await bucket.get(`collections/reviewed/${trailerMetadata.sha256}.png`);
+  assert.deepEqual(Buffer.from(await trailerObject!.arrayBuffer()), withTrailer);
+  const trailerDownload = await client.downloadHash(trailerMetadata.sha256, 'with-trailer', directory);
+  assert.deepEqual(await readFile(trailerDownload.path), withTrailer);
+  assert.equal((await client.upload(trailerMetadata, withTrailer)).duplicate, true);
   assert.equal(outbound, 0);
 });
