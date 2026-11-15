@@ -77,10 +77,16 @@ async function automatedReview(batch, manifest, annotations, vision, reader) {
   for (const row of annotations) {
     const image = manifest.unique.find(item => item.sha256 === row.sha256);
     if (row.decision === 'pending' && !row.llm?.needsReview) {
-      const generated = await vision.annotate(await asset(batch, image));
+      const previous = row.llm;
+      const feedback = previous?.reopenedFrom ? {
+        previous: { description: row.description, ocr_text: row.ocr_text, tags: row.tags, queries: row.queries },
+        reviewReason: 'The earlier canonical target is no longer kept. Independently assess this image again.'
+      } : null;
+      const generated = await vision.annotate(await asset(batch, image), feedback);
       Object.assign(row, generated.value, { duplicate_of: '',
         decision: generated.value.needs_review ? 'pending' : generated.value.decision,
-        llm: { annotation: generated.receipt, needsReview: generated.value.needs_review, comparisons: [] } });
+        llm: { annotation: generated.receipt, needsReview: generated.value.needs_review, comparisons: [],
+          ...(previous ? { previous } : {}) } });
       await saveJSON(annotationPath, annotations);
     }
     // Hand-reviewed annotations stay under the existing manual workflow.
@@ -223,9 +229,16 @@ export async function ingestDirectory(source, output, client = null, vision = nu
           const provenance = row.llm;
           Object.assign(row, repaired.value, { decision: repaired.value.needs_review ? 'pending' : repaired.value.decision,
             llm: { ...provenance, repair: repaired.receipt, needsReview: repaired.value.needs_review } });
+          if (row.decision !== 'keep') {
+            for (const dependent of annotations.filter(candidate => candidate.decision === 'duplicate' && candidate.duplicate_of === row.sha256)) {
+              dependent.decision = 'pending';
+              dependent.duplicate_of = '';
+              dependent.llm = { ...dependent.llm, needsReview: false, duplicatesChecked: false, reopenedFrom: row.sha256 };
+            }
+          }
           await saveJSON(join(batch, 'annotations.json'), annotations);
         }
-        return ingestDirectory(source, batch, client);
+        return ingestDirectory(source, batch, client, vision, reader);
       }
       return { status: 'validation_failed', batch, checks, instruction: 'Review the missing terms or inappropriate queries, then re-run ingest.' };
     }

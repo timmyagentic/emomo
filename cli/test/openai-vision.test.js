@@ -118,3 +118,29 @@ test('similar candidates use the shared model and preserve canonical references 
   await ingestDirectory(source, batch, null, vision);
   assert.equal(annotations, 2); assert.equal(comparisons, 1);
 });
+
+test('repairing away a canonical target reopens and rechecks its duplicate images', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-reconcile-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source);
+  const second = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP8zwACTGCSAQANHQEDgslx/wAAAABJRU5ErkJggg==', 'base64');
+  await writeFile(join(source, 'a.png'), PNG); await writeFile(join(source, 'b.png'), second);
+  let calls = 0;
+  const vision = {
+    annotate: async (bytes, feedback) => {
+      calls++;
+      if (bytes.equals(PNG)) return { value: feedback ? { ...annotation, decision: 'exclude', reason: 'Canonical image is unusable' } : { ...annotation, queries: ['zzzxqmissing'] }, receipt };
+      return { value: annotation, receipt };
+    },
+    compare: async () => ({ value: { duplicate: true, needs_review: false, reason: 'Duplicate fixture decision' }, receipt })
+  };
+  const ready = await ingestDirectory(source, batch, null, vision);
+  assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 1); assert.equal(ready.excluded, 1);
+  const rows = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
+  assert.equal(rows[0].decision, 'exclude'); assert.equal(rows[1].decision, 'keep'); assert.equal(rows[1].duplicate_of, '');
+  assert.ok(rows[1].llm.previous.reopenedFrom);
+  assert.equal(calls, 4);
+  await ingestDirectory(source, batch, null, vision);
+  assert.equal(calls, 4);
+});
