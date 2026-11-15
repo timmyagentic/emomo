@@ -144,3 +144,18 @@ test('repairing away a canonical target reopens and rechecks its duplicate image
   await ingestDirectory(source, batch, null, vision);
   assert.equal(calls, 4);
 });
+
+test('local preparation stays usable with vision and read access but no maintenance access', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-openai-local-only-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'images'), batch = join(dir, 'batch');
+  await mkdir(source); await writeFile(join(source, 'cat.png'), PNG);
+  let calls = 0;
+  const vision = { annotate: async () => { calls++; return { value: annotation, receipt }; } };
+  const reader = { search: async () => assert.fail('External duplicate references require maintenance verification access') };
+  const ready = await ingestDirectory(source, batch, null, vision, reader);
+  assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 1);
+  assert.equal(ready.onlineSimilarCandidatesChecked, false);
+  assert.equal((await ingestDirectory(source, batch, null, vision, reader)).status, 'ready');
+  assert.equal(calls, 1);
+});

@@ -168,7 +168,7 @@ export async function ingestDirectory(source, output, client = null, vision = nu
   const expected = manifest.unique.filter(row => !manifest.existing.some(item => item.content_hash === row.sha256));
   const annotations = await readJSON(join(batch, 'annotations.json'));
   if (!Array.isArray(annotations) || annotations.length !== expected.length || new Set(annotations.map(row => row.sha256)).size !== expected.length || annotations.some(row => !expected.some(image => image.sha256 === row.sha256))) throw fail('Annotate every unique new image exactly once.');
-  if (vision) await automatedReview(batch, manifest, annotations, vision, reader);
+  if (vision) await automatedReview(batch, manifest, annotations, vision, client ? reader : null);
   const pending = annotations.filter(row => row.decision === 'pending');
   if (pending.length) return { status: pending.some(row => row.llm?.needsReview) ? 'needs_review' : 'needs_annotation', batch, totalFiles: current.images.length, uniqueImages: manifest.unique.length,
     exactDuplicates: current.images.length - manifest.unique.length, alreadyOnline: manifest.existing.length, rejected: current.rejected,
@@ -345,7 +345,7 @@ export async function directoryCommand(args, env = process.env) {
   if (command === 'ingest') {
     if (options['--confirm']) throw fail('Use publish after reviewing the prepared batch.');
     const vision = await configuredVision(env);
-    const access = vision ? await readAccess(env) : null;
+    const access = vision && client ? await readAccess(env) : null;
     const reader = access?.apiUrl === DEFAULT_API_URL ? new EmomoClient({ baseUrl: DEFAULT_API_URL, token: access.token }) : null;
     return ingestDirectory(args[1], options['--dir'], client, vision, reader);
   }
