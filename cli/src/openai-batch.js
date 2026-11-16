@@ -24,7 +24,7 @@ async function save(directory, state) {
   finally { await unlink(temporary).catch(() => {}); }
 }
 function validateState(state, vision) {
-  if (state?.schemaVersion !== 1 || state.model !== vision.model || state.reasoningEffort !== vision.reasoningEffort || state.promptVersion !== VISION_PROMPT_VERSION || !Array.isArray(state.parts)) throw fail('The stored Batch does not match the configured model and prompt version.');
+  if (state?.schemaVersion !== 1 || state.model !== vision.model || !['low', 'xhigh'].includes(state.reasoningEffort) || ![1, VISION_PROMPT_VERSION].includes(state.promptVersion) || !Array.isArray(state.parts)) throw fail('The stored Batch does not match the configured model and prompt version.');
   const ids = new Set();
   for (const part of state.parts) {
     if (!/^[a-f0-9-]{36}$/.test(part.submission) || part.file !== `batch-inputs/${part.submission}.jsonl` || !Array.isArray(part.jobs) || !part.jobs.length || part.jobs.length > MAX_REQUESTS || !Number.isSafeInteger(part.bytes) || part.bytes < 1 || part.bytes > MAX_FILE_BYTES || !Number.isSafeInteger(part.inputTokens) || part.inputTokens < 1) throw fail('The saved Batch shard is invalid.');
@@ -34,7 +34,7 @@ function validateState(state, vision) {
     }
   }
 }
-async function verifyInput(directory, part, vision) {
+async function verifyInput(directory, part, vision, state) {
   const expected = join(await realpath(directory), part.file);
   if (await realpath(expected) !== expected || (await stat(expected)).size !== part.bytes) throw fail('A Batch input file moved or changed.');
   const jobs = new Map(part.jobs.map(job => [job.customId, job]));
@@ -49,7 +49,7 @@ async function verifyInput(directory, part, vision) {
       const image = content.find(item => item.type === 'input_image');
       if (!/^data:image\/(png|jpeg|webp);base64,/.test(image?.image_url ?? '')) throw fail('Batch images must be embedded local originals.');
       const bytes = Buffer.from(image.image_url.slice(image.image_url.indexOf(',') + 1), 'base64');
-      const prepared = vision.prepareAnnotation(bytes);
+      const prepared = vision.prepareAnnotation(bytes, null, { effort: state.reasoningEffort, promptVersion: state.promptVersion });
       if (prepared.hashes[0] !== job.sha256 || digest(prepared.payload) !== digest(input.body)) throw fail('A Batch request changed model, prompt, settings or image content.');
       seen.add(input.custom_id);
     }
@@ -107,7 +107,7 @@ async function submit(directory, state, vision) {
     if (part.batchId || part.status === 'submission_unknown' || part.collected) continue;
     if (part.inputTokens > queueBudget) throw fail('A saved shard exceeds the current queue budget. Collect active jobs, then use batch-retry to rebuild pending inputs.');
     if (queued + part.inputTokens > queueBudget) continue;
-    await verifyInput(directory, part, vision);
+    await verifyInput(directory, part, vision, state);
     if (!part.inputFileId) {
       const form = new FormData();
       form.set('purpose', 'batch');
@@ -194,7 +194,7 @@ async function collect(directory, state, annotations, vision, apply, checkpoint)
         try {
           if (output.error || output.response?.status_code !== 200) throw new EmomoError('BATCH_ITEM_FAILED', 'This Batch item failed or expired. Retry pending items explicitly.');
           parsed = vision.annotationResult(output.response.body, {
-            ...job, payload: { model: state.model, reasoning: { effort: state.reasoningEffort } }
+            ...job, promptVersion: state.promptVersion, payload: { model: state.model, reasoning: { effort: state.reasoningEffort } }
           });
         } catch (error) {
           job.error = publicError(error);
