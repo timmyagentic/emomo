@@ -280,3 +280,17 @@ test('directory resumes a saved low pass after a failed xhigh review without rep
   const saved = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
   assert.equal(saved[0].llm.annotation.firstPass.reasoningEffort, 'low');
 });
+
+test('description coverage applies to new prompts while saved v2 prompts retain their content', () => {
+  const client = new OpenAIVision({ apiKey: key });
+  const current = client.prepareAnnotation(PNG);
+  const old = client.prepareAnnotation(PNG, null, { promptVersion: 2 });
+  assert.equal(current.promptVersion, 3);
+  assert.equal(old.promptVersion, 2);
+  assert.equal(current.payload.reasoning.effort, 'low');
+  assert.ok(current.payload.instructions.includes('meaningful changes between panels'));
+  assert.ok(current.payload.instructions.includes('facial expression, key objects'));
+  assert.ok(!old.payload.instructions.includes('meaningful changes between panels'));
+  assert.deepEqual(current.payload.input, old.payload.input);
+  assert.deepEqual(current.payload.text, old.payload.text);
+});

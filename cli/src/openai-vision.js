@@ -11,7 +11,7 @@ export const OPENAI_MODEL = 'gpt-6.1-sol';
 export const OPENAI_EFFORT = 'low';
 export const OPENAI_REVIEW_MODEL = 'gpt-6-luna';
 export const OPENAI_REVIEW_EFFORT = 'medium';
-export const VISION_PROMPT_VERSION = 2;
+export const VISION_PROMPT_VERSION = 3;
 const API_ROOT = 'https://api.openai.com/v1';
 const string = { type: 'string' };
 const strings = { type: 'array', items: string };
@@ -177,7 +177,9 @@ export class OpenAIVision {
     const legacy = options.promptVersion === 1;
     const prompt = feedback ? `Review this image again and correct the previous metadata or queries using only visible evidence.\n${JSON.stringify(feedback)}` : 'Prepare complete metadata for this image.';
     const prepared = this.prepare(feedback ? 'meme_annotation_repair' : 'meme_annotation', prompt, [bytes], legacy ? annotationSchema : adaptiveSchema);
+    prepared.promptVersion = options.promptVersion ?? VISION_PROMPT_VERSION;
     prepared.payload.reasoning.effort = options.effort ?? (feedback ? 'xhigh' : this.reasoningEffort);
+    if (prepared.promptVersion >= 3) prepared.payload.instructions += '\nWrite a self-contained factual description that identifies the visible subject and covers its action or pose, facial expression, key objects and distinguishing visual details when visible. For multi-panel images, describe the meaningful changes between panels. Include cropping, occlusion, mosaic or other alterations when they distinguish the image. Use natural Chinese with enough detail to identify this image; do not pad to a target length. Keep exact transcription in ocr_text, and ensure any summary of its meaning in description agrees with it. Do not invent identity, motive, hidden details or an interpretation unsupported by the image.';
     if (!legacy) prepared.payload.instructions += '\nBefore returning, check OCR against description and tags. Set review_reasons to small_text for small or hard-to-read text, dense_text for dense text or many text panels, and conflicting_result for contradictions between OCR, description and tags. Otherwise return an empty array. Do not guess illegible text.';
     return prepared;
   }
