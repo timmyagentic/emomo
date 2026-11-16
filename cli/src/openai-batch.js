@@ -24,7 +24,7 @@ async function save(directory, state) {
   finally { await unlink(temporary).catch(() => {}); }
 }
 function validateState(state, vision) {
-  if (state?.schemaVersion !== 1 || state.model !== vision.model || !['low', 'xhigh'].includes(state.reasoningEffort) || ![1, VISION_PROMPT_VERSION].includes(state.promptVersion) || !Array.isArray(state.parts)) throw fail('The stored Batch does not match the configured model and prompt version.');
+  if (state?.schemaVersion !== 1 || state.model !== vision.model || !['low', 'xhigh'].includes(state.reasoningEffort) || ![1, 2, VISION_PROMPT_VERSION].includes(state.promptVersion) || !Array.isArray(state.parts)) throw fail('The stored Batch does not match the configured model and prompt version.');
   const ids = new Set();
   for (const part of state.parts) {
     if (!/^[a-f0-9-]{36}$/.test(part.submission) || part.file !== `batch-inputs/${part.submission}.jsonl` || !Array.isArray(part.jobs) || !part.jobs.length || part.jobs.length > MAX_REQUESTS || !Number.isSafeInteger(part.bytes) || part.bytes < 1 || part.bytes > MAX_FILE_BYTES || !Number.isSafeInteger(part.inputTokens) || part.inputTokens < 1) throw fail('The saved Batch shard is invalid.');
