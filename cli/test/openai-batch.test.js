@@ -19,6 +19,10 @@ function provider() {
     if (path === '/v1/files' && options.method === 'POST') {
       const id = `file-${files.size}`;
       files.set(id, (await options.body.get('file').text()).trim().split('\n').map(JSON.parse));
+      for (const request of files.get(id)) {
+        assert.equal(request.body.model, 'gpt-6.1-sol');
+        assert.equal(request.body.reasoning.effort, 'xhigh');
+      }
       return Response.json({ id });
     }
     if (path === '/v1/batches' && options.method === 'POST') {
@@ -69,6 +73,7 @@ test('Batch submits once, resumes unordered results by image ID and enters norma
   assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 2); assert.ok(ready.checks.every(check => check.passed));
   const after = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
   assert.ok(after.every(row => row.llm.annotation.customId === `annotation_${row.sha256}`));
+  assert.ok(after.every(row => row.llm.annotation.requestedModel === 'gpt-6.1-sol' && row.llm.annotation.reasoningEffort === 'xhigh'));
   assert.equal((await ingestDirectory(source, batch, null, vision)).status, 'ready');
   assert.equal(state.creates, 1);
 });

@@ -12,30 +12,43 @@ const annotation = { decision: 'keep', description: '猫咪开心', ocr_text: ''
   tags: ['猫', '开心'], search_aliases: ['高兴'], category: 'usable', preview_only: false,
   queries: ['猫 开心'], reason: '', needs_review: false };
 const receipt = { model: 'gpt-6.1-sol', reasoningEffort: 'xhigh', promptVersion: 1 };
-const response = value => Response.json({ id: 'response-test', status: 'completed', model: 'gpt-6.1-sol',
+const response = (value, model = 'gpt-6.1-sol') => Response.json({ id: 'response-test', status: 'completed', model, service_tier: 'default',
   output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] }],
-  usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30 } });
+  usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30,
+    input_tokens_details: { cached_tokens: 4 }, output_tokens_details: { reasoning_tokens: 8 } } });
 
-test('all vision operations use the official endpoint, requested model/effort and strict image JSON', async () => {
+test('annotations use Sol/xhigh while duplicate review uses Luna/medium with accurate receipts', async () => {
   const requests = [];
   const client = new OpenAIVision({ apiKey: key }, async (url, options) => {
     assert.equal(url, 'https://api.openai.com/v1/responses');
     assert.equal(options.redirect, 'manual');
     const body = JSON.parse(options.body); requests.push(body);
-    assert.equal(body.model, 'gpt-6.1-sol'); assert.equal(body.reasoning.effort, 'xhigh');
+    const comparison = body.text.format.name === 'meme_duplicate_review';
+    assert.equal(body.model, comparison ? 'gpt-6-luna' : 'gpt-6.1-sol');
+    assert.equal(body.reasoning.effort, comparison ? 'medium' : 'xhigh');
     assert.equal(body.store, false); assert.equal(body.text.format.strict, true);
     assert.ok(!options.body.includes(key));
     assert.ok(body.input[0].content.some(part => part.type === 'input_image' && part.image_url.startsWith('data:image/png;base64,')));
-    return response(body.text.format.name === 'meme_duplicate_review' ? { duplicate: true, reason: 'Same picture and wording', needs_review: false } : annotation);
+    return response(comparison ? { duplicate: true, reason: 'Same picture and wording', needs_review: false } : annotation, body.model);
   });
   const first = await client.annotate(PNG);
   assert.equal(first.value.description, annotation.description);
   await client.annotate(PNG, { previous: annotation, failedQueries: ['wrong query'] });
-  assert.equal((await client.compare(PNG, PNG)).value.duplicate, true);
+  const reviewed = await client.compare(PNG, PNG);
+  assert.equal(reviewed.value.duplicate, true);
+  assert.equal(reviewed.receipt.model, 'gpt-6-luna');
+  assert.equal(reviewed.receipt.requestedModel, 'gpt-6-luna');
+  assert.equal(reviewed.receipt.reasoningEffort, 'medium');
   assert.deepEqual(requests.map(body => body.text.format.name), ['meme_annotation', 'meme_annotation_repair', 'meme_duplicate_review']);
   assert.ok(!JSON.stringify(client).includes(key));
   assert.equal(first.receipt.imageHashes.length, 1);
   assert.equal(first.receipt.totalTokens, 30);
+  assert.equal(first.receipt.requestedModel, 'gpt-6.1-sol');
+  assert.equal(first.receipt.reasoningEffort, 'xhigh');
+  assert.equal(first.receipt.cachedInputTokens, 4);
+  assert.equal(first.receipt.reasoningTokens, 8);
+  assert.equal(first.receipt.serviceTier, 'default');
+  assert.equal(client.prepareAnnotation(PNG).payload.model, 'gpt-6.1-sol');
 });
 
 test('API failures, redirects, malformed metadata and incomplete output cannot become annotations or leak keys', async () => {
@@ -206,4 +219,21 @@ test('parallel duplicate decisions verify the final canonical image instead of a
   const rows = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
   assert.equal(rows[1].duplicate_of, rows[0].sha256);
   assert.equal(rows[2].decision, 'pending'); assert.equal(rows[2].duplicate_of, '');
+});
+
+test('positive duplicate verdicts with changed framing remain pending while resize rounding is allowed', async () => {
+  const client = new OpenAIVision({ apiKey: key }, async () => response({ duplicate: true, needs_review: false, reason: 'Same picture' }, 'gpt-6-luna'));
+  const square = await readFile(new URL('./fixtures/static-baseline.jpg', import.meta.url));
+  const cropped = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAOCAIAAACpTQvdAAAAHElEQVR4nGP8z0AaYCJRPcOoBmIAE1GqGEa4BgDSowEbOGLWswAAAABJRU5ErkJggg==', 'base64');
+  const guarded = await client.compare(square, cropped);
+  assert.equal(guarded.value.duplicate, false);
+  assert.equal(guarded.value.needs_review, true);
+  assert.equal(guarded.reviewGuard.type, 'aspect_ratio');
+  assert.equal(guarded.reviewGuard.modelValue.duplicate, true);
+  assert.equal(guarded.receipt.requestedModel, 'gpt-6-luna');
+  const first = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAPCAIAAABiEdh4AAAAH0lEQVR4nGP8z0AaYCJRPcOoBmIAE1GqkMCoBgYiAAAJPwEdPXWFKwAAAABJRU5ErkJggg==', 'base64');
+  const resized = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACAAAAAfCAIAAAAJNFjbAAAANUlEQVR4nO3QwQkAAAjDwOr+O+sIefkQcgO0kJrc6uP9eIBMhEyETIRMhEyETIRMhEyE/idaKuUBPcCOah0AAAAASUVORK5CYII=', 'base64');
+  const accepted = await client.compare(first, resized);
+  assert.equal(accepted.value.duplicate, true);
+  assert.equal(accepted.value.needs_review, false);
 });
