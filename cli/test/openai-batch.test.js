@@ -21,7 +21,7 @@ function provider() {
       files.set(id, (await options.body.get('file').text()).trim().split('\n').map(JSON.parse));
       for (const request of files.get(id)) {
         assert.equal(request.body.model, 'gpt-6.1-sol');
-        assert.equal(request.body.reasoning.effort, 'xhigh');
+        assert.equal(request.body.reasoning.effort, 'low');
       }
       return Response.json({ id });
     }
@@ -73,7 +73,7 @@ test('Batch submits once, resumes unordered results by image ID and enters norma
   assert.equal(ready.status, 'ready'); assert.equal(ready.newImages, 2); assert.ok(ready.checks.every(check => check.passed));
   const after = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
   assert.ok(after.every(row => row.llm.annotation.customId === `annotation_${row.sha256}`));
-  assert.ok(after.every(row => row.llm.annotation.requestedModel === 'gpt-6.1-sol' && row.llm.annotation.reasoningEffort === 'xhigh'));
+  assert.ok(after.every(row => row.llm.annotation.requestedModel === 'gpt-6.1-sol' && row.llm.annotation.reasoningEffort === 'low'));
   assert.equal((await ingestDirectory(source, batch, null, vision)).status, 'ready');
   assert.equal(state.creates, 1);
 });
@@ -154,4 +154,32 @@ test('Batch input paths cannot escape the batch directory', async t => {
   state.parts[0].file = '../private-file.json';
   await writeFile(path, JSON.stringify(state));
   await assert.rejects(batchStatus(batch, vision), { code: 'INVALID_OPENAI_BATCH' });
+});
+
+test('an existing v1 xhigh Batch keeps its original prompt and effort when resumed', async t => {
+  const { source, batch } = await inputs(t), { vision, state } = provider();
+  const prepare = vision.prepareAnnotation.bind(vision);
+  vision.reasoningEffort = 'xhigh';
+  vision.prepareAnnotation = bytes => prepare(bytes, null, { effort: 'xhigh', promptVersion: 1 });
+  // The provider fixture assertion is specific to new low submissions.
+  const originalTransport = vision.transport;
+  vision.transport = async (url, options) => {
+    if (new URL(url).pathname === '/v1/files' && options.method === 'POST') {
+      const file = options.body.get('file');
+      const lines = (await file.text()).trim().split('\n').map(JSON.parse);
+      for (const line of lines) assert.equal(line.body.reasoning.effort, 'xhigh');
+      const id = `file-${state.files.size}`; state.files.set(id, lines);
+      return Response.json({ id });
+    }
+    return originalTransport(url, options);
+  };
+  await ingestDirectory(source, batch, null, vision, null, { mode: 'batch' });
+  const path = join(batch, 'openai-batch.json');
+  const saved = JSON.parse(await readFile(path, 'utf8')); saved.promptVersion = 1;
+  await writeFile(path, JSON.stringify(saved));
+  vision.reasoningEffort = 'low'; vision.prepareAnnotation = prepare; state.ready = true;
+  const result = await ingestDirectory(source, batch, null, vision);
+  assert.equal(result.status, 'ready');
+  const rows = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
+  assert.ok(rows.every(row => row.llm.annotation.reasoningEffort === 'xhigh' && row.llm.annotation.promptVersion === 1));
 });

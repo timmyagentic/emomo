@@ -124,6 +124,16 @@ async function automatedReview(batch, manifest, annotations, vision, reader) {
     applyVisionAnnotation(row, generated);
     await checkpoint();
   });
+  if (vision.upgradeAnnotation) {
+    const firstPasses = annotations.filter(row => row.llm?.annotation?.reasoningEffort === 'low' && !row.llm.annotation.reviewCompleted);
+    await mapConcurrent(firstPasses, vision.concurrency ?? 1, async row => {
+      const generated = await modelReview(row, 'annotation_review', () => withModelImages(batch, [row.sha256], vision,
+        async () => vision.upgradeAnnotation(await asset(batch, { sha256: row.sha256 }), { value: row, receipt: row.llm.annotation })), checkpoint);
+      if (generated.receipt.firstPass) applyVisionAnnotation(row, generated);
+      else row.llm.annotation = generated.receipt;
+      await checkpoint();
+    });
+  }
   const reviewRows = annotations.filter(row => row.decision === 'keep' && row.llm && !row.llm.duplicatesChecked);
   const referenceDownloads = new Map();
   let readQueue = Promise.resolve();

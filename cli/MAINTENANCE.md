@@ -4,7 +4,7 @@
 
 ## 从图片目录开始
 
-把图片目录交给 Agent，运行 `emomo-library ingest /absolute/images`。配置本地 OpenAI 后，以 Sol/xhigh 完成标注、OCR和查询修订，以 Luna/medium 完成相似候选复核，再执行本地搜索验收；未配置时返回待标注清单，由 Agent 填写后重跑。默认实时并发，可用 `--mode batch` 异步提交首轮标注，再通过 `batch-status`、`batch-resume`、`batch-retry` 管理进度。验收通过后给出确认编号。用户确认后运行 `emomo-library publish /absolute/batch --confirm <编号>`，通过维护接口上传并保存回执。一次性维护密钥配置使用 `emomo-library connect --key-file /private/key`。完整流程和接口字段见[目录导入](../docs/DIRECTORY_IMPORT.md)。
+把图片目录交给 Agent，运行 `emomo-library ingest /absolute/images`。配置本地 OpenAI 后，以 Sol/low 首轮标注、OCR，低清小字、密集文本、矛盾结果和查询修订使用 Sol/xhigh，以 Luna/medium 完成相似候选复核，再执行本地搜索验收；未配置时返回待标注清单，由 Agent 填写后重跑。默认实时并发，可用 `--mode batch` 异步提交首轮标注，再通过 `batch-status`、`batch-resume`、`batch-retry` 管理进度。验收通过后给出确认编号。用户确认后运行 `emomo-library publish /absolute/batch --confirm <编号>`，通过维护接口上传并保存回执。一次性维护密钥配置使用 `emomo-library connect --key-file /private/key`。完整流程和接口字段见[目录导入](../docs/DIRECTORY_IMPORT.md)。
 
 ## 导入已审核资料
 

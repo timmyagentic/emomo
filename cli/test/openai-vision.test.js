@@ -17,7 +17,7 @@ const response = (value, model = 'gpt-6.1-sol') => Response.json({ id: 'response
   usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30,
     input_tokens_details: { cached_tokens: 4 }, output_tokens_details: { reasoning_tokens: 8 } } });
 
-test('annotations use Sol/xhigh while duplicate review uses Luna/medium with accurate receipts', async () => {
+test('annotations use Sol low and repair xhigh while duplicate review uses Luna/medium with accurate receipts', async () => {
   const requests = [];
   const client = new OpenAIVision({ apiKey: key }, async (url, options) => {
     assert.equal(url, 'https://api.openai.com/v1/responses');
@@ -25,7 +25,7 @@ test('annotations use Sol/xhigh while duplicate review uses Luna/medium with acc
     const body = JSON.parse(options.body); requests.push(body);
     const comparison = body.text.format.name === 'meme_duplicate_review';
     assert.equal(body.model, comparison ? 'gpt-6-luna' : 'gpt-6.1-sol');
-    assert.equal(body.reasoning.effort, comparison ? 'medium' : 'xhigh');
+    assert.equal(body.reasoning.effort, comparison ? 'medium' : body.text.format.name === 'meme_annotation_repair' ? 'xhigh' : 'low');
     assert.equal(body.store, false); assert.equal(body.text.format.strict, true);
     assert.ok(!options.body.includes(key));
     assert.ok(body.input[0].content.some(part => part.type === 'input_image' && part.image_url.startsWith('data:image/png;base64,')));
@@ -44,7 +44,7 @@ test('annotations use Sol/xhigh while duplicate review uses Luna/medium with acc
   assert.equal(first.receipt.imageHashes.length, 1);
   assert.equal(first.receipt.totalTokens, 30);
   assert.equal(first.receipt.requestedModel, 'gpt-6.1-sol');
-  assert.equal(first.receipt.reasoningEffort, 'xhigh');
+  assert.equal(first.receipt.reasoningEffort, 'low');
   assert.equal(first.receipt.cachedInputTokens, 4);
   assert.equal(first.receipt.reasoningTokens, 8);
   assert.equal(first.receipt.serviceTier, 'default');
@@ -236,4 +236,47 @@ test('positive duplicate verdicts with changed framing remain pending while resi
   const accepted = await client.compare(first, resized);
   assert.equal(accepted.value.duplicate, true);
   assert.equal(accepted.value.needs_review, false);
+});
+
+test('low annotations escalate small or dense text, uncertainty and conflicting results once', async () => {
+  const calls = [];
+  const client = new OpenAIVision({ apiKey: key }, async (url, options) => {
+    const body = JSON.parse(options.body); calls.push(body);
+    return response({ ...annotation, review_reasons: [] });
+  });
+  const ordinary = { value: { ...annotation, review_reasons: [] }, receipt: { reasoningEffort: 'low' } };
+  assert.equal((await client.upgradeAnnotation(PNG, ordinary)).receipt.reviewCompleted, true);
+  assert.equal(calls.length, 0);
+  for (const value of [
+    { ...annotation, text_presence: 2, ocr_text: '文字' },
+    { ...annotation, text_presence: 2, ocr_text: '字'.repeat(120) },
+    { ...annotation, needs_review: true },
+    { ...annotation, review_reasons: ['conflicting_result'] }
+  ]) {
+    const result = await client.upgradeAnnotation(PNG, { value, receipt: ordinary.receipt });
+    assert.equal(result.receipt.reasoningEffort, 'xhigh');
+    assert.equal(result.receipt.firstPass.reasoningEffort, 'low');
+    assert.ok(result.receipt.reviewReasons.length);
+    assert.equal((await client.upgradeAnnotation(PNG, result)), result);
+  }
+  assert.ok(calls.every(body => body.model === 'gpt-6.1-sol' && body.reasoning.effort === 'xhigh'));
+});
+
+test('directory resumes a saved low pass after a failed xhigh review without repeating low', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'emomo-adaptive-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = join(dir, 'source'), batch = join(dir, 'batch');
+  await mkdir(source); await writeFile(join(source, 'sample.png'), PNG);
+  const calls = []; let fail = true;
+  const client = new OpenAIVision({ apiKey: key }, async (url, options) => {
+    const body = JSON.parse(options.body); calls.push(body.reasoning.effort);
+    if (body.reasoning.effort === 'xhigh' && fail) return new Response('', { status: 401 });
+    return response({ ...annotation, review_reasons: body.reasoning.effort === 'low' ? ['conflicting_result'] : [] });
+  });
+  await assert.rejects(ingestDirectory(source, batch, null, client), { code: 'OPENAI_REQUEST_FAILED' });
+  fail = false;
+  assert.equal((await ingestDirectory(source, batch, null, client)).status, 'ready');
+  assert.deepEqual(calls, ['low', 'xhigh', 'xhigh']);
+  const saved = JSON.parse(await readFile(join(batch, 'annotations.json'), 'utf8'));
+  assert.equal(saved[0].llm.annotation.firstPass.reasoningEffort, 'low');
 });
