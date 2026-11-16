@@ -9,6 +9,8 @@ import { importMetadata } from './import-metadata.js';
 
 export const OPENAI_MODEL = 'gpt-6.1-sol';
 export const OPENAI_EFFORT = 'xhigh';
+export const OPENAI_REVIEW_MODEL = 'gpt-6-luna';
+export const OPENAI_REVIEW_EFFORT = 'medium';
 export const VISION_PROMPT_VERSION = 1;
 const API_ROOT = 'https://api.openai.com/v1';
 const string = { type: 'string' };
@@ -58,7 +60,7 @@ export class OpenAIVision {
   #apiKey;
   constructor({ apiKey, model = OPENAI_MODEL, reasoningEffort = OPENAI_EFFORT, limits = {} }, transport = fetch, scheduler = new OpenAIScheduler(limits)) {
     if (typeof apiKey !== 'string' || !/^sk-[A-Za-z0-9_-]{20,}$/.test(apiKey)) throw new EmomoError('INVALID_OPENAI_CONFIG', 'A valid OpenAI API key is required.');
-    if (model !== OPENAI_MODEL || reasoningEffort !== OPENAI_EFFORT) throw new EmomoError('INVALID_OPENAI_CONFIG', 'This workflow uses gpt-6.1-sol with xhigh reasoning.');
+    if (model !== OPENAI_MODEL || reasoningEffort !== OPENAI_EFFORT) throw new EmomoError('INVALID_OPENAI_CONFIG', 'Image annotation uses gpt-6.1-sol with xhigh reasoning.');
     this.#apiKey = apiKey;
     this.model = model;
     this.reasoningEffort = reasoningEffort;
@@ -83,7 +85,9 @@ export class OpenAIVision {
       content.push({ type: 'input_image', image_url: `data:${mime};base64,${bytes.toString('base64')}`, detail: 'original' });
       hashes.push(createHash('sha256').update(bytes).digest('hex'));
     }
-    const payload = { model: this.model, reasoning: { effort: this.reasoningEffort }, store: false,
+    const comparison = operation === 'meme_duplicate_review';
+    const payload = { model: comparison ? OPENAI_REVIEW_MODEL : this.model,
+      reasoning: { effort: comparison ? OPENAI_REVIEW_EFFORT : this.reasoningEffort }, store: false,
       instructions, input: [{ role: 'user', content }], max_output_tokens: 16384,
       text: { format: { type: 'json_schema', name: operation, strict: true, schema } } };
     return { operation, payload, hashes, imageInfo, inputTokens,
@@ -160,9 +164,12 @@ export class OpenAIVision {
       value = JSON.parse(parts.filter(part => part.type === 'output_text').map(part => part.text).join(''));
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
     } catch { throw new EmomoError('OPENAI_RESPONSE_INVALID', 'OpenAI returned incomplete, refused or invalid structured output. The annotation remains pending.'); }
-    return { value, receipt: { operation: prepared.operation, model: result.model, requestedModel: this.model, reasoningEffort: this.reasoningEffort,
+    return { value, receipt: { operation: prepared.operation, model: result.model,
+      requestedModel: prepared.payload.model, reasoningEffort: prepared.payload.reasoning.effort,
       promptVersion: VISION_PROMPT_VERSION, responseId: result.id, receivedAt: new Date().toISOString(), imageHashes: prepared.hashes,
       inputTokens: result.usage?.input_tokens, outputTokens: result.usage?.output_tokens, totalTokens: result.usage?.total_tokens,
+      cachedInputTokens: result.usage?.input_tokens_details?.cached_tokens,
+      reasoningTokens: result.usage?.output_tokens_details?.reasoning_tokens, serviceTier: result.service_tier,
       ...(result.emomoRetryUsage?.length ? { retryUsage: result.emomoRetryUsage } : {}) } };
   }
   prepareAnnotation(bytes, feedback = null) {
@@ -188,6 +195,14 @@ export class OpenAIVision {
     const prepared = this.prepare('meme_duplicate_review', `Compare the two complete images. Mark duplicate only if they show the same underlying image, expression, action and exact visible wording. Resizing or recompression may be duplicates. Different subtitles, gestures, crops that remove content or emotions must remain separate. Uncertainty requires needs_review=true. Explain the visual evidence briefly in Chinese.`, [first, second], comparisonSchema);
     const response = this.parse(await this.execute(prepared), prepared);
     if (typeof response.value.duplicate !== 'boolean' || typeof response.value.needs_review !== 'boolean' || typeof response.value.reason !== 'string' || !response.value.reason.trim()) throw new EmomoError('OPENAI_RESPONSE_INVALID', 'Invalid duplicate comparison.');
+    const [a, b] = prepared.imageInfo;
+    // Proportional resizing permits pixel rounding. A larger aspect-ratio
+    // change can hide a crop, so a positive model verdict needs confirmation.
+    const changedShape = Math.abs(a.width * b.height - b.width * a.height) > Math.max(a.width, a.height, b.width, b.height);
+    if (response.value.duplicate && !response.value.needs_review && changedShape) {
+      return { ...response, reviewGuard: { type: 'aspect_ratio', modelValue: response.value },
+        value: { duplicate: false, needs_review: true, reason: '两图长宽比例不同，需确认裁切或拉伸是否改变了内容；暂不自动归并。' } };
+    }
     return response;
   }
 }

@@ -193,7 +193,9 @@ async function collect(directory, state, annotations, vision, apply, checkpoint)
         let parsed;
         try {
           if (output.error || output.response?.status_code !== 200) throw new EmomoError('BATCH_ITEM_FAILED', 'This Batch item failed or expired. Retry pending items explicitly.');
-          parsed = vision.annotationResult(output.response.body, job);
+          parsed = vision.annotationResult(output.response.body, {
+            ...job, payload: { model: state.model, reasoning: { effort: state.reasoningEffort } }
+          });
         } catch (error) {
           job.error = publicError(error);
           await save(directory, state);

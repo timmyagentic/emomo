@@ -14,7 +14,7 @@ node cli/bin/emomo-library.js connect --key-file /private/import-key
 
 ## 本地模型配置
 
-本机私有 Emomo 配置目录的 `openai.json` 保存 `apiKey`、`model` 和 `reasoningEffort`，权限为 0600。当前统一配置为 `gpt-6.1-sol` 与 `xhigh`。客户端仅调用官方 `https://api.openai.com/v1/responses`，提交完整图片并要求结构化结果。凭据通过授权头发送，模型调用回执只保留模型、推理档位、图片哈希和 token 用量。
+本机私有 Emomo 配置目录的 `openai.json` 保存 `apiKey`、`model` 和 `reasoningEffort`，权限为 0600。该配置用于首轮标注、OCR及查询修订，使用 `gpt-6.1-sol` 与 `xhigh`。近似图复核（含最终主图确认）固定使用 `gpt-6-luna` 与 `medium`，旧配置无需改动。客户端仅调用官方 `https://api.openai.com/v1/responses`，提交完整图片并要求结构化结果。凭据通过授权头发送，模型调用回执记录实际请求及返回模型、推理档位、图片哈希、token 用量，以及服务端提供的缓存命中、推理 token 和服务档位。已有比较结果按原回执复用，不因切换模型自动重跑。若模型判重而原图长宽比例变化超出等比例缩放的像素取整范围，则保留模型原始判断并转为待确认，避免将内容裁切当作重压缩。
 
 | 环节 | 执行方式 |
 | --- | --- |
