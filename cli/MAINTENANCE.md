@@ -6,6 +6,20 @@
 
 把图片目录交给 Agent，运行 `emomo-library ingest /absolute/images`。配置本地 OpenAI 后，以 Sol/low 首轮标注、OCR，低清小字、密集文本、矛盾结果和查询修订使用 Sol/xhigh，以 Luna/medium 完成相似候选复核，再执行本地搜索验收；未配置时返回待标注清单，由 Agent 填写后重跑。默认实时并发，可用 `--mode batch` 异步提交首轮标注，再通过 `batch-status`、`batch-resume`、`batch-retry` 管理进度。验收通过后给出确认编号。用户确认后运行 `emomo-library publish /absolute/batch --confirm <编号>`，通过维护接口上传并保存回执。一次性维护密钥配置使用 `emomo-library connect --key-file /private/key`。完整流程和接口字段见[目录导入](../docs/DIRECTORY_IMPORT.md)。
 
+## 下架已发布的图片
+
+本地挑图后，把原图绝对路径、生产图片 ID 或 SHA-256 写入 JSON 数组。每项使用 `file`、`id`、`sha256` 中的一个字段。例如 `[{"file":"/absolute/original.png"},{"id":"production-image-id"}]`。同一个 SHA-256 下的所有生产条目和图片路径都会列入计划。
+
+```sh
+emomo-library connect-takedown --key-file /private/takedown-key
+emomo-library takedown-plan /absolute/selection.json --out /absolute/takedown-plan.json
+emomo-library takedown /absolute/takedown-plan.json --confirm <确认编号>
+```
+
+先核对计划中的生产目标和 ID，再用计划返回的确认编号执行。工具保存逐图回执到计划旁的 `.receipt.json` 文件。网络中断后，用同一个计划和编号继续。生产条目有变化时，重新生成并核对计划。
+
+下架会从生产索引移除该 SHA-256，阻止重复入库，并让 Emomo 原图下载入口返回 404。本地文件和 R2 原图保留。搜索及详情的边缘缓存最多可滞后 60 秒。生产验收和部署顺序见[目录导入](../docs/DIRECTORY_IMPORT.md#生产图库下架)。
+
 ## 导入已审核资料
 
 ```sh

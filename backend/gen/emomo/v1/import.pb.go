@@ -340,6 +340,262 @@ func (x *ImportErrorResponse) GetMessage() string {
 	return ""
 }
 
+// Maintenance-only takedown. A preview binds approval to the exact content
+// hash, and to every production record and object path that will be affected.
+type TakedownPlanRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Selector:
+	//
+	//	*TakedownPlanRequest_Sha256
+	//	*TakedownPlanRequest_Id
+	Selector      isTakedownPlanRequest_Selector `protobuf_oneof:"selector"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TakedownPlanRequest) Reset() {
+	*x = TakedownPlanRequest{}
+	mi := &file_emomo_v1_import_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TakedownPlanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TakedownPlanRequest) ProtoMessage() {}
+
+func (x *TakedownPlanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_import_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TakedownPlanRequest.ProtoReflect.Descriptor instead.
+func (*TakedownPlanRequest) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_import_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *TakedownPlanRequest) GetSelector() isTakedownPlanRequest_Selector {
+	if x != nil {
+		return x.Selector
+	}
+	return nil
+}
+
+func (x *TakedownPlanRequest) GetSha256() string {
+	if x != nil {
+		if x, ok := x.Selector.(*TakedownPlanRequest_Sha256); ok {
+			return x.Sha256
+		}
+	}
+	return ""
+}
+
+func (x *TakedownPlanRequest) GetId() string {
+	if x != nil {
+		if x, ok := x.Selector.(*TakedownPlanRequest_Id); ok {
+			return x.Id
+		}
+	}
+	return ""
+}
+
+type isTakedownPlanRequest_Selector interface {
+	isTakedownPlanRequest_Selector()
+}
+
+type TakedownPlanRequest_Sha256 struct {
+	Sha256 string `protobuf:"bytes,1,opt,name=sha256,proto3,oneof"`
+}
+
+type TakedownPlanRequest_Id struct {
+	Id string `protobuf:"bytes,2,opt,name=id,proto3,oneof"`
+}
+
+func (*TakedownPlanRequest_Sha256) isTakedownPlanRequest_Selector() {}
+
+func (*TakedownPlanRequest_Id) isTakedownPlanRequest_Selector() {}
+
+type TakedownApplyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sha256        string                 `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	Confirmation  string                 `protobuf:"bytes,2,opt,name=confirmation,proto3" json:"confirmation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TakedownApplyRequest) Reset() {
+	*x = TakedownApplyRequest{}
+	mi := &file_emomo_v1_import_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TakedownApplyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TakedownApplyRequest) ProtoMessage() {}
+
+func (x *TakedownApplyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_import_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TakedownApplyRequest.ProtoReflect.Descriptor instead.
+func (*TakedownApplyRequest) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_import_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TakedownApplyRequest) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *TakedownApplyRequest) GetConfirmation() string {
+	if x != nil {
+		return x.Confirmation
+	}
+	return ""
+}
+
+type TakedownTarget struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	StorageKey    string                 `protobuf:"bytes,2,opt,name=storage_key,json=storageKey,proto3" json:"storage_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TakedownTarget) Reset() {
+	*x = TakedownTarget{}
+	mi := &file_emomo_v1_import_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TakedownTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TakedownTarget) ProtoMessage() {}
+
+func (x *TakedownTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_import_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TakedownTarget.ProtoReflect.Descriptor instead.
+func (*TakedownTarget) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_import_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TakedownTarget) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TakedownTarget) GetStorageKey() string {
+	if x != nil {
+		return x.StorageKey
+	}
+	return ""
+}
+
+type TakedownReceipt struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sha256        string                 `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	Targets       []*TakedownTarget      `protobuf:"bytes,2,rep,name=targets,proto3" json:"targets,omitempty"`
+	Confirmation  string                 `protobuf:"bytes,3,opt,name=confirmation,proto3" json:"confirmation,omitempty"`
+	TakenDownAt   string                 `protobuf:"bytes,4,opt,name=taken_down_at,json=takenDownAt,proto3" json:"taken_down_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TakedownReceipt) Reset() {
+	*x = TakedownReceipt{}
+	mi := &file_emomo_v1_import_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TakedownReceipt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TakedownReceipt) ProtoMessage() {}
+
+func (x *TakedownReceipt) ProtoReflect() protoreflect.Message {
+	mi := &file_emomo_v1_import_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TakedownReceipt.ProtoReflect.Descriptor instead.
+func (*TakedownReceipt) Descriptor() ([]byte, []int) {
+	return file_emomo_v1_import_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TakedownReceipt) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *TakedownReceipt) GetTargets() []*TakedownTarget {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+func (x *TakedownReceipt) GetConfirmation() string {
+	if x != nil {
+		return x.Confirmation
+	}
+	return ""
+}
+
+func (x *TakedownReceipt) GetTakenDownAt() string {
+	if x != nil {
+		return x.TakenDownAt
+	}
+	return ""
+}
+
 var File_emomo_v1_import_proto protoreflect.FileDescriptor
 
 const file_emomo_v1_import_proto_rawDesc = "" +
@@ -367,7 +623,24 @@ const file_emomo_v1_import_proto_rawDesc = "" +
 	"\bexisting\x18\x01 \x03(\v2\x0e.emomo.v1.MemeR\bexisting\"C\n" +
 	"\x13ImportErrorResponse\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessageB-Z+github.com/timmy/emomo/gen/emomo/v1;emomov1b\x06proto3"
+	"\amessage\x18\x02 \x01(\tR\amessage\"M\n" +
+	"\x13TakedownPlanRequest\x12\x18\n" +
+	"\x06sha256\x18\x01 \x01(\tH\x00R\x06sha256\x12\x10\n" +
+	"\x02id\x18\x02 \x01(\tH\x00R\x02idB\n" +
+	"\n" +
+	"\bselector\"R\n" +
+	"\x14TakedownApplyRequest\x12\x16\n" +
+	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\"\n" +
+	"\fconfirmation\x18\x02 \x01(\tR\fconfirmation\"A\n" +
+	"\x0eTakedownTarget\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
+	"\vstorage_key\x18\x02 \x01(\tR\n" +
+	"storageKey\"\xa5\x01\n" +
+	"\x0fTakedownReceipt\x12\x16\n" +
+	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x122\n" +
+	"\atargets\x18\x02 \x03(\v2\x18.emomo.v1.TakedownTargetR\atargets\x12\"\n" +
+	"\fconfirmation\x18\x03 \x01(\tR\fconfirmation\x12\"\n" +
+	"\rtaken_down_at\x18\x04 \x01(\tR\vtakenDownAtB-Z+github.com/timmy/emomo/gen/emomo/v1;emomov1b\x06proto3"
 
 var (
 	file_emomo_v1_import_proto_rawDescOnce sync.Once
@@ -381,28 +654,33 @@ func file_emomo_v1_import_proto_rawDescGZIP() []byte {
 	return file_emomo_v1_import_proto_rawDescData
 }
 
-var file_emomo_v1_import_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_emomo_v1_import_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_emomo_v1_import_proto_goTypes = []any{
 	(*ImportMetadata)(nil),       // 0: emomo.v1.ImportMetadata
 	(*ImportResponse)(nil),       // 1: emomo.v1.ImportResponse
 	(*ImportLookupRequest)(nil),  // 2: emomo.v1.ImportLookupRequest
 	(*ImportLookupResponse)(nil), // 3: emomo.v1.ImportLookupResponse
 	(*ImportErrorResponse)(nil),  // 4: emomo.v1.ImportErrorResponse
-	(*ImageInfo)(nil),            // 5: emomo.v1.ImageInfo
-	(TextPresence)(0),            // 6: emomo.v1.TextPresence
-	(*Meme)(nil),                 // 7: emomo.v1.Meme
+	(*TakedownPlanRequest)(nil),  // 5: emomo.v1.TakedownPlanRequest
+	(*TakedownApplyRequest)(nil), // 6: emomo.v1.TakedownApplyRequest
+	(*TakedownTarget)(nil),       // 7: emomo.v1.TakedownTarget
+	(*TakedownReceipt)(nil),      // 8: emomo.v1.TakedownReceipt
+	(*ImageInfo)(nil),            // 9: emomo.v1.ImageInfo
+	(TextPresence)(0),            // 10: emomo.v1.TextPresence
+	(*Meme)(nil),                 // 11: emomo.v1.Meme
 }
 var file_emomo_v1_import_proto_depIdxs = []int32{
-	5, // 0: emomo.v1.ImportMetadata.image_info:type_name -> emomo.v1.ImageInfo
-	6, // 1: emomo.v1.ImportMetadata.text_presence:type_name -> emomo.v1.TextPresence
-	7, // 2: emomo.v1.ImportResponse.meme:type_name -> emomo.v1.Meme
-	6, // 3: emomo.v1.ImportResponse.text_presence:type_name -> emomo.v1.TextPresence
-	7, // 4: emomo.v1.ImportLookupResponse.existing:type_name -> emomo.v1.Meme
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	9,  // 0: emomo.v1.ImportMetadata.image_info:type_name -> emomo.v1.ImageInfo
+	10, // 1: emomo.v1.ImportMetadata.text_presence:type_name -> emomo.v1.TextPresence
+	11, // 2: emomo.v1.ImportResponse.meme:type_name -> emomo.v1.Meme
+	10, // 3: emomo.v1.ImportResponse.text_presence:type_name -> emomo.v1.TextPresence
+	11, // 4: emomo.v1.ImportLookupResponse.existing:type_name -> emomo.v1.Meme
+	7,  // 5: emomo.v1.TakedownReceipt.targets:type_name -> emomo.v1.TakedownTarget
+	6,  // [6:6] is the sub-list for method output_type
+	6,  // [6:6] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_emomo_v1_import_proto_init() }
@@ -412,13 +690,17 @@ func file_emomo_v1_import_proto_init() {
 	}
 	file_emomo_v1_types_proto_init()
 	file_emomo_v1_meme_proto_init()
+	file_emomo_v1_import_proto_msgTypes[5].OneofWrappers = []any{
+		(*TakedownPlanRequest_Sha256)(nil),
+		(*TakedownPlanRequest_Id)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emomo_v1_import_proto_rawDesc), len(file_emomo_v1_import_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

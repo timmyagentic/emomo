@@ -1,3 +1,4 @@
+import { applyLibraryMigrations } from './library-migrations.js';
 import { authorizedFetch, bindings, admission, downloadEntry } from './access-fixture.js';
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
@@ -13,6 +14,7 @@ let outbound = 0;
 const options = () => ({
   modules: true, script, compatibilityDate: '2026-07-30',
   bindings, durableObjects: { ...admission, DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } },
+  d1Databases: { DB: 'library' },
   r2Buckets: { IMAGES: 'images' },
   ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1004', simple: { limit: 30, period: 60 as const } } },
   outboundService: () => { outbound++; return new MFResponse('Forbidden', { status: 502 }); },
@@ -21,6 +23,7 @@ before(async () => {
   const bundle = await build({ stdin: { contents: downloadEntry, resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
   script = bundle.outputFiles[0].text;
   mf = new Miniflare(options());
+  await applyLibraryMigrations(await mf.getD1Database('DB'));
   await (await mf.getR2Bucket('IMAGES') as unknown as R2Bucket).put(key, new Uint8Array(PNG));
 });
 after(async () => { await mf?.dispose(); });
@@ -66,6 +69,7 @@ test('missing identity, limiter and R2 bindings fail closed; edge bulk guard ret
   try {
     assert.equal((await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.9' } })).status, 503);
     await broken.setOptions({ ...options(), r2Buckets: {} });
+    await applyLibraryMigrations(await broken.getD1Database('DB'));
     assert.equal((await authorizedFetch(broken, `https://images.test/${key}`, { headers: { 'cf-connecting-ip': '198.51.100.10' } })).status, 503);
     await broken.setOptions({ ...options(), ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1005', simple: { limit: 1, period: 60 } } } });
     // Three requests cover both sides of a fixed-minute boundary when the

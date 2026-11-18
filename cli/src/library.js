@@ -152,7 +152,14 @@ export async function libraryMain(args) {
       process.stdout.write(JSON.stringify({ schemaVersion: 1, ok, command, data }) + '\n');
       return ok ? 0 : 1;
     }
-    if (['help', '--help', '-h'].includes(command) && args.length <= 1) data = { commands: ['ingest IMAGE_DIRECTORY [--dir BATCH] [--mode realtime|batch]', 'batch-status BATCH', 'batch-resume BATCH', 'batch-retry BATCH', 'publish BATCH --confirm REVISION', 'connect --key-file PRIVATE_FILE [--api-url URL]', 'import METADATA --dir NEW_PATH [--vocabulary JSON]','prepare --catalog PATH --dir NEW_PATH --collection NAME --revision NAME','validate PATH','diff BASE_PATH TARGET_PATH'], publicationRequiresConfirmation: true };
+    if (['takedown-plan', 'takedown', 'connect-takedown'].includes(command)) {
+      const { takedownCommand } = await import('./library-takedown.js');
+      data = await takedownCommand(args);
+      const ok = data.status !== 'partial';
+      process.stdout.write(JSON.stringify({ schemaVersion: 1, ok, command, data }) + '\n');
+      return ok ? 0 : 1;
+    }
+    if (['help', '--help', '-h'].includes(command) && args.length <= 1) data = { commands: ['ingest IMAGE_DIRECTORY [--dir BATCH] [--mode realtime|batch]', 'batch-status BATCH', 'batch-resume BATCH', 'batch-retry BATCH', 'publish BATCH --confirm REVISION', 'takedown-plan SELECTION --out NEW_PLAN', 'takedown PLAN --confirm REVISION', 'connect-takedown --key-file PRIVATE_FILE [--api-url URL]', 'connect --key-file PRIVATE_FILE [--api-url URL]', 'import METADATA --dir NEW_PATH [--vocabulary JSON]','prepare --catalog PATH --dir NEW_PATH --collection NAME --revision NAME','validate PATH','diff BASE_PATH TARGET_PATH'], publicationRequiresConfirmation: true };
     else if (command === 'import' && args[1] && !args[1].startsWith('--')) {
       const opts = {};
       for (let i = 2; i < args.length; i += 2) {
