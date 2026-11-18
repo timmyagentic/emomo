@@ -27,3 +27,26 @@ message ImportResponse {
 message ImportLookupRequest { repeated string sha256 = 1; }
 message ImportLookupResponse { repeated Meme existing = 1; }
 message ImportErrorResponse { string code = 1; string message = 2; }
+
+// Maintenance-only takedown. A preview binds approval to the exact content
+// hash, and to every production record and object path that will be affected.
+message TakedownPlanRequest {
+  oneof selector {
+    string sha256 = 1;
+    string id = 2;
+  }
+}
+message TakedownApplyRequest {
+  string sha256 = 1;
+  string confirmation = 2;
+}
+message TakedownTarget {
+  string id = 1;
+  string storage_key = 2;
+}
+message TakedownReceipt {
+  string sha256 = 1;
+  repeated TakedownTarget targets = 2;
+  string confirmation = 3;
+  string taken_down_at = 4;
+}

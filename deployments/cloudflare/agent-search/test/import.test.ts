@@ -1,3 +1,4 @@
+import { applyLibraryMigrations } from './library-migrations.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
@@ -24,9 +25,7 @@ test('maintenance API requires full metadata and isolated credentials, persists 
   t.after(() => mf.dispose());
   const db = await mf.getD1Database('DB');
   const bucket = (await mf.getBindings<{ IMAGES: R2Bucket }>()).IMAGES;
-  const schema = await readFile('migrations/0001_text_index.sql', 'utf8');
-  await db.batch(schema.split('-- statement').map(s => s.trim()).filter(Boolean).map(s => db.prepare(s)));
-  await db.prepare(await readFile('migrations/0002_import_hash.sql', 'utf8')).run();
+  await applyLibraryMigrations(db);
   await db.prepare(importSQL(indexRow({ meme: { id: 'old', storage_key: 'old.png' }, annotation: { meme_id: 'old', description: '已有表情' } }))).run();
   const old = await db.prepare("SELECT * FROM memes WHERE id='old'").first();
   const upload = (meta: object, auth = token, data = PNG, origin = false) => {

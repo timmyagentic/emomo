@@ -1,3 +1,4 @@
+import { applyLibraryMigrations } from './library-migrations.js';
 import { authorizedFetch, bindings, admission, downloadEntry } from './access-fixture.js';
 // @ts-expect-error Shared dependency-free development environment helper.
 import { developmentEnv } from '../../../../scripts/dev.mjs';
@@ -150,7 +151,8 @@ test('actual installed CLI searches local D1, gets real metadata and downloads a
   const id = createHash('sha256').update(PNG).digest('hex');
   const imageKey = `collections/reviewed/${id}.png`;
   const downloadBundle = await build({ stdin: { contents: downloadEntry, resolveDir: process.cwd() }, write: false, bundle: true, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
-  const images = new Miniflare({ modules: true, script: downloadBundle.outputFiles[0].text, compatibilityDate: '2026-07-30', r2Buckets: { IMAGES: 'cli-images' }, bindings, durableObjects: { ...admission, DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } }, ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1004', simple: { limit: 30, period: 60 } } } });
+  const images = new Miniflare({ modules: true, script: downloadBundle.outputFiles[0].text, compatibilityDate: '2026-07-30', d1Databases: { DB: 'download-index' }, r2Buckets: { IMAGES: 'cli-images' }, bindings, durableObjects: { ...admission, DOWNLOAD_IP_LIMITER: { className: 'PerIpLimiter', useSQLite: true } }, ratelimits: { DOWNLOAD_RATE_LIMITER: { namespace_id: '1004', simple: { limit: 30, period: 60 } } } });
+  await applyLibraryMigrations(await images.getD1Database('DB'));
   await (await images.getR2Bucket('IMAGES') as unknown as R2Bucket).put(imageKey, new Uint8Array(PNG));
   const server = createServer(async (incoming, outgoing) => {
     try {

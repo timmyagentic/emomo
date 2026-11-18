@@ -8,18 +8,22 @@ import { normalizeMeme, identifyImage, saveImage } from './client.js';
 import { SHA256, MAX_IMPORT_IMAGE_BYTES } from './import-metadata.js';
 
 export const IMPORT_API = 'https://imports.timmyagentic.si/admin/v1';
-const keyPattern = /^emomo_import_[a-f0-9]{64}$/;
-const configPath = env => join(resolve(env.EMOMO_CONFIG_DIR || join(env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'emomo')), 'import-access.json');
-const invalid = () => new EmomoError('IMPORT_ACCESS_REQUIRED', 'Configure maintenance access with emomo-library connect --key-file PRIVATE_FILE.');
-async function privateFile(path) {
+const scopes = {
+  import: { pattern: /^emomo_import_[a-f0-9]{64}$/, command: 'connect' },
+  takedown: { pattern: /^emomo_takedown_[a-f0-9]{64}$/, command: 'connect-takedown' },
+};
+const configPath = (env, scope) => join(resolve(env.EMOMO_CONFIG_DIR || join(env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'emomo')), `${scope}-access.json`);
+const invalid = scope => new EmomoError(scope === 'import' ? 'IMPORT_ACCESS_REQUIRED' : 'TAKEDOWN_ACCESS_REQUIRED',
+  `Configure maintenance access with emomo-library ${scopes[scope].command} --key-file PRIVATE_FILE.`);
+async function privateFile(path, scope) {
   const info = await lstat(path);
-  if (!info.isFile() || info.isSymbolicLink() || info.size > 8192 || process.platform !== 'win32' && (info.mode & 0o077)) throw invalid();
+  if (!info.isFile() || info.isSymbolicLink() || info.size > 8192 || process.platform !== 'win32' && (info.mode & 0o077)) throw invalid(scope);
   return readFile(path, 'utf8');
 }
-export async function connectImport(keyFile, api = IMPORT_API, env = process.env) {
-  const token = (await privateFile(resolve(keyFile))).trim();
-  if (!keyPattern.test(token)) throw invalid();
-  const apiUrl = canonicalApi(api), path = configPath(env);
+async function connectMaintenance(keyFile, api, env, scope) {
+  const token = (await privateFile(resolve(keyFile), scope)).trim();
+  if (!scopes[scope].pattern.test(token)) throw invalid(scope);
+  const apiUrl = canonicalApi(api), path = configPath(env, scope);
   await mkdir(resolve(path, '..'), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${randomUUID()}`;
   try {
@@ -28,17 +32,22 @@ export async function connectImport(keyFile, api = IMPORT_API, env = process.env
   } finally { await unlink(temporary).catch(() => {}); }
   return { apiUrl, configPath: path, configured: true };
 }
-export async function configuredImportClient(env = process.env) {
+async function configuredMaintenance(env, scope) {
   let data;
-  try { data = JSON.parse(await privateFile(configPath(env))); }
-  catch (error) { if (error.code === 'ENOENT') return null; throw invalid(); }
-  if (!keyPattern.test(data.token)) throw invalid();
-  return new ImportClient(canonicalApi(data.apiUrl), data.token);
+  try { data = JSON.parse(await privateFile(configPath(env, scope), scope)); }
+  catch (error) { if (error.code === 'ENOENT') return null; throw invalid(scope); }
+  if (!scopes[scope].pattern.test(data?.token)) throw invalid(scope);
+  return new ImportClient(canonicalApi(data.apiUrl), data.token, fetch, scope);
 }
+export const connectImport = (keyFile, api = IMPORT_API, env = process.env) => connectMaintenance(keyFile, api, env, 'import');
+export const configuredImportClient = (env = process.env) => configuredMaintenance(env, 'import');
+export const connectTakedown = (keyFile, api = IMPORT_API, env = process.env) => connectMaintenance(keyFile, api, env, 'takedown');
+export const configuredTakedownClient = (env = process.env) => configuredMaintenance(env, 'takedown');
+
 export class ImportClient {
-  constructor(apiUrl, token, transport = fetch) {
+  constructor(apiUrl, token, transport = fetch, scope = 'import') {
     this.apiUrl = canonicalApi(apiUrl);
-    if (!keyPattern.test(token)) throw invalid();
+    if (!scopes[scope].pattern.test(token)) throw invalid(scope);
     this.token = token;
     this.transport = transport;
     this.minimumIntervalMs = 0;
@@ -49,9 +58,19 @@ export class ImportClient {
     if (body !== undefined && !(body instanceof FormData)) { headers['content-type'] = 'application/json'; body = JSON.stringify(body); }
     let response;
     try { response = await this.transport(`${this.apiUrl}/${path}`, { method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(90000) }); }
-    catch { throw new EmomoError('IMPORT_NETWORK_ERROR', 'Import response unavailable. Repeat publish with the same confirmation to resume.', { retryable: true }); }
+    catch { throw new EmomoError('IMPORT_NETWORK_ERROR', 'Maintenance response unavailable. Retry the same operation to resume.', { retryable: true }); }
     if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new EmomoError('IMPORT_REDIRECT', 'Maintenance redirects are rejected. Configure the final endpoint.'); }
-    if (!response.ok) { await response.body?.cancel(); throw new EmomoError('IMPORT_REJECTED', `Maintenance request failed (HTTP ${response.status}).`, { httpStatus: response.status, retryable: response.status >= 500 }); }
+    if (!response.ok) {
+      const reason = response.headers.get('x-emomo-maintenance-error');
+      await response.body?.cancel();
+      if (response.status === 409 && path === 'imports' && reason === 'IMAGE_TAKEN_DOWN') {
+        throw new EmomoError('IMAGE_TAKEN_DOWN', 'This SHA-256 was taken down. Remove it from the import batch.', { httpStatus: 409 });
+      }
+      if (response.status === 409 && path === 'takedowns' && reason === 'TAKEDOWN_PREVIEW_CHANGED') {
+        throw new EmomoError('TAKEDOWN_PREVIEW_CHANGED', 'The affected production records changed. Prepare and review a fresh plan.', { httpStatus: 409 });
+      }
+      throw new EmomoError('IMPORT_REJECTED', `Maintenance request failed (HTTP ${response.status}).`, { httpStatus: response.status, retryable: response.status >= 500 });
+    }
     return response;
   }
   async request(path, body) {

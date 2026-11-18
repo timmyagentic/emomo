@@ -1,4 +1,4 @@
-import { create, fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
+import { create, fromJson, toJson } from '@bufbuild/protobuf';
 import { ImportMetadataSchema, ImportResponseSchema, ImportLookupRequestSchema, ImportLookupResponseSchema, ImportErrorResponseSchema } from '../gen/emomo/v1/import_pb.js';
 import { MemeSchema } from '../gen/emomo/v1/meme_pb.js';
 import { keywordSearch, HttpError } from './index.js';
@@ -6,43 +6,12 @@ import { indexRow, rowValues, validateStorageKey } from './metadata.js';
 import { importMetadata, SHA256, MAX_IMPORT_IMAGE_BYTES } from '../../../../cli/src/import-metadata.js';
 import { staticImageInfo } from '../../../../cli/src/image-info.js';
 
-const OPTIONS = { useProtoFieldName: true, enumAsInteger: true, alwaysEmitImplicit: true };
-const HASH_SQL = "json_extract(meme_json, '$.content_hash')";
-type Stored = { meme_json: string; description: string; text_presence: number };
-class ImportError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
-}
-const json = (value: JsonValue, status = 200) => Response.json(value, { status, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
-const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map(b => b.toString(16).padStart(2, '0')).join('');
+import { authenticate, body, ImportError, json, hex, OPTIONS, HASH_SQL } from './maintenance-http.js';
+import { isTakenDown, takedown } from './takedown.js';
 
-async function authenticate(request: Request, env: ImportEnv) {
-  if (!SHA256.test(env.IMPORT_KEY_SHA256 ?? '')) throw new ImportError(503, 'IMPORT_UNAVAILABLE', 'Maintenance access is not configured.');
-  const token = /^Bearer (emomo_import_[a-f0-9]{64})$/.exec(request.headers.get('authorization') ?? '')?.[1];
-  if (!token) throw new ImportError(401, 'UNAUTHORIZED', 'A maintenance key is required.');
-  const hash = hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)));
-  if (!crypto.subtle.timingSafeEqual(new TextEncoder().encode(hash), new TextEncoder().encode(env.IMPORT_KEY_SHA256))) throw new ImportError(401, 'UNAUTHORIZED', 'A maintenance key is required.');
-}
-async function body(request: Request, maximum: number): Promise<Uint8Array> {
-  if (!request.body) throw new ImportError(400, 'INVALID_BODY', 'A request body is required.');
-  if (Number(request.headers.get('content-length')) > maximum) throw new ImportError(413, 'BODY_TOO_LARGE', 'Import body exceeds the size limit.');
-  const reader = request.body.getReader(), chunks: Uint8Array[] = [];
-  let length = 0, timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => {}); }, 60000);
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (timedOut) throw new ImportError(408, 'BODY_TIMEOUT', 'Import upload timed out.');
-      if (done) break;
-      length += value.length;
-      if (length > maximum) { await reader.cancel(); throw new ImportError(413, 'BODY_TOO_LARGE', 'Import body exceeds the size limit.'); }
-      chunks.push(value);
-    }
-  } finally { clearTimeout(timer); reader.releaseLock(); }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return bytes;
-}
+type Stored = { meme_json: string; description: string; text_presence: number };
+const revoked = () => new ImportError(409, 'IMAGE_TAKEN_DOWN', 'This SHA-256 has been taken down and cannot be imported.');
+
 function meme(row: Stored, env: ImportEnv) {
   const value = fromJson(MemeSchema, JSON.parse(row.meme_json));
   value.url = `${env.IMAGE_BASE_URL}/${value.storageKey}`;
@@ -84,6 +53,7 @@ async function ingest(request: Request, env: ImportEnv) {
     if (error instanceof ImportError) throw error;
     throw new ImportError(400, 'INVALID_METADATA', 'Complete metadata, static image dimensions, format and SHA-256 must agree.');
   }
+  if (await isTakenDown(env.DB, metadata.sha256)) throw revoked();
   const found = await existing(env, metadata.sha256);
   if (found) return result(found, env, true);
   const extension = ['', 'jpg', 'png', 'webp'][metadata.image_info.format];
@@ -100,7 +70,10 @@ async function ingest(request: Request, env: ImportEnv) {
     SELECT ?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM memes WHERE ${HASH_SQL} = ?)
     ON CONFLICT(id) DO NOTHING RETURNING meme_json,description,text_presence`).bind(...rowValues(row), metadata.sha256).first<Stored>();
   const stored = inserted ?? await existing(env, metadata.sha256);
-  if (!stored) throw new ImportError(409, 'ID_CONFLICT', 'The generated ID is already used by another asset.');
+  if (!stored) {
+    if (await isTakenDown(env.DB, metadata.sha256)) throw revoked();
+    throw new ImportError(409, 'ID_CONFLICT', 'The generated ID is already used by another asset.');
+  }
   return result(stored, env, !inserted);
 }
 async function originalImage(hash: string, env: ImportEnv) {
@@ -124,10 +97,15 @@ export default {
     try {
       const url = new URL(request.url);
       const imageHash = /^\/admin\/v1\/images\/([a-f0-9]{64})$/.exec(url.pathname)?.[1];
-      if (url.search || !imageHash && !['/admin/v1/imports', '/admin/v1/lookup', '/admin/v1/search'].includes(url.pathname)) throw new ImportError(404, 'NOT_FOUND', 'Route not found.');
+      const takedownRoute = ['/admin/v1/takedowns/plan', '/admin/v1/takedowns'].includes(url.pathname);
+      if (url.search || !imageHash && !takedownRoute && !['/admin/v1/imports', '/admin/v1/lookup', '/admin/v1/search'].includes(url.pathname)) throw new ImportError(404, 'NOT_FOUND', 'Route not found.');
       if (request.headers.has('origin')) throw new ImportError(403, 'FORBIDDEN', 'Use the maintenance script.');
       if (request.method !== (imageHash ? 'GET' : 'POST')) throw new ImportError(405, 'METHOD_NOT_ALLOWED', 'Invalid HTTP method.');
-      await authenticate(request, env);
+      if (takedownRoute) {
+        await authenticate(request, env.TAKEDOWN_KEY_SHA256, 'takedown');
+        return await takedown(request, env.DB, url.pathname === '/admin/v1/takedowns');
+      }
+      await authenticate(request, env.IMPORT_KEY_SHA256, 'import');
       if (imageHash) return await originalImage(imageHash, env);
       if (url.pathname.endsWith('/search')) {
         const response = await keywordSearch(request, env);
@@ -137,9 +115,14 @@ export default {
       return url.pathname.endsWith('/lookup') ? await lookup(request, env) : await ingest(request, env);
     } catch (error) {
       if (error instanceof HttpError) return json(toJson(ImportErrorResponseSchema, create(ImportErrorResponseSchema, { code: 'INVALID_QUERY', message: error.message }), OPTIONS), error.status);
-      if (error instanceof ImportError) return json(toJson(ImportErrorResponseSchema, create(ImportErrorResponseSchema, { code: error.code, message: error.message }), OPTIONS), error.status);
-      console.error(JSON.stringify({ event: 'import_unavailable' }));
-      return json(toJson(ImportErrorResponseSchema, create(ImportErrorResponseSchema, { code: 'IMPORT_UNAVAILABLE', message: 'Import could not finish. Retry the same prepared image.' }), OPTIONS), 503);
+      if (error instanceof ImportError) {
+        const response = json(toJson(ImportErrorResponseSchema, create(ImportErrorResponseSchema, { code: error.code, message: error.message }), OPTIONS), error.status);
+        if (['IMAGE_TAKEN_DOWN', 'TAKEDOWN_PREVIEW_CHANGED'].includes(error.code)) response.headers.set('x-emomo-maintenance-error', error.code);
+        return response;
+      }
+      const isTakedown = new URL(request.url).pathname.startsWith('/admin/v1/takedowns');
+      console.error(JSON.stringify({ event: isTakedown ? 'takedown_unavailable' : 'import_unavailable' }));
+      return json(toJson(ImportErrorResponseSchema, create(ImportErrorResponseSchema, { code: isTakedown ? 'TAKEDOWN_UNAVAILABLE' : 'IMPORT_UNAVAILABLE', message: 'Maintenance request could not finish. Retry the same confirmed operation.' }), OPTIONS), 503);
     }
   },
 } satisfies ExportedHandler<ImportEnv>;

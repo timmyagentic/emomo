@@ -1,8 +1,9 @@
 import { authenticate, admit, AccessError, accessError } from './access.js';
 import { enforceInterval, rateLimited, uncached } from './rate-limit.js';
+import { isTakenDown } from './takedown.js';
 export { PerIpLimiter } from './rate-limit.js';
 
-const IMAGE = /^\/collections\/reviewed\/[a-f0-9]{64}\.(png|jpg|webp)$/;
+const IMAGE = /^\/collections\/reviewed\/([a-f0-9]{64})\.(png|jpg|webp)$/;
 const TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' };
 const MAX_BYTES = 25 * 1024 * 1024;
 const error = (message: string, status: number) => uncached(Response.json({ error: message }, { status }));
@@ -26,6 +27,7 @@ export default {
       reservation = await admit(env, 'download', identity);
       // No ranges or conditional shortcuts: every full-image request consumes a slot.
       if (request.headers.has('range')) return error('Partial downloads are not supported.', 416);
+      if (await isTakenDown(env.DB, match[1])) return error('Image not found.', 404);
       const key = url.pathname.slice(1);
       let stream: ReadableStream | null = null;
       let object: R2Object | null;
@@ -41,7 +43,7 @@ export default {
         return error('Image exceeds download size limit.', 413);
       }
       return uncached(new Response(stream, { headers: {
-        'content-type': TYPES[match[1]],
+        'content-type': TYPES[match[2]],
         'content-length': String(object.size),
         'x-content-type-options': 'nosniff',
         'accept-ranges': 'none',

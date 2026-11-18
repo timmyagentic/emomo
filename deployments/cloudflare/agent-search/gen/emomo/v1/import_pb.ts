@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file emomo/v1/import.proto.
  */
 export const file_emomo_v1_import: GenFile = /*@__PURE__*/
-  fileDesc("ChVlbW9tby92MS9pbXBvcnQucHJvdG8SCGVtb21vLnYxIu0BCg5JbXBvcnRNZXRhZGF0YRIOCgZzaGEyNTYYASABKAkSJwoKaW1hZ2VfaW5mbxgCIAEoCzITLmVtb21vLnYxLkltYWdlSW5mbxIQCghjYXRlZ29yeRgDIAEoCRITCgtkZXNjcmlwdGlvbhgEIAEoCRIQCghvY3JfdGV4dBgFIAEoCRItCg10ZXh0X3ByZXNlbmNlGAYgASgOMhYuZW1vbW8udjEuVGV4dFByZXNlbmNlEgwKBHRhZ3MYByADKAkSFgoOc2VhcmNoX2FsaWFzZXMYCCADKAkSFAoMcHJldmlld19vbmx5GAkgASgIIoUBCg5JbXBvcnRSZXNwb25zZRIcCgRtZW1lGAEgASgLMg4uZW1vbW8udjEuTWVtZRIRCglkdXBsaWNhdGUYAiABKAgSEwoLZGVzY3JpcHRpb24YAyABKAkSLQoNdGV4dF9wcmVzZW5jZRgEIAEoDjIWLmVtb21vLnYxLlRleHRQcmVzZW5jZSIlChNJbXBvcnRMb29rdXBSZXF1ZXN0Eg4KBnNoYTI1NhgBIAMoCSI4ChRJbXBvcnRMb29rdXBSZXNwb25zZRIgCghleGlzdGluZxgBIAMoCzIOLmVtb21vLnYxLk1lbWUiNAoTSW1wb3J0RXJyb3JSZXNwb25zZRIMCgRjb2RlGAEgASgJEg8KB21lc3NhZ2UYAiABKAlCLVorZ2l0aHViLmNvbS90aW1teS9lbW9tby9nZW4vZW1vbW8vdjE7ZW1vbW92MWIGcHJvdG8z", [file_emomo_v1_types, file_emomo_v1_meme]);
+  fileDesc("ChVlbW9tby92MS9pbXBvcnQucHJvdG8SCGVtb21vLnYxIu0BCg5JbXBvcnRNZXRhZGF0YRIOCgZzaGEyNTYYASABKAkSJwoKaW1hZ2VfaW5mbxgCIAEoCzITLmVtb21vLnYxLkltYWdlSW5mbxIQCghjYXRlZ29yeRgDIAEoCRITCgtkZXNjcmlwdGlvbhgEIAEoCRIQCghvY3JfdGV4dBgFIAEoCRItCg10ZXh0X3ByZXNlbmNlGAYgASgOMhYuZW1vbW8udjEuVGV4dFByZXNlbmNlEgwKBHRhZ3MYByADKAkSFgoOc2VhcmNoX2FsaWFzZXMYCCADKAkSFAoMcHJldmlld19vbmx5GAkgASgIIoUBCg5JbXBvcnRSZXNwb25zZRIcCgRtZW1lGAEgASgLMg4uZW1vbW8udjEuTWVtZRIRCglkdXBsaWNhdGUYAiABKAgSEwoLZGVzY3JpcHRpb24YAyABKAkSLQoNdGV4dF9wcmVzZW5jZRgEIAEoDjIWLmVtb21vLnYxLlRleHRQcmVzZW5jZSIlChNJbXBvcnRMb29rdXBSZXF1ZXN0Eg4KBnNoYTI1NhgBIAMoCSI4ChRJbXBvcnRMb29rdXBSZXNwb25zZRIgCghleGlzdGluZxgBIAMoCzIOLmVtb21vLnYxLk1lbWUiNAoTSW1wb3J0RXJyb3JSZXNwb25zZRIMCgRjb2RlGAEgASgJEg8KB21lc3NhZ2UYAiABKAkiQQoTVGFrZWRvd25QbGFuUmVxdWVzdBIQCgZzaGEyNTYYASABKAlIABIMCgJpZBgCIAEoCUgAQgoKCHNlbGVjdG9yIjwKFFRha2Vkb3duQXBwbHlSZXF1ZXN0Eg4KBnNoYTI1NhgBIAEoCRIUCgxjb25maXJtYXRpb24YAiABKAkiMQoOVGFrZWRvd25UYXJnZXQSCgoCaWQYASABKAkSEwoLc3RvcmFnZV9rZXkYAiABKAkieQoPVGFrZWRvd25SZWNlaXB0Eg4KBnNoYTI1NhgBIAEoCRIpCgd0YXJnZXRzGAIgAygLMhguZW1vbW8udjEuVGFrZWRvd25UYXJnZXQSFAoMY29uZmlybWF0aW9uGAMgASgJEhUKDXRha2VuX2Rvd25fYXQYBCABKAlCLVorZ2l0aHViLmNvbS90aW1teS9lbW9tby9nZW4vZW1vbW8vdjE7ZW1vbW92MWIGcHJvdG8z", [file_emomo_v1_types, file_emomo_v1_meme]);
 
 /**
  * POST /admin/v1/imports uses multipart/form-data with one metadata JSON
@@ -165,3 +165,111 @@ export type ImportErrorResponse = Message<"emomo.v1.ImportErrorResponse"> & {
  */
 export const ImportErrorResponseSchema: GenMessage<ImportErrorResponse> = /*@__PURE__*/
   messageDesc(file_emomo_v1_import, 4);
+
+/**
+ * Maintenance-only takedown. A preview binds approval to the exact content
+ * hash, and to every production record and object path that will be affected.
+ *
+ * @generated from message emomo.v1.TakedownPlanRequest
+ */
+export type TakedownPlanRequest = Message<"emomo.v1.TakedownPlanRequest"> & {
+  /**
+   * @generated from oneof emomo.v1.TakedownPlanRequest.selector
+   */
+  selector: {
+    /**
+     * @generated from field: string sha256 = 1;
+     */
+    value: string;
+    case: "sha256";
+  } | {
+    /**
+     * @generated from field: string id = 2;
+     */
+    value: string;
+    case: "id";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message emomo.v1.TakedownPlanRequest.
+ * Use `create(TakedownPlanRequestSchema)` to create a new message.
+ */
+export const TakedownPlanRequestSchema: GenMessage<TakedownPlanRequest> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_import, 5);
+
+/**
+ * @generated from message emomo.v1.TakedownApplyRequest
+ */
+export type TakedownApplyRequest = Message<"emomo.v1.TakedownApplyRequest"> & {
+  /**
+   * @generated from field: string sha256 = 1;
+   */
+  sha256: string;
+
+  /**
+   * @generated from field: string confirmation = 2;
+   */
+  confirmation: string;
+};
+
+/**
+ * Describes the message emomo.v1.TakedownApplyRequest.
+ * Use `create(TakedownApplyRequestSchema)` to create a new message.
+ */
+export const TakedownApplyRequestSchema: GenMessage<TakedownApplyRequest> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_import, 6);
+
+/**
+ * @generated from message emomo.v1.TakedownTarget
+ */
+export type TakedownTarget = Message<"emomo.v1.TakedownTarget"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string storage_key = 2;
+   */
+  storageKey: string;
+};
+
+/**
+ * Describes the message emomo.v1.TakedownTarget.
+ * Use `create(TakedownTargetSchema)` to create a new message.
+ */
+export const TakedownTargetSchema: GenMessage<TakedownTarget> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_import, 7);
+
+/**
+ * @generated from message emomo.v1.TakedownReceipt
+ */
+export type TakedownReceipt = Message<"emomo.v1.TakedownReceipt"> & {
+  /**
+   * @generated from field: string sha256 = 1;
+   */
+  sha256: string;
+
+  /**
+   * @generated from field: repeated emomo.v1.TakedownTarget targets = 2;
+   */
+  targets: TakedownTarget[];
+
+  /**
+   * @generated from field: string confirmation = 3;
+   */
+  confirmation: string;
+
+  /**
+   * @generated from field: string taken_down_at = 4;
+   */
+  takenDownAt: string;
+};
+
+/**
+ * Describes the message emomo.v1.TakedownReceipt.
+ * Use `create(TakedownReceiptSchema)` to create a new message.
+ */
+export const TakedownReceiptSchema: GenMessage<TakedownReceipt> = /*@__PURE__*/
+  messageDesc(file_emomo_v1_import, 8);

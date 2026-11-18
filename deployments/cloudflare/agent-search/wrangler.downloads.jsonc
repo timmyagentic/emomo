@@ -14,6 +14,12 @@
       "custom_domain": true
     }
   ],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "emomo-agent-index",
+    "database_id": "576f07ac-6950-41fe-922f-637cface62f8",
+    "remote": false
+  }],
   "r2_buckets": [
     {
       "binding": "IMAGES",

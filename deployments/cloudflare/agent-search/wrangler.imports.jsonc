@@ -15,7 +15,7 @@
     "migrations_dir": "migrations"
   }],
   "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "emomo-reviewed-public", "remote": false }],
-  "secrets": { "required": ["IMPORT_KEY_SHA256"] },
+  "secrets": { "required": ["IMPORT_KEY_SHA256", "TAKEDOWN_KEY_SHA256"] },
   "vars": { "IMAGE_BASE_URL": "https://images.timmyagentic.si" },
   "observability": { "enabled": true, "head_sampling_rate": 0.1 }
 }
