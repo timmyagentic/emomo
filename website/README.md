@@ -1,5 +1,7 @@
 # Emomo website and account service
 
+Source for the React and HeroUI interface lives in `interface/`. Run `npm ci && npm run build` there after editing components. Commit the generated HTML and local assets with their source.
+
 The static public site and the account API run on `emomo-official`. The existing 0.1.1 CLI accepts self-service keys without a client upgrade.
 
 `/account` combines registration and login through a six-digit email code. A code expires after ten minutes, permits five attempts, and is consumed atomically. A successful verification creates a 14-day Secure, HttpOnly, SameSite=Lax host-only session. POST requests require the same Origin. Account JSON DTOs come from `backend/proto/emomo/v1/account.proto`; run `npm --prefix protocol run generate` from the repository root to regenerate the current Worker and website DTOs directly. The retired native app is not part of protocol generation.
