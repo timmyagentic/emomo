@@ -1,0 +1,128 @@
+@import "./base.css";
+[data-product-edition="emomo"] .pi-surface {
+  --pi-paper: #fff4dd;
+  --pi-fg: #382b21;
+  --pi-muted: #675148;
+  --pi-accent: #753a27;
+  --pi-line: #d4b59d;
+  --pi-tint: #f4e3cf;
+}
+.meme-hero {
+  background: #fff4dd;
+}
+.meme-hero h1 {
+  font-size: clamp(42px, 4.8vw, 72px);
+  line-height: 1.04;
+}
+.meme-desk {
+  padding: clamp(18px, 2.6vw, 34px);
+  background: #f5c998;
+  border-radius: 15px;
+  border: 1px solid #d6ae7c;
+}
+.meme-desk-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.meme-desk-title h2 {
+  font-size: clamp(21px, 2vw, 30px);
+  line-height: 1.25;
+}
+.meme-desk .pi-tab-list {
+  background: #fbe5c7;
+}
+.meme-result {
+  display: grid;
+  grid-template-columns: minmax(105px, 0.78fr) minmax(0, 1.22fr);
+  gap: 15px;
+  align-items: center;
+  background: #fff9ed;
+  padding: clamp(14px, 2.5vw, 32px);
+  border-radius: 12px;
+}
+.meme-result > p {
+  font-size: clamp(19px, 2.1vw, 30px);
+  font-weight: 650;
+  line-height: 1.35;
+  color: #493a2d;
+}
+.meme-result small {
+  grid-column: 1/-1;
+  font-size: 13px;
+  color: #6d5744;
+}
+.meme-result .pi-figure img {
+  max-height: 292px;
+  border-radius: 5px;
+}
+.meme-film video {
+  width: 100%;
+  max-height: 315px;
+  background: #fff8ee;
+  border-radius: 8px;
+}
+.meme-film > a {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  font-size: 14px;
+  text-decoration: underline;
+}
+@media (max-width: 500px) {
+  .meme-hero h1 {
+    font-size: 44px;
+  }
+  .meme-result {
+    gap: 10px;
+    padding: 12px;
+  }
+  .meme-desk .pi-tab {
+    padding-inline: 10px;
+  }
+}
+
+.pi-reading-index {
+  display: block;
+  width: min(100%, 620px);
+  text-align: left;
+  margin: 15px 0;
+  color: var(--pi-fg);
+}
+.pi-reading-index button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 7px 12px;
+  border: 1px solid var(--pi-line);
+  border-radius: 7px;
+  background: var(--pi-paper);
+  color: var(--pi-fg);
+  font-size: 15px;
+  font-weight: 650;
+}
+.pi-reading-index ul {
+  list-style: none;
+  padding: 8px 14px;
+  margin: 5px 0;
+  border-left: 2px solid var(--pi-accent);
+}
+.pi-reading-index a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 35px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pi-reading-index li {
+  font-size: 15px;
+  margin: 0;
+}
+body[data-product-subpage] main {
+  scroll-margin-top: 15px;
+}
+body[data-product-subpage] main :is(h2, section[id]) {
+  scroll-margin-top: 12px;
+}

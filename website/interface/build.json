@@ -1,0 +1,8 @@
+{
+  "publicDirectory": "../public",
+  "key": "emomo",
+  "documents": [
+    "docs",
+    "account"
+  ]
+}
