@@ -345,26 +345,3 @@
 .account-wrap a {
   text-underline-offset: 4px;
 }
-
-
-.account-wrap .account-heading h1 {
-  font-size: clamp(30px, 4vw, 51px);
-  line-height: 1.12;
-}
-
-.account-wrap .signin {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
-  gap: clamp(24px, 5vw, 72px);
-  margin-block: 24px;
-}
-
-.signin .intro h2 {
-  font-size: 22px;
-}
-
-@media (max-width: 700px) {
-  .account-wrap .signin {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-}
