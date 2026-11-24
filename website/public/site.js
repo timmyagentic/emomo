@@ -23,6 +23,40 @@ if (menu && nav) {
     }
   });
 }
+const tabs = [...document.querySelectorAll('[data-example]')];
+function selectExample(tab, focus = false) {
+  tabs.forEach((item) => {
+    item.setAttribute('aria-selected', String(item === tab));
+    item.tabIndex = item === tab ? 0 : -1;
+    document.getElementById(item.getAttribute('aria-controls')).hidden =
+      item !== tab;
+  });
+  if (focus) tab.focus();
+}
+tabs.forEach((tab, index) => {
+  tab.addEventListener('click', () => selectExample(tab));
+  tab.addEventListener('keydown', (event) => {
+    let next;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
+      next = (index + 1) % tabs.length;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
+      next = (index + tabs.length - 1) % tabs.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = tabs.length - 1;
+    if (next !== undefined) {
+      event.preventDefault();
+      selectExample(tabs[next], true);
+    }
+  });
+});
+const tabList = document.querySelector(".example-tabs");
+if (tabList) {
+  import("./ui/controls.js").then(({ mountTabs }) => {
+    mountTabs(tabList, undefined, true);
+  }).catch(() => {
+    // Keep the original tab handlers when the enhancement is unavailable.
+  });
+}
 for (const button of document.querySelectorAll('[data-copy]')) {
   const label = button.textContent;
   button.addEventListener('click', async () => {
@@ -45,5 +79,27 @@ for (const button of document.querySelectorAll('[data-copy]')) {
       if (status)
         status.textContent = '未能访问剪贴板，已选中安装 Prompt，请手动复制';
     }
+  });
+}
+
+const demoVideo = document.getElementById('demo-video');
+const playback = document.querySelector('[data-demo-playback]');
+if (demoVideo && playback) {
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const updateLabel = () => {
+    playback.textContent = demoVideo.paused ? '播放演示' : '暂停演示';
+  };
+  const play = () => demoVideo.play().catch(updateLabel);
+  demoVideo.addEventListener('play', updateLabel);
+  demoVideo.addEventListener('pause', updateLabel);
+  playback.addEventListener('click', () => {
+    if (demoVideo.paused) play();
+    else demoVideo.pause();
+  });
+  demoVideo.controls = false;
+  playback.hidden = false;
+  if (!motion.matches) play();
+  motion.addEventListener('change', event => {
+    if (event.matches) demoVideo.pause();
   });
 }

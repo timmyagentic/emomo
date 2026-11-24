@@ -890,6 +890,3 @@ td code {
   .navcta-long { display: none; }
   .navcta-short { display: inline; }
 }
-
-.example-original { display: inline-flex; align-items: center; justify-content: center; cursor: zoom-in; }
-.example-original:focus-visible { outline: 3px solid #284ccd; outline-offset: 4px; }

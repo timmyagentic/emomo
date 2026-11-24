@@ -1,7 +1,5 @@
 # Emomo website and account service
 
-Source for the React and HeroUI interface lives in `interface/`. Run `npm ci && npm run build` there after editing components. Commit the generated HTML and local assets with their source.
-
 The static public site and the account API run on `emomo-official`. The existing 0.1.1 CLI accepts self-service keys without a client upgrade.
 
 `/account` combines registration and login through a six-digit email code. A code expires after ten minutes, permits five attempts, and is consumed atomically. A successful verification creates a 14-day Secure, HttpOnly, SameSite=Lax host-only session. POST requests require the same Origin. Account JSON DTOs come from `backend/proto/emomo/v1/account.proto`; run `npm --prefix protocol run generate` from the repository root to regenerate the current Worker and website DTOs directly. The retired native app is not part of protocol generation.
@@ -21,7 +19,7 @@ Keep current CLI version/download links aligned with the published release; `pub
 
 ## timmyagentic visual system
 
-The landing page presents the two public reaction images and a playable product demonstration as a media gallery.
+The product website follows the approved timmyagentic main-site visual language: Instrument Sans and Noto Sans SC, paper/ink colors, blue emphasis, quiet image backgrounds, generous spacing, and a shared parent-brand navigation and footer. Product content, languages, existing links and JavaScript interactions stay owned by this website.
 
 The self-hosted visual assets live under `brand/` in the static directory. Font licenses are included in `brand/fonts/`; Chinese subsets cover the current HTML/JavaScript copy (800 characters). Regenerate those subsets when adding new characters; system fallbacks remain configured. The ambient image is the same approved asset used on the main site. No third-party font request is made by visitors.
 
