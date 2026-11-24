@@ -1,85 +1,152 @@
 @import "./base.css";
 [data-product-edition="emomo"] .pi-surface {
-  --pi-paper: #fff4dd;
-  --pi-fg: #382b21;
-  --pi-muted: #675148;
-  --pi-accent: #753a27;
-  --pi-line: #d4b59d;
-  --pi-tint: #f4e3cf;
+  --pi-fg: #221e25;
+  --pi-muted: #55505a;
+  --pi-accent: #613c89;
+  --pi-tint: #efeaf4;
+  --pi-line: #e1dce6;
 }
 .meme-hero {
-  background: #fff4dd;
+  background: #fff;
+  padding-block: clamp(28px, 4vw, 55px);
 }
-.meme-hero h1 {
-  font-size: clamp(42px, 4.8vw, 72px);
-  line-height: 1.04;
-}
-.meme-desk {
-  padding: clamp(18px, 2.6vw, 34px);
-  background: #f5c998;
-  border-radius: 15px;
-  border: 1px solid #d6ae7c;
-}
-.meme-desk-title {
+.meme-hero .meme-directory-head {
+  background: transparent;
+  position: static;
+  border: 0;
+  padding: 0;
   display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 14px;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
 }
-.meme-desk-title h2 {
-  font-size: clamp(21px, 2vw, 30px);
-  line-height: 1.25;
+.meme-directory-head h1 {
+  font-size: clamp(38px, 5vw, 68px);
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  margin: 0;
 }
-.meme-desk .pi-tab-list {
-  background: #fbe5c7;
+.meme-directory-head p {
+  color: #544e59;
+  font-size: 16px;
+  margin: 12px 0 0;
 }
-.meme-result {
+.meme-directory-head .pi-actions {
+  margin: 0;
+}
+.meme-shelf {
+  margin-top: 28px;
+}
+.meme-shelf .pi-tab-list {
+  margin-bottom: 18px;
+}
+.meme-grid {
   display: grid;
-  grid-template-columns: minmax(105px, 0.78fr) minmax(0, 1.22fr);
-  gap: 15px;
-  align-items: center;
-  background: #fff9ed;
-  padding: clamp(14px, 2.5vw, 32px);
-  border-radius: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 2vw, 30px);
 }
-.meme-result > p {
-  font-size: clamp(19px, 2.1vw, 30px);
-  font-weight: 650;
-  line-height: 1.35;
-  color: #493a2d;
+.meme-print {
+  min-width: 0;
+  margin: 0;
 }
-.meme-result small {
-  grid-column: 1/-1;
-  font-size: 13px;
-  color: #6d5744;
-}
-.meme-result .pi-figure img {
-  max-height: 292px;
-  border-radius: 5px;
-}
-.meme-film video {
-  width: 100%;
-  max-height: 315px;
-  background: #fff8ee;
+.meme-print .pi-figure > a,
+.meme-poster {
+  aspect-ratio: 1.2;
+  background: #f3f0ec;
   border-radius: 8px;
+  overflow: hidden;
 }
-.meme-film > a {
-  display: inline-flex;
-  min-height: 42px;
-  align-items: center;
+.meme-print .pi-figure img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+.meme-dance .pi-figure > a {
+  background: #f2eaf2;
+}
+.meme-shelf .meme-grid .meme-poster.button {
+  border-radius: 8px;
+  padding: 0;
+  border: 0;
+  position: relative;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+}
+.meme-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.meme-poster > svg {
+  position: absolute;
+  inset: auto 12px 12px auto;
+  background: #14121bdf;
+  border-radius: 50%;
+  color: #fff;
+  padding: 8px;
+}
+.meme-print figcaption {
+  display: block;
+  padding: 12px 0;
+}
+.meme-print h2 {
+  font-size: clamp(17px, 1.6vw, 24px);
+  line-height: 1.25;
+  margin: 0;
+  color: #251e28;
+}
+.meme-print figcaption p {
   font-size: 14px;
+  line-height: 1.5;
+  color: #58505e;
+  margin: 5px 0 0;
+}
+.meme-projection video {
+  display: block;
+  max-height: 60vh;
+  width: 100%;
+  background: #19171a;
+}
+.meme-projection a {
+  display: inline-flex;
+  padding: 10px 0;
+  color: #513474;
   text-decoration: underline;
 }
-@media (max-width: 500px) {
-  .meme-hero h1 {
-    font-size: 44px;
+@media (max-width: 690px) {
+  .meme-hero .meme-directory-head {
+    display: block;
   }
-  .meme-result {
-    gap: 10px;
-    padding: 12px;
+  .meme-directory-head .pi-actions {
+    margin-top: 13px;
   }
-  .meme-desk .pi-tab {
-    padding-inline: 10px;
+  .meme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px 11px;
+  }
+  .meme-print .pi-figure > a,
+  .meme-poster {
+    aspect-ratio: 1;
+  }
+  .meme-video {
+    grid-column: 1/-1;
+    display: grid;
+    align-items: center;
+    grid-template-columns: minmax(110px, 0.8fr) 1fr;
+    gap: 12px;
+  }
+  .meme-video .meme-poster {
+    aspect-ratio: 16/9;
+  }
+  .meme-print h2 {
+    font-size: 16px;
+  }
+  .meme-print figcaption p {
+    font-size: 13px;
+  }
+  .meme-shelf {
+    margin-top: 16px;
   }
 }
 
