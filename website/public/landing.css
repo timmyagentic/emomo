@@ -156,3 +156,6 @@
     @keyframes nav-appear {from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:none;}}
   }
 }
+
+.landing-emomo main .eyebrow, .landing-emomo .install-section p,
+.landing-emomo .install-section li { color: var(--muted-text); }
