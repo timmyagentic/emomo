@@ -22,22 +22,11 @@
 <!--product:header-->
 <main id="account-main" class="account-wrap">
   <div class="account-heading">
-<div class="eyebrow">YOUR ACCESS / 你的 Emomo</div>
-<h1>把表情带回对话。</h1>
-<p>一个邮箱，一把密钥。让你的 Agent 开始找图。</p>
+<h1>Emomo 账户</h1>
+<p>验证邮箱后可以创建、下载或撤销访问密钥。</p>
 </div>
   <p id="status" role="status" aria-live="polite">正在检查登录状态…</p>
   <section id="signin" class="signin" hidden aria-label="登录或注册">
-    <div class="intro">
-<h2>登录，即可领取密钥。</h2>
-<p>首次验证邮箱会自动创建账户。<br>没有密码需要记，也不用提供模型密钥。</p>
-<ol>
-<li>验证你的邮箱</li>
-<li>创建专属访问密钥</li>
-<li>配置 CLI，开始找图</li>
-</ol>
-<p class="muted">已有本地图库？离线使用不需要登录。</p>
-</div>
     <div class="account-card">
       <form id="email-form">
 <h2>登录 / 注册</h2>
@@ -63,6 +52,11 @@
 <p class="small muted">没有收到？也看看垃圾邮件文件夹。</p>
 </form>
     </div>
+      <aside class="intro" aria-label="账户说明">
+      <h2>首次使用</h2>
+      <p>首次验证邮箱会创建账户。登录后下载密钥文件，即可在 CLI 中配置。</p>
+      <p>只搜索本地图库可以直接离线使用。<a href="/docs#local">本地图库说明</a></p>
+    </aside>
   </section>
   <section id="dashboard" hidden aria-label="账户与密钥">
     <div class="account-bar">
@@ -108,8 +102,7 @@
     <div id="keys" class="keys" aria-live="polite">
 </div>
     <section class="setup account-card">
-<div class="eyebrow">NEXT / 接入 CLI</div>
-<h2>最后一步，交给你的 Agent。</h2>
+<h2>在 CLI 中配置密钥</h2>
 <p>安装 <a href="/docs#install">Emomo CLI</a>，下载上方密钥文件，然后在 macOS / Linux 执行：</p>
 <pre class="code">chmod 600 ~/Downloads/emomo-access.key
 emomo auth configure --key-file ~/Downloads/emomo-access.key
@@ -120,7 +113,7 @@ emomo doctor --api-url https://api.timmyagentic.si/agent/v1</pre>
 </main>
 <footer>
 <div class="wrap foot">
-<span>emomo / 表情到位，对话才有意思。</span>
+<span>Emomo</span>
 <a href="/docs">使用文档 →</a>
 </div>
 </footer>

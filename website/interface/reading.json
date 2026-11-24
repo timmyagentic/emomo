@@ -2,23 +2,27 @@
   "docs": [
     {
       "id": "install",
-      "label": "01 / 一句话安装"
+      "label": "安装 CLI v0.1.4"
     },
     {
       "id": "usage",
-      "label": "02 / 搜索、看图、下载"
+      "label": "搜索、看图、下载"
     },
     {
       "id": "api",
-      "label": "03 / 进阶接口"
+      "label": "进阶接口"
     },
     {
       "id": "local",
-      "label": "04 / 可选的离线图库"
+      "label": "可选的离线图库"
     },
     {
       "id": "errors",
-      "label": "05 / 明确处理错误"
+      "label": "明确处理错误"
+    },
+    {
+      "id": "licensing",
+      "label": "许可与隐私"
     }
   ]
 }

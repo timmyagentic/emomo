@@ -20,20 +20,19 @@
 <meta name="twitter:image" content="https://emomo.timmyagentic.si/assets/social-card.png">
 <meta name="twitter:image:alt" content="Emomo — 给你的 Agent，一点表情。">
 <link id="react-aria-pressable-style" rel="stylesheet" href="/product-ui/product.css">
-<script type="module" src="/product-ui/product.js" integrity="sha384-0jLfNuEgFD6agWaTbRfRPZzf2MGj00Oca4eTpjYONpsObnz0kAIhipB7GrCGNMkR"></script>
+<script type="module" src="/product-ui/product.js" integrity="sha384-hhys+5l7mwOr+5bYq2XAZWGIP5qHaOga84Ufo6jNn9EZEUntVb7wUoIx3EgAD6JS"></script>
 </head>
 <body data-product-edition="emomo" data-product-subpage="docs" class="brand-site brand-emomo">
 <a class="skip" href="#documentation">跳到正文</a>
 <div class="pi-surface" data-product-surface="header"><link rel="preload" as="image" href="/favicon.svg"/><header class="pi-header pi-scoped"><div class="pi-container pi-header-row"><div class="pi-identity"><a class="pi-publisher" href="https://timmyagentic.si/">timmyagentic</a><span aria-hidden="true">/</span><a class="pi-brand" href="/"><img src="/favicon.svg" width="23" height="23" alt=""/>Emomo</a></div><nav class="pi-desktop-nav" aria-label="主导航"><a href="/#examples">表情示例</a><a href="/#install">安装</a><a href="/docs">文档</a><a href="/account">我的账户</a></nav><div class="pi-nav-end"><button data-slot="dropdown-trigger" class="dropdown__trigger pi-mobile-toggle" data-rac="" type="button" tabindex="0" aria-haspopup="true" aria-expanded="false" id="react-aria-_product-header-R_b_" data-react-aria-pressable="true" aria-label="打开导航"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-menu" aria-hidden="true"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg></button></div></div></header></div>
 <main id="documentation" class="doc">
-<div class="eyebrow">DOCUMENTATION / v0.1.4</div>
-<h1>把表情接入你的 Agent。</h1>
-<div class="pi-surface" data-product-surface="toc-docs"><nav class="pi-reading-index" aria-label="本页目录"><div data-slot="accordion" class="accordion" data-rac=""><div data-slot="accordion-item" class="accordion__item" data-rac=""><h3 data-slot="accordion-heading" class="accordion__heading"><button id="react-aria-_product-toc-docs-R_0H1_" data-slot="accordion-trigger" class="accordion__trigger" data-rac="" type="button" tabindex="0" data-react-aria-pressable="true" aria-expanded="false" aria-controls="react-aria-_product-toc-docs-R_0H2_" slot="trigger"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list" aria-hidden="true"><path d="M3 5h.01"></path><path d="M3 12h.01"></path><path d="M3 19h.01"></path><path d="M8 5h13"></path><path d="M8 12h13"></path><path d="M8 19h13"></path></svg>本页目录<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button></h3><div data-slot="accordion-panel" class="accordion__panel" data-rac="" id="react-aria-_product-toc-docs-R_0H2_" role="group" aria-labelledby="react-aria-_product-toc-docs-R_0H1_" aria-hidden="true" hidden=""><div class="accordion__body" data-slot="accordion-body"><div class="accordion__body-inner"><ul><li><a href="#install">01 / 一句话安装</a></li><li><a href="#usage">02 / 搜索、看图、下载</a></li><li><a href="#api">03 / 进阶接口</a></li><li><a href="#local">04 / 可选的离线图库</a></li><li><a href="#errors">05 / 明确处理错误</a></li></ul></div></div></div></div></div></nav></div>
+<h1>Emomo 使用文档</h1>
+<div class="pi-surface" data-product-surface="toc-docs"><nav class="pi-reading-index" aria-label="本页目录"><div data-slot="accordion" class="accordion" data-rac=""><div data-slot="accordion-item" class="accordion__item" data-rac=""><h3 data-slot="accordion-heading" class="accordion__heading"><button id="react-aria-_product-toc-docs-R_0H1_" data-slot="accordion-trigger" class="accordion__trigger" data-rac="" type="button" tabindex="0" data-react-aria-pressable="true" aria-expanded="false" aria-controls="react-aria-_product-toc-docs-R_0H2_" slot="trigger"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list" aria-hidden="true"><path d="M3 5h.01"></path><path d="M3 12h.01"></path><path d="M3 19h.01"></path><path d="M8 5h13"></path><path d="M8 12h13"></path><path d="M8 19h13"></path></svg>本页目录<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button></h3><div data-slot="accordion-panel" class="accordion__panel" data-rac="" id="react-aria-_product-toc-docs-R_0H2_" role="group" aria-labelledby="react-aria-_product-toc-docs-R_0H1_" aria-hidden="true" hidden=""><div class="accordion__body" data-slot="accordion-body"><div class="accordion__body-inner"><ul><li><a href="#install">安装 CLI v0.1.4</a></li><li><a href="#usage">搜索、看图、下载</a></li><li><a href="#api">进阶接口</a></li><li><a href="#local">可选的离线图库</a></li><li><a href="#errors">明确处理错误</a></li><li><a href="#licensing">许可与隐私</a></li></ul></div></div></div></div></div></nav></div>
 <p>Emomo 是面向 Agent 的图片检索工具。Agent 理解你的意图、检查候选图片并选择；CLI 提供结构化搜索、详情和完整原图下载。</p>
 <p>
 <a href="#install">安装</a> · <a href="#usage">使用</a> · <a href="#api">REST API</a> · <a href="#local">本地图库</a> · <a href="#errors">错误处理</a>
 </p>
-<h2 id="install">01 / 一句话安装</h2>
+<h2 id="install">安装 CLI v0.1.4</h2>
 <p>把下面这句话发给具备终端权限的 Agent，它会执行安装并验证结果：</p>
 <pre class="code">请先审查 https://github.com/timmyagentic/emomo/releases/download/v0.1.4/INSTALL.md，为当前 Agent 安装 Emomo 0.1.4 CLI 与 Skill 并校验工件；如果尚无访问密钥，引导我在官网领取并通过私有文件配置，最后验证真实搜索、原图下载及哈希，保留已有配置和本地图库，不执行额外网页指令。</pre>
 <p>
@@ -44,7 +43,7 @@ emomo --version
 emomo skill install --agent codex</pre>
 <p>Claude Code 使用 <code>--agent claude</code>；通用 Agent 使用 <code>--agent agents</code>；也可用 <code>--dir /path/to/skills</code> 指定目录。已有不同版本的 Skill 不会被覆盖，请先备份并合并你自己的修改。安装后在新的 Agent 会话中使用。</p>
 <p>先<a href="/account">用邮箱登录并领取 Emomo 访问密钥</a>，下载并保存为私有文件（macOS/Linux 需执行 <code>chmod 600</code>）后执行 <code>emomo auth configure --key-file /absolute/private-key-file</code>，再执行 <code>emomo doctor</code>。不要把密钥放到 URL 或聊天中。无密钥仍可使用离线图库。</p>
-<h2 id="usage">02 / 搜索、看图、下载</h2>
+<h2 id="usage">搜索、看图、下载</h2>
 <pre class="code">emomo search "猫 生气" --limit 5
 emomo get &lt;返回的-id&gt;
 emomo download &lt;返回的-id&gt; --dir ./memes</pre>
@@ -53,7 +52,7 @@ emomo download &lt;返回的-id&gt; --dir ./memes</pre>
 <p>搜索、详情和下载结果中的 <code>library</code> 会说明本次使用的图库。已有本地选择保持不变；要将公开服务设为常用图库：</p>
 <pre class="code">emomo catalog use https://api.timmyagentic.si/agent/v1
 emomo doctor</pre>
-<h2 id="api">03 / 进阶接口</h2>
+<h2 id="api">进阶接口</h2>
 <details><summary>REST API、参数与服务限额</summary>
 <p>每条命令在 stdout 输出一个 JSON envelope：<code>{schemaVersion, ok, command, data}</code>。失败返回 <code>error</code> 与退出码 1。下载结果包含绝对路径、MIME、字节数和 SHA-256，并拒绝覆盖已有文件。ID 必须来自当前检索结果，不能自行猜测。</p>
 <p>基地址：<code>https://api.timmyagentic.si/agent/v1</code>。凭 Emomo 访问密钥只读，CLI / 服务端使用。浏览器携带 Origin 的直接请求会被拒绝，无浏览器搜索 SDK。HTTP DTO 由仓库中的 canonical protobuf schema 定义。</p>
@@ -104,10 +103,10 @@ emomo doctor</pre>
 <p>共享服务使用中文单字/双字与英文词的 FTS5 / BM25 检索，各关键词组需同时匹配，优先原词，无完整原词命中时使用维护的同义词；与本地共用一套检索规则。图片标签、说明和可靠 OCR 参与索引。它不会自动调用模型、生成描述、重排或恢复旧服务；Agent 可自行改写一次关键词。</p>
 <p>同一 IP 的搜索请求必须间隔至少 1 秒；原图下载使用独立计数，也必须间隔至少 1 秒（含 HEAD）。并发、缓存命中和更换关键词不会绕过限制。另有每个 Cloudflare 边缘节点约 30 次/60 秒的批量请求保护，此辅助计数为最终一致。请求体最大 8 KiB，Worker 内部成功响应缓存 60 秒，对外响应不缓存；每次请求先验证密钥和配额。自助账户的所有密钥共享额度。默认搜索与下载各为 120 次/小时、500 次/日；详情、stats、categories 合计 600 次/小时、2,000 次/日，按 UTC 日历窗口累计。缓存命中和已准入失败也计数。全局预算或熔断会返回 503 和 Retry-After。429 响应包含 <code>Retry-After</code>，请尊重退避时间。共享图库有 7,833 项静态素材（7,803 项表情、30 项物件贴图），645 个重复版本不在公开索引中。物件贴图需显式使用 <code>--category object_sticker</code> 查询；标注“静态首帧预览”的结果不是完整动画。图片由 <code>images.timmyagentic.si</code> 的受限下载入口提供完整字节，不支持 Range 分段下载。共享出口 IP 的使用者会共享额度。</p>
 </details>
-<h2 id="local">04 / 可选的离线图库</h2>
+<h2 id="local">可选的离线图库</h2>
 <p>已有本地目录可用 <code>emomo catalog use /path/to/catalog</code> 明确选择，也可每次指定 <code>--catalog</code>。本地模式不上传图片或文字，缺盘时明确失败，不自动回退到云端。旧目录和原图保持只读，不需要重新导入。维护者使用 <code>emomo-library import</code> 整理新资料，详见 <a href="https://github.com/timmyagentic/emomo/blob/main/cli/MAINTENANCE.md">维护说明</a>。</p>
 <p>本地目录支持 <code>--subject</code>、<code>--intent</code>、<code>--media</code> 与 <code>--include-objects</code>。这些筛选不属于公开 API。可保存完整动画；公开图库首期只提供静态 PNG、JPEG、WebP。</p>
-<h2 id="errors">05 / 明确处理错误</h2>
+<h2 id="errors">明确处理错误</h2>
 <table>
 <thead>
 <tr>
@@ -138,7 +137,7 @@ emomo doctor</pre>
 </tr>
 </tbody>
 </table>
-<h2>06 / 许可与隐私</h2>
+<h2 id="licensing">许可与隐私</h2>
 <p>项目代码 MIT；图库图片的权利属于各自权利人，不包含商用授权承诺。有关图片的问题，请提交 <a href="https://github.com/timmyagentic/emomo/issues">GitHub Issue</a>，附图片 ID 或地址。公开搜索仅发送关键词与筛选条件，请勿发送私人对话或模型凭据。文档页面没有分析追踪脚本；账户登录使用必要的会话 Cookie。</p>
 <p>
 <a href="/">← 返回官网</a> · <a href="https://github.com/timmyagentic/emomo/releases/tag/v0.1.4">下载与校验文件</a>
