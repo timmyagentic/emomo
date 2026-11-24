@@ -1,13 +1,7 @@
 import React, { useState } from "react";
-import {
-  Smile,
-  Cat,
-  Sparkles,
-  Play,
-  KeyRound,
-  PackageOpen,
-} from "lucide-react";
-import { Action, Choices, Figure, HeroCopy, Mark } from "./ui.jsx";
+import { Button } from "@heroui/react/button";
+import { Cat, Sparkles, Play, KeyRound, PackageOpen } from "lucide-react";
+import { Action, Choices, Figure } from "./ui.jsx";
 export const site = {
   name: "Emomo",
   lang: "zh",
@@ -38,20 +32,31 @@ const scenes = [
   { id: "film", label: "看演示", icon: Play },
 ];
 export function Hero() {
-  const [scene, setScene] = useState("cat");
+  const [view, select] = useState("all");
+  const items = [
+    { id: "all", label: "全部" },
+    { id: "stills", label: "表情图" },
+    { id: "film", label: "使用演示", icon: Play },
+  ];
+  const film = (
+    <video
+      controls
+      playsInline
+      preload="metadata"
+      poster="/demo/emomo-v10-cover.webp"
+      aria-label="Emomo 使用演示"
+    >
+      <source src="/demo/emomo-v10.mp4" type="video/mp4" />
+    </video>
+  );
   return (
-    <section className="pi-hero meme-hero">
-      <div className="pi-container pi-split">
-        <HeroCopy
-          title={
-            <>
-              有些话，
-              <br />
-              一张图就懂了。
-            </>
-          }
-          description="说出你想怎么回，让 Agent 找到合适的表情，把原图带回聊天。"
-        >
+    <section className="pi-hero meme-hero" aria-labelledby="hero-title">
+      <div className="pi-container">
+        <header className="meme-directory-head">
+          <div>
+            <h1 id="hero-title">Emomo 表情库</h1>
+            <p>用一句话给 Agent 描述想回的表情，取回原图或动图。</p>
+          </div>
           <div className="pi-actions">
             <Action href="#install" icon={PackageOpen}>
               安装 Emomo
@@ -60,49 +65,70 @@ export function Hero() {
               领取密钥
             </Action>
           </div>
-        </HeroCopy>
-        <article id="examples" className="meme-desk">
-          <div className="meme-desk-title">
-            <Smile size={25} />
-            <h2>这句话，想怎么回？</h2>
-          </div>
+        </header>
+        <div id="examples" className="meme-shelf">
           <Choices
-            label="选择表情或演示"
-            tabs={scenes}
-            value={scene}
-            onChange={setScene}
+            label="浏览表情与演示"
+            tabs={items}
+            value={view}
+            onChange={select}
           >
-            {(s) =>
-              s.id === "film" ? (
-                <div className="meme-film">
-                  <video
-                    controls
-                    playsInline
-                    preload="metadata"
-                    poster="/demo/emomo-v10-cover.webp"
-                    aria-label="Emomo 使用演示"
-                  >
-                    <source src="/demo/emomo-v10.mp4" type="video/mp4" />
-                  </video>
+            {(item) =>
+              item.id === "film" ? (
+                <div className="meme-projection">
+                  {film}
                   <a href="/demo/emomo-v10.mp4">打开完整演示</a>
                 </div>
               ) : (
-                <div className="meme-result">
-                  <p>{s.ask}</p>
-                  <Figure
-                    src={s.src}
-                    title={s.label + "表情"}
-                    alt={s.alt}
-                    width={1080}
-                    height={s.id === "cat" ? 1087 : 1080}
-                    priority
-                  />
-                  <small>真实图库示例</small>
+                <div className="meme-grid">
+                  {scenes
+                    .filter((s) => s.src)
+                    .map((s) => (
+                      <figure className={"meme-print meme-" + s.id} key={s.id}>
+                        <Figure
+                          src={s.src}
+                          title={s.label + "表情"}
+                          alt={s.alt}
+                          width={1080}
+                          height={s.id === "cat" ? 1087 : 1080}
+                          priority
+                        />
+                        <figcaption>
+                          <h2>
+                            {s.id === "cat"
+                              ? "收到，卑职这就不办"
+                              : "旋转、开心、跳跃"}
+                          </h2>
+                          <p>{s.ask}</p>
+                        </figcaption>
+                      </figure>
+                    ))}
+                  {item.id === "all" && (
+                    <figure className="meme-print meme-video">
+                      <Button
+                        className="meme-poster"
+                        onPress={() => select("film")}
+                        aria-label="播放 Emomo 使用演示"
+                      >
+                        <img
+                          src="/demo/emomo-v10-cover.webp"
+                          width="640"
+                          height="360"
+                          alt=""
+                        />
+                        <Play aria-hidden="true" size={35} />
+                      </Button>
+                      <figcaption>
+                        <h2>从一句话到一张图</h2>
+                        <p>观看一次完整的表情搜索。</p>
+                      </figcaption>
+                    </figure>
+                  )}
                 </div>
               )
             }
           </Choices>
-        </article>
+        </div>
       </div>
     </section>
   );
