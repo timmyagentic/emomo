@@ -49,14 +49,6 @@ tabs.forEach((tab, index) => {
     }
   });
 });
-// The two cover images link to the matching example, before or after HeroUI mounts.
-for (const link of document.querySelectorAll('.reaction-pair a')) {
-  link.addEventListener('click', () => {
-    const tab = document.getElementById(link.hash.slice(1));
-    tab?.click();
-    tab?.focus({ preventScroll: true });
-  });
-}
 const tabList = document.querySelector(".example-tabs");
 if (tabList) {
   import("./ui/controls.js").then(({ mountTabs }) => {

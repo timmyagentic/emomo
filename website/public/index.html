@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="/style.css">
 <script src="/site.js" defer>
 </script>
+<link rel="stylesheet" href="/brand/brand.css?v=viewport-demo">
 <meta property="og:image" content="https://emomo.timmyagentic.si/assets/social-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -23,9 +24,10 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://emomo.timmyagentic.si/assets/social-card.png">
 <meta name="twitter:image:alt" content="Emomo — 给你的 Agent，一点表情。">
-<link id="react-aria-pressable-style" rel="stylesheet" href="/landing.css">
+<link id="react-aria-pressable-style" rel="stylesheet" href="/viewport.css">
+<script src="/viewport.js" defer></script>
 </head>
-<body class="landing landing-emomo">
+<body class="brand-site brand-emomo emomo-home viewport-home" data-viewport-page>
 <a class="skip" href="#main">跳到正文</a>
 <header>
 <nav class="wrap" aria-label="主导航">
@@ -43,14 +45,25 @@
 </nav>
 </header>
 <main id="main">
-<section class="landing-hero" aria-labelledby="hero-title">
-  <div class="landing-copy">
-    <h1 id="hero-title"><span class="landing-line">这句话，</span><span class="landing-line">用哪张表情回？</span></h1>
-    <p class="landing-desc">让 Agent 按对话里的语气挑表情。看过候选图，再把选中的整张原图带回聊天。</p>
-    <div class="landing-actions"><a class="landing-action" data-primary-action href="#install">安装 Emomo <span aria-hidden="true">↗</span></a></div>
-    <p class="landing-note">CLI + Skill · 支持现有 Agent</p>
-  </div>
-  <div class="landing-proof reaction-pair"><a href="#example-tab-cat" aria-label="收到，但不想动，查看对话示例"><figure><img src="/examples/c81be4b90f490a50015478c9afb8c86d0d30202ca0d20159f72d9fb35c9cbe6e.webp" alt="低头的猫，配字：收到，卑职这就不办" width="360" height="360"><figcaption>收到，但不想动 ↘</figcaption></figure></a><a href="#example-tab-happy" aria-label="开心到起飞，查看对话示例"><figure><img src="/examples/caff9696392b35412c8c6849f32ffe3ab75e1ff3f8b2c241874f13bad0306df7.webp" alt="开心跳舞的露比，配字：旋转、开心、跳跃" width="360" height="360"><figcaption>开心到起飞 ↘</figcaption></figure></a></div>
+<section class="hero wrap" aria-labelledby="hero-title">
+<div class="studio-hero-copy">
+<p class="eyebrow">EMOMO · A LITTLE MORE EXPRESSION</p>
+<h1 id="hero-title">有些话，<br><span class="studio-accent">一张图就懂了。</span></h1>
+<p class="lede">给你的 Agent，一点表情。<br>从对话里的语气出发，找到合适的那张，把完整原图带回来。</p>
+<div class="actions">
+<a class="button primary" href="#install">开始使用<img class="icon" src="/icons/arrow-right.svg" alt="" aria-hidden="true" width="24" height="24">
+</a>
+<a class="text-link" href="#examples">看看怎么表达</a>
+</div>
+<p class="subtle">CLI + Skill · 用你已经在用的 Agent</p>
+</div>
+<div class="hero-demo">
+<video id="demo-video" controls muted loop playsinline preload="metadata" width="1920" height="1080" poster="/demo/emomo-v10-cover.webp" aria-label="从聊天截图中找到合适的表情">
+<source src="/demo/emomo-v10-loop.mp4" type="video/mp4">
+</video>
+<div class="demo-video-links" data-viewport-controls><button class="demo-playback" type="button" data-demo-playback aria-controls="demo-video" hidden>播放演示</button>
+<a class="text-link" href="/demo/emomo-v10.mp4">观看高清有声版 ↗</a></div>
+</div>
 </section>
 <section id="examples" class="example-section">
 <div class="wrap">
@@ -84,13 +97,6 @@
 </div>
 </div>
 </section>
-<div class="benefit-statement"><p><span class="benefit-line"><span class="benefit-word">从一句话的</span><span class="benefit-word">语气出发，</span></span><span class="benefit-line"><span class="benefit-word">挑到那张</span><span class="benefit-word">可以直接发的原图。</span></span></p></div><div class="film-sample">
-<video id="demo-video" controls muted loop playsinline preload="metadata" width="1920" height="1080" poster="/demo/emomo-v10-cover.webp" aria-label="从聊天截图中找到合适的表情">
-<source src="/demo/emomo-v10-loop.mp4" type="video/mp4">
-</source></video>
-<div class="demo-video-links" data-viewport-controls><button class="demo-playback" type="button" data-demo-playback aria-controls="demo-video" hidden>播放演示</button>
-<a class="text-link" href="/demo/emomo-v10.mp4">观看高清有声版 ↗</a></div>
-</div>
 <section id="workflow" class="wrap workflow">
 <div class="section-head">
 <div>
