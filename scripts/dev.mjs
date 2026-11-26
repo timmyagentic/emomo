@@ -16,7 +16,6 @@ export function plan(action, profile) {
   if (action === 'bootstrap') {
     add('protocol', 'npm', 'ci', '--no-audit', '--no-fund');
     add(search, 'npm', 'ci', '--no-audit', '--no-fund');
-    add('website', 'npm', 'ci', '--no-audit', '--no-fund');
     if (profile === 'full') {
       for (const cwd of [gateway, 'frontend']) add(cwd, 'npm', 'ci', '--no-audit', '--no-fund');
       add('backend', 'go', 'mod', 'download');
@@ -26,7 +25,6 @@ export function plan(action, profile) {
     add('cli', 'npm', 'run', 'check');
     add('cli', 'npm', 'test');
     add(search, 'npm', 'run', 'check');
-    add('website', 'npm', 'run', 'check');
     if (profile === 'full') {
       add(gateway, 'npm', 'test');
       add(gateway, 'npm', 'run', 'typecheck');
