@@ -9,12 +9,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const targets = {
   worker: ['deployments/cloudflare/agent-search', ['api', 'meme', 'types', 'import']],
-  website: ['website', ['account']],
 };
 const args = process.argv.slice(2);
 const check = args.includes('--check');
 const requested = args.filter(arg => arg !== '--check');
-if (requested.length > 1 || requested.some(name => !Object.hasOwn(targets, name))) throw new Error('Usage: node protocol/generate.mjs [worker|website] [--check]');
+if (requested.length > 1 || requested.some(name => !Object.hasOwn(targets, name))) throw new Error('Usage: node protocol/generate.mjs [worker] [--check]');
 const temporary = await mkdtemp(join(tmpdir(), 'emomo-proto-'));
 try {
   const template = { version: 'v2', plugins: [{ local: [process.execPath, join(here, 'node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es')], out: 'gen', opt: ['target=ts', 'import_extension=.js'] }] };

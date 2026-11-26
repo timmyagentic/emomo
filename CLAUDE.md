@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working in this repository. It covers the monorepo layout; subproject-specific instructions live in each subdirectory.
 
-Current product: `cli/`, `deployments/cloudflare/agent-search/`, `website/`. Use `node scripts/dev.mjs bootstrap agent` and `check agent`; `protocol/` independently generates their DTOs. The old app commands below are retained-product guidance. See `AGENTS.md` for current boundaries.
+Current product: `cli/`, `deployments/cloudflare/agent-search/`. Use `node scripts/dev.mjs bootstrap agent` and `check agent`; `protocol/` independently generates the search Worker DTOs. The old app commands below are retained-product guidance. See `AGENTS.md` for current boundaries.
 
 ## Subproject Map
 

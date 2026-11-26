@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { uncached } from './rate-limit.js';
 
 import { DEFAULT_QUOTAS, type Operation, type Quota } from './policy.js';
-import type { AccountNamespace } from '../../../../website/src/account-types.js';
+import type { AccountNamespace } from './account-types.js';
 export { DEFAULT_QUOTAS } from './policy.js';
 export type { Operation, Quota } from './policy.js';
 export type GlobalLimits = { perSecond: number; perDay: number; inFlight: number; failures: number; cooldownSeconds: number };
